@@ -1,0 +1,192 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Workflow } from '../types'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2 } from 'lucide-react'
+import QuickEditModal from './QuickEditModal'
+import './WorkflowList.css'
+
+interface WorkflowListProps {
+  workflows: Workflow[]
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}
+
+export default function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowListProps) {
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <RefreshCw className="spinner" size={32} />
+        <p>Loading workflows...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <p className="error-message">{error}</p>
+        <button onClick={onRefresh} className="btn btn-primary">
+          <RefreshCw size={16} /> Retry
+        </button>
+      </div>
+    )
+  }
+
+  const sortedWorkflows = [...workflows].sort((a, b) => {
+    const orderA = a.params.order ?? 999
+    const orderB = b.params.order ?? 999
+    return orderA - orderB
+  })
+
+  return (
+    <div className="workflow-list">
+      <div className="list-header">
+        <h2>Workflows ({workflows.length})</h2>
+        <button onClick={onRefresh} className="btn btn-secondary">
+          <RefreshCw size={16} /> Refresh
+        </button>
+      </div>
+
+      {workflows.length === 0 ? (
+        <div className="empty-state">
+          <p>No workflows found</p>
+          <Link to="/create" className="btn btn-primary">
+            Create Your First Workflow
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="workflow-grid">
+            {sortedWorkflows.map((workflow) => (
+              <div key={workflow.name} className="workflow-card-wrapper">
+                <Link
+                  to={`/workflow/${encodeURIComponent(workflow.name)}`}
+                  className="workflow-card"
+                >
+              <div className="workflow-card-header">
+                {workflow.params.icon && (
+                  <div className="workflow-icon">
+                    <img
+                      src={`${workflow.folderPath}/${workflow.params.icon}`}
+                      alt={workflow.name}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="workflow-title-section">
+                  <h3>{workflow.name}</h3>
+                  {workflow.params.iconBadge && (
+                    <span
+                      className="workflow-badge"
+                      style={{
+                        backgroundColor:
+                          workflow.params.iconBadge.colorVariant === 'error'
+                            ? 'var(--error)'
+                            : workflow.params.iconBadge.colorVariant === 'warning'
+                            ? 'var(--warning)'
+                            : workflow.params.iconBadge.colorVariant === 'success'
+                            ? 'var(--success)'
+                            : 'var(--accent)',
+                        ...(workflow.params.iconBadge as any),
+                      }}
+                    >
+                      {workflow.params.iconBadge.content}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+                  {workflow.params.description && (
+                    <p className="workflow-description">{workflow.params.description}</p>
+                  )}
+
+                  <div className="workflow-quick-info">
+                    {workflow.params.parser === 'comfyui' &&
+                      workflow.params.comfyui_config?.serverUrl && (
+                        <div className="quick-info-item">
+                          <Server size={14} />
+                          <span className="quick-info-label">Server:</span>
+                          <span className="quick-info-value" title={workflow.params.comfyui_config.serverUrl}>
+                            {workflow.params.comfyui_config.serverUrl.replace(/^https?:\/\//, '').split(':')[0]}
+                          </span>
+                        </div>
+                      )}
+                    {workflow.params.timeout && (
+                      <div className="quick-info-item">
+                        <Clock size={14} />
+                        <span className="quick-info-label">Timeout:</span>
+                        <span className="quick-info-value">{workflow.params.timeout}s</span>
+                      </div>
+                    )}
+                    {workflow.params.devMode && (
+                      <div className="quick-info-item">
+                        <Code size={14} />
+                        <span className="quick-info-value dev-mode-badge">Dev Mode</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="workflow-meta">
+                    <div className="meta-item">
+                      <Settings size={14} />
+                      <span>
+                        {workflow.params.parser === 'comfyui' ? 'ComfyUI' : 'Default'}
+                      </span>
+                    </div>
+                    {workflow.hasWorkflowFile && (
+                      <div className="meta-item">
+                        <FileJson size={14} />
+                        <span>Workflow File</span>
+                      </div>
+                    )}
+                    {workflow.params.scope && (
+                      <div className="meta-item">
+                        <span className="scope-badge">{workflow.params.scope}</span>
+                      </div>
+                    )}
+                    {workflow.params.tags && workflow.params.tags.length > 0 && (
+                      <div className="workflow-tags">
+                        {workflow.params.tags.map((tag) => (
+                          <span key={tag} className="tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                <button
+                  className="quick-edit-btn"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setEditingWorkflow(workflow)
+                  }}
+                  title="Quick Edit"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {editingWorkflow && (
+            <QuickEditModal
+              workflowName={editingWorkflow.name}
+              params={editingWorkflow.params}
+              onClose={() => setEditingWorkflow(null)}
+              onSave={() => {
+                setEditingWorkflow(null)
+                onRefresh()
+              }}
+            />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
