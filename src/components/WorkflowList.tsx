@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Workflow } from '../types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2 } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X } from 'lucide-react'
 import QuickEditModal from './QuickEditModal'
+import BulkEditModal from './BulkEditModal'
 import './WorkflowList.css'
 
 interface WorkflowListProps {
@@ -14,6 +15,9 @@ interface WorkflowListProps {
 
 export default function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowListProps) {
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
+  const [selectedWorkflows, setSelectedWorkflows] = useState<Set<string>>(new Set())
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
   if (loading) {
     return (
       <div className="loading-container">
@@ -40,13 +44,101 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     return orderA - orderB
   })
 
+  const toggleSelection = (workflowName: string) => {
+    const newSelection = new Set(selectedWorkflows)
+    if (newSelection.has(workflowName)) {
+      newSelection.delete(workflowName)
+    } else {
+      newSelection.add(workflowName)
+    }
+    setSelectedWorkflows(newSelection)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedWorkflows.size === workflows.length) {
+      setSelectedWorkflows(new Set())
+    } else {
+      setSelectedWorkflows(new Set(workflows.map((w) => w.name)))
+    }
+  }
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedWorkflows(new Set())
+  }
+
+  const enterSelectionMode = () => {
+    setSelectionMode(true)
+  }
+
+  const selectedWorkflowsList = workflows.filter((w) =>
+    selectedWorkflows.has(w.name)
+  )
+
   return (
     <div className="workflow-list">
       <div className="list-header">
-        <h2>Workflows ({workflows.length})</h2>
-        <button onClick={onRefresh} className="btn btn-secondary">
-          <RefreshCw size={16} /> Refresh
-        </button>
+        <div className="header-left">
+          <h2>Workflows ({workflows.length})</h2>
+          {selectionMode && (
+            <span className="selection-mode-badge">
+              {selectedWorkflows.size > 0
+                ? `${selectedWorkflows.size} selected`
+                : 'Select workflows to edit'}
+            </span>
+          )}
+        </div>
+        <div className="header-actions">
+          {!selectionMode ? (
+            <>
+              <button
+                onClick={enterSelectionMode}
+                className="btn btn-primary"
+              >
+                <CheckSquare size={16} />
+                Bulk Edit
+              </button>
+              <button onClick={onRefresh} className="btn btn-secondary">
+                <RefreshCw size={16} /> Refresh
+              </button>
+            </>
+          ) : (
+            <>
+              {workflows.length > 0 && (
+                <button
+                  onClick={toggleSelectAll}
+                  className="btn btn-secondary"
+                  title={
+                    selectedWorkflows.size === workflows.length
+                      ? 'Deselect all'
+                      : 'Select all'
+                  }
+                >
+                  <CheckSquare size={16} />
+                  {selectedWorkflows.size === workflows.length
+                    ? 'Deselect All'
+                    : 'Select All'}
+                </button>
+              )}
+              {selectedWorkflows.size > 0 && (
+                <button
+                  onClick={() => setShowBulkEdit(true)}
+                  className="btn btn-primary"
+                >
+                  <CheckSquare size={16} />
+                  Edit {selectedWorkflows.size}
+                </button>
+              )}
+              <button
+                onClick={exitSelectionMode}
+                className="btn btn-secondary"
+              >
+                <X size={16} />
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {workflows.length === 0 ? (
@@ -59,12 +151,35 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
       ) : (
         <>
           <div className="workflow-grid">
-            {sortedWorkflows.map((workflow) => (
-              <div key={workflow.name} className="workflow-card-wrapper">
-                <Link
-                  to={`/workflow/${encodeURIComponent(workflow.name)}`}
-                  className="workflow-card"
+            {sortedWorkflows.map((workflow) => {
+              const isSelected = selectedWorkflows.has(workflow.name)
+              return (
+                <div
+                  key={workflow.name}
+                  className={`workflow-card-wrapper ${
+                    isSelected ? 'selected' : ''
+                  } ${selectionMode ? 'selection-mode' : ''}`}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleSelection(workflow.name)
+                    }
+                  }}
                 >
+                  {selectionMode && isSelected && (
+                    <div className="selection-indicator">
+                      <CheckSquare size={20} />
+                    </div>
+                  )}
+                  <Link
+                    to={`/workflow/${encodeURIComponent(workflow.name)}`}
+                    className="workflow-card"
+                    onClick={(e) => {
+                      if (selectionMode) {
+                        e.preventDefault()
+                        toggleSelection(workflow.name)
+                      }
+                    }}
+                  >
               <div className="workflow-card-header">
                 {workflow.params.icon && (
                   <div className="workflow-icon">
@@ -159,19 +274,22 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                     )}
                   </div>
                 </Link>
-                <button
-                  className="quick-edit-btn"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setEditingWorkflow(workflow)
-                  }}
-                  title="Quick Edit"
-                >
-                  <Edit2 size={16} />
-                </button>
+                {!selectionMode && (
+                  <button
+                    className="quick-edit-btn"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setEditingWorkflow(workflow)
+                    }}
+                    title="Quick Edit"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
           {editingWorkflow && (
             <QuickEditModal
@@ -180,6 +298,19 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
               onClose={() => setEditingWorkflow(null)}
               onSave={() => {
                 setEditingWorkflow(null)
+                onRefresh()
+              }}
+            />
+          )}
+          {showBulkEdit && selectedWorkflowsList.length > 0 && (
+            <BulkEditModal
+              workflows={selectedWorkflowsList}
+              onClose={() => {
+                setShowBulkEdit(false)
+              }}
+              onSave={() => {
+                setShowBulkEdit(false)
+                exitSelectionMode()
                 onRefresh()
               }}
             />

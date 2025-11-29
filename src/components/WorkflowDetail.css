@@ -80,34 +80,47 @@
   overflow: hidden;
 }
 
-.code-editor {
-  width: 100%;
+.editor-container {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.editor-container:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.code-viewer-wrapper {
+  position: relative;
+  overflow: auto;
+  background: var(--bg-primary);
+  border-radius: 8px;
   min-height: 500px;
-  padding: 1rem;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: none;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  resize: vertical;
-  tab-size: 2;
+  max-height: 800px;
 }
 
-.code-editor:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+.code-viewer-wrapper .syntax-highlight-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.code-viewer {
-  padding: 1rem;
-  margin: 0;
-  overflow-x: auto;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--text-primary);
-  background: var(--bg-primary);
+.code-viewer-wrapper .syntax-highlight-background pre {
+  margin: 0 !important;
+  padding: 1rem !important;
+  background: var(--bg-primary) !important;
+  min-height: 100%;
+}
+
+.workflow-json-highlight {
+  width: 100%;
+  height: 100%;
 }
 
 .info-grid {

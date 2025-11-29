@@ -7,6 +7,9 @@ import {
   saveWorkflowParams,
 } from '../api/workflows'
 import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff } from 'lucide-react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import Editor from '@monaco-editor/react'
 import './WorkflowDetail.css'
 
 interface WorkflowDetailProps {
@@ -23,6 +26,21 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [error, setError] = useState<string | null>(null)
   const [showWorkflowJson, setShowWorkflowJson] = useState(false)
   const [paramsText, setParamsText] = useState('')
+  const [workflowHighlightRef, setWorkflowHighlightRef] = useState<HTMLDivElement | null>(null)
+  const [workflowScrollRef, setWorkflowScrollRef] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (workflowScrollRef && workflowHighlightRef) {
+      const syncScroll = () => {
+        if (workflowHighlightRef && workflowScrollRef) {
+          workflowHighlightRef.scrollTop = workflowScrollRef.scrollTop
+          workflowHighlightRef.scrollLeft = workflowScrollRef.scrollLeft
+        }
+      }
+      workflowScrollRef.addEventListener('scroll', syncScroll)
+      return () => workflowScrollRef.removeEventListener('scroll', syncScroll)
+    }
+  }, [workflowScrollRef, workflowHighlightRef])
 
   useEffect(() => {
     if (name) {
@@ -118,11 +136,23 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             <h2>Parameters (params.json)</h2>
           </div>
           <div className="editor-container">
-            <textarea
+            <Editor
+              height="500px"
+              language="json"
               value={paramsText}
-              onChange={(e) => setParamsText(e.target.value)}
-              className="code-editor"
-              spellCheck={false}
+              onChange={(value: string | undefined) => setParamsText(value || '')}
+              theme="vs-dark"
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                tabSize: 2,
+                wordWrap: 'on',
+                formatOnPaste: true,
+                formatOnType: true,
+              }}
             />
           </div>
         </div>
@@ -142,9 +172,26 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             </div>
             {showWorkflowJson && (
               <div className="editor-container">
-                <pre className="code-viewer">
-                  {JSON.stringify(workflowJson, null, 2)}
-                </pre>
+                <div className="code-viewer-wrapper" ref={setWorkflowScrollRef}>
+                  <div
+                    ref={setWorkflowHighlightRef}
+                    className="syntax-highlight-background workflow-json-highlight"
+                  >
+                    <SyntaxHighlighter
+                      language="json"
+                      style={vscDarkPlus}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1rem',
+                        background: 'transparent',
+                        minHeight: '100%',
+                      }}
+                      PreTag="div"
+                    >
+                      {JSON.stringify(workflowJson, null, 2)}
+                    </SyntaxHighlighter>
+                  </div>
+                </div>
               </div>
             )}
           </div>
