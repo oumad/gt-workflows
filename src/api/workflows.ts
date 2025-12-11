@@ -1,7 +1,5 @@
 import { Workflow, WorkflowParams } from '../types';
 
-const WORKFLOWS_PATH = 'data/gt-workflows';
-
 export async function listWorkflows(): Promise<Workflow[]> {
   try {
     const response = await fetch('/api/workflows/list');
@@ -88,6 +86,42 @@ export async function deleteWorkflow(workflowName: string): Promise<void> {
     }
   } catch (error) {
     console.error('Error deleting workflow:', error);
+    throw error;
+  }
+}
+
+export async function uploadFile(workflowName: string, file: File): Promise<{ filename: string; path: string; relativePath: string }> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to upload file');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+}
+
+export async function deleteWorkflowFile(workflowName: string, filename: string): Promise<void> {
+  try {
+    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/file/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete file');
+    }
+  } catch (error) {
+    console.error('Error deleting file:', error);
     throw error;
   }
 }

@@ -34,9 +34,11 @@ export default function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
       }
 
       if (parserType === 'comfyui') {
+        params.process = '<COMFYUI>'
+        params.main = ''
         params.comfyui_config = {
           serverUrl: 'http://127.0.0.1:8188',
-          workflow: 'workflow.json',
+          workflow: './workflow.json',
         }
       } else {
         params.process = 'python'

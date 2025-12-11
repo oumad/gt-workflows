@@ -5,12 +5,15 @@ import {
   getWorkflowParams,
   getWorkflowJson,
   saveWorkflowParams,
+  uploadFile,
+  deleteWorkflowFile,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
 import NodeManager from './NodeManager'
+import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
 interface WorkflowDetailProps {
@@ -31,6 +34,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [workflowHighlightRef, setWorkflowHighlightRef] = useState<HTMLDivElement | null>(null)
   const [workflowScrollRef, setWorkflowScrollRef] = useState<HTMLDivElement | null>(null)
   const [iconError, setIconError] = useState(false)
+  const [iconDragOver, setIconDragOver] = useState(false)
+  const [workflowDragOver, setWorkflowDragOver] = useState(false)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -237,45 +242,135 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <label>Parser Type</label>
                     <span>{params.parser === 'comfyui' ? 'ComfyUI' : 'Default'}</span>
                   </div>
-                {params.description && (
                   <div className="info-item">
                     <label>Description</label>
-                    <span>{params.description}</span>
+                    <input
+                      type="text"
+                      value={params.description || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, description: e.target.value || undefined })}
+                      placeholder="Workflow description"
+                      className="info-input"
+                    />
                   </div>
-                )}
-                {params.scope && (
                   <div className="info-item">
                     <label>Scope</label>
-                    <span>{params.scope}</span>
+                    <select
+                      value={params.scope || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, scope: e.target.value || undefined })}
+                      className="info-input"
+                    >
+                      <option value="">None</option>
+                      <option value="item">Item</option>
+                    </select>
                   </div>
-                )}
-                {params.executionName && (
                   <div className="info-item">
                     <label>Execution Name</label>
-                    <span>{params.executionName}</span>
+                    <input
+                      type="text"
+                      value={params.executionName || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, executionName: e.target.value || undefined })}
+                      placeholder="Execute button label"
+                      className="info-input"
+                    />
                   </div>
-                )}
-                <div className="info-item">
-                  <label>Timeout</label>
-                  <span>{params.timeout ? `${params.timeout}s` : 'Not set'}</span>
-                </div>
-                {params.tags && params.tags.length > 0 && (
+                  <div className="info-item">
+                    <label>Timeout (seconds)</label>
+                    <input
+                      type="number"
+                      value={params.timeout || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, timeout: e.target.value ? Number(e.target.value) : undefined })}
+                      placeholder="Not set"
+                      className="info-input"
+                      min="0"
+                    />
+                  </div>
                   <div className="info-item">
                     <label>Tags</label>
-                    <div className="tags-list">
-                      {params.tags.map((tag, idx) => (
-                        <span key={idx} className="tag-badge">
-                          <Tag size={12} />
-                          {tag}
-                        </span>
-                      ))}
+                    <input
+                      type="text"
+                      value={params.tags ? params.tags.join(', ') : ''}
+                      onChange={(e) => {
+                        const tags = e.target.value.split(',').map(t => t.trim()).filter(t => t);
+                        handleParamsUpdate({ ...params, tags: tags.length > 0 ? tags : undefined });
+                      }}
+                      placeholder="Comma-separated tags"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
+                    <label>Dev Mode</label>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={params.devMode || false}
+                        onChange={(e) => handleParamsUpdate({ ...params, devMode: e.target.checked || undefined })}
+                      />
+                      <span>Enabled</span>
+                    </label>
+                  </div>
+                  <div className="info-item info-item-full">
+                    <label>Icon</label>
+                    <div className="file-upload-area">
+                      {params.icon ? (
+                        <div className="file-info">
+                          <span>{params.icon.replace(/^\.\//, '')}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!name) return;
+                              const iconFilename = params.icon.replace(/^\.\//, '');
+                              try {
+                                // Delete the icon file
+                                await deleteWorkflowFile(name, iconFilename);
+                                // Update params and save
+                                const updatedParams = { ...params, icon: undefined };
+                                handleParamsUpdate(updatedParams);
+                                await saveWorkflowParams(name, updatedParams);
+                                onUpdate();
+                              } catch (error) {
+                                console.error('Failed to delete icon:', error);
+                                // Still remove from params even if file deletion fails
+                                const updatedParams = { ...params, icon: undefined };
+                                handleParamsUpdate(updatedParams);
+                                await saveWorkflowParams(name, updatedParams);
+                                onUpdate();
+                              }
+                            }}
+                            className="btn-icon"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="file-drop-zone">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file && name) {
+                                try {
+                                  // Compress image before uploading
+                                  const compressedFile = await compressImage(file, 800, 0.85);
+                                  const result = await uploadFile(name, compressedFile);
+                                  const updatedParams = { ...params, icon: result.relativePath };
+                                  handleParamsUpdate(updatedParams);
+                                  // Automatically save params.json with the icon reference
+                                  await saveWorkflowParams(name, updatedParams);
+                                  onUpdate(); // Refresh the workflow list if needed
+                                } catch (error) {
+                                  alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                }
+                              }
+                            }}
+                            style={{ display: 'none' }}
+                          />
+                          <Upload size={20} />
+                          <span>Click or drop image</span>
+                        </label>
+                      )}
                     </div>
                   </div>
-                )}
-                <div className="info-item">
-                  <label>Dev Mode</label>
-                  <span>{params.devMode ? 'Yes' : 'No'}</span>
-                </div>
                 </div>
               </div>
             </div>
@@ -288,48 +383,193 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                   <h2>ComfyUI Config</h2>
                 </div>
                 <div className="info-grid">
-                  {params.comfyui_config.serverUrl && (
-                    <div className="info-item">
-                      <label>Server URL</label>
-                      <span>{params.comfyui_config.serverUrl}</span>
+                  <div className="info-item">
+                    <label>Server URL</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.serverUrl || ''}
+                      onChange={(e) => handleParamsUpdate({
+                        ...params,
+                        comfyui_config: {
+                          ...params.comfyui_config,
+                          serverUrl: e.target.value || undefined
+                        }
+                      })}
+                      placeholder="http://127.0.0.1:8188"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item info-item-full">
+                    <label>Workflow File</label>
+                    <div className="file-upload-area">
+                      {params.comfyui_config.workflow ? (
+                        <div className="file-info">
+                          <span>{params.comfyui_config.workflow.replace(/^\.\//, '')}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleParamsUpdate({
+                              ...params,
+                              comfyui_config: {
+                                ...params.comfyui_config,
+                                workflow: undefined
+                              }
+                            })}
+                            className="btn-icon"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label 
+                          className={`file-drop-zone ${workflowDragOver ? 'drag-over' : ''}`}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setWorkflowDragOver(true);
+                          }}
+                          onDragLeave={() => setWorkflowDragOver(false)}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            setWorkflowDragOver(false);
+                            const file = e.dataTransfer.files[0];
+                            if (file && file.name.endsWith('.json') && name) {
+                              try {
+                                const result = await uploadFile(name, file);
+                                handleParamsUpdate({
+                                  ...params,
+                                  comfyui_config: {
+                                    ...params.comfyui_config,
+                                    workflow: result.relativePath
+                                  }
+                                });
+                                // Reload workflow JSON after upload
+                                const jsonData = await getWorkflowJson(name);
+                                setWorkflowJson(jsonData);
+                              } catch (error) {
+                                alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                              }
+                            }
+                          }}
+                        >
+                          <input
+                            type="file"
+                            accept=".json"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file && name) {
+                                try {
+                                  const result = await uploadFile(name, file);
+                                  handleParamsUpdate({
+                                    ...params,
+                                    comfyui_config: {
+                                      ...params.comfyui_config,
+                                      workflow: result.relativePath
+                                    }
+                                  });
+                                  // Reload workflow JSON after upload
+                                  const jsonData = await getWorkflowJson(name);
+                                  setWorkflowJson(jsonData);
+                                } catch (error) {
+                                  alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                }
+                              }
+                            }}
+                            style={{ display: 'none' }}
+                          />
+                          <Upload size={20} />
+                          <span>Click or drop JSON file</span>
+                        </label>
+                      )}
                     </div>
-                  )}
-                  {params.comfyui_config.workflow && (
-                    <div className="info-item">
-                      <label>Workflow File</label>
-                      <span>{params.comfyui_config.workflow}</span>
-                    </div>
-                  )}
-                  {params.comfyui_config.saveOutputPath && (
-                    <div className="info-item">
-                      <label>Save Output Path</label>
-                      <span>{params.comfyui_config.saveOutputPath}</span>
-                    </div>
-                  )}
-                  {params.comfyui_config.SAVE_INPUT_PATH && (
-                    <div className="info-item">
-                      <label>Save Input Path</label>
-                      <span>{params.comfyui_config.SAVE_INPUT_PATH}</span>
-                    </div>
-                  )}
-                  {params.comfyui_config.ACCEPTED_IMG_FORMATS && (
-                    <div className="info-item">
-                      <label>Accepted Image Formats</label>
-                      <span>{params.comfyui_config.ACCEPTED_IMG_FORMATS.join(', ')}</span>
-                    </div>
-                  )}
-                  {params.comfyui_config.ACCEPTED_VIDEO_FORMATS && (
-                    <div className="info-item">
-                      <label>Accepted Video Formats</label>
-                      <span>{params.comfyui_config.ACCEPTED_VIDEO_FORMATS.join(', ')}</span>
-                    </div>
-                  )}
-                  {params.comfyui_config.ACCEPTED_FILE_FORMATS && (
-                    <div className="info-item">
-                      <label>Accepted File Formats</label>
-                      <span>{params.comfyui_config.ACCEPTED_FILE_FORMATS.join(', ')}</span>
-                    </div>
-                  )}
+                  </div>
+                  <div className="info-item">
+                    <label>Save Output Path</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.saveOutputPath || ''}
+                      onChange={(e) => handleParamsUpdate({
+                        ...params,
+                        comfyui_config: {
+                          ...params.comfyui_config,
+                          saveOutputPath: e.target.value || undefined
+                        }
+                      })}
+                      placeholder="/path/to/output"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
+                    <label>Save Input Path</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.SAVE_INPUT_PATH || ''}
+                      onChange={(e) => handleParamsUpdate({
+                        ...params,
+                        comfyui_config: {
+                          ...params.comfyui_config,
+                          SAVE_INPUT_PATH: e.target.value || undefined
+                        }
+                      })}
+                      placeholder="/path/to/input"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
+                    <label>Accepted Image Formats</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.ACCEPTED_IMG_FORMATS ? params.comfyui_config.ACCEPTED_IMG_FORMATS.join(', ') : ''}
+                      onChange={(e) => {
+                        const formats = e.target.value.split(',').map(f => f.trim()).filter(f => f);
+                        handleParamsUpdate({
+                          ...params,
+                          comfyui_config: {
+                            ...params.comfyui_config,
+                            ACCEPTED_IMG_FORMATS: formats.length > 0 ? formats : undefined
+                          }
+                        });
+                      }}
+                      placeholder="png, jpg, jpeg"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
+                    <label>Accepted Video Formats</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.ACCEPTED_VIDEO_FORMATS ? params.comfyui_config.ACCEPTED_VIDEO_FORMATS.join(', ') : ''}
+                      onChange={(e) => {
+                        const formats = e.target.value.split(',').map(f => f.trim()).filter(f => f);
+                        handleParamsUpdate({
+                          ...params,
+                          comfyui_config: {
+                            ...params.comfyui_config,
+                            ACCEPTED_VIDEO_FORMATS: formats.length > 0 ? formats : undefined
+                          }
+                        });
+                      }}
+                      placeholder="mp4, mov"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
+                    <label>Accepted File Formats</label>
+                    <input
+                      type="text"
+                      value={params.comfyui_config.ACCEPTED_FILE_FORMATS ? params.comfyui_config.ACCEPTED_FILE_FORMATS.join(', ') : ''}
+                      onChange={(e) => {
+                        const formats = e.target.value.split(',').map(f => f.trim()).filter(f => f);
+                        handleParamsUpdate({
+                          ...params,
+                          comfyui_config: {
+                            ...params.comfyui_config,
+                            ACCEPTED_FILE_FORMATS: formats.length > 0 ? formats : undefined
+                          }
+                        });
+                      }}
+                      placeholder="txt, json"
+                      className="info-input"
+                    />
+                  </div>
                 </div>
 
                 {/* Node Manager inside ComfyUI section */}
