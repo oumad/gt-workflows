@@ -13,6 +13,7 @@ export default function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
   const navigate = useNavigate()
   const [workflowName, setWorkflowName] = useState('')
   const [parserType, setParserType] = useState<'comfyui' | 'default'>('comfyui')
+  const [label, setLabel] = useState('')
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export default function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
 
       const params: WorkflowParams = {
         parser: parserType,
+        label: label.trim() || undefined,
         description: description.trim() || undefined,
       }
 
@@ -108,6 +110,19 @@ export default function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
               ? 'For ComfyUI workflows exported in API format'
               : 'For custom scripts (Python, Node, etc.)'}
           </small>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="label">Label (Optional)</label>
+          <input
+            id="label"
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Display name (uses folder name if not set)"
+            className="form-input"
+          />
+          <small>Custom display name for the workflow</small>
         </div>
 
         <div className="form-group">

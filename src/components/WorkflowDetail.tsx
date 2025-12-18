@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { WorkflowParams } from '../types'
 import {
@@ -8,11 +8,12 @@ import {
   uploadFile,
   deleteWorkflowFile,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
 import NodeManager from './NodeManager'
+import SaveConfirmationModal from './SaveConfirmationModal'
 import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
@@ -20,9 +21,259 @@ interface WorkflowDetailProps {
   onUpdate: () => void
 }
 
+interface SubgraphEditorProps {
+  nodeId: string
+  config: any
+  workflowJson: any
+  onUpdate: (config: any) => void
+  onDelete: () => void
+}
+
+function SubgraphEditor({ nodeId, config, workflowJson, onUpdate, onDelete }: SubgraphEditorProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [nodesOrder, setNodesOrder] = useState<string[]>(config.nodesOrder || [])
+  const [newNodeId, setNewNodeId] = useState('')
+
+  // Get child nodes for this subgraph with their titles
+  const childNodes = useMemo(() => {
+    if (!workflowJson) return []
+    const children: Array<{ id: string; fullId: string; title: string; classType: string }> = []
+    const prefix = `${nodeId}:`
+    Object.keys(workflowJson).forEach(key => {
+      if (key.startsWith(prefix)) {
+        const childId = key.split(':')[1]
+        if (childId) {
+          const fullId = key
+          const node = workflowJson[fullId]
+          const title = node?._meta?.title || node?.class_type || childId
+          const classType = node?.class_type || ''
+          if (!children.find(c => c.id === childId)) {
+            children.push({
+              id: childId,
+              fullId,
+              title,
+              classType
+            })
+          }
+        }
+      }
+    })
+    return children.sort((a, b) => a.id.localeCompare(b.id))
+  }, [workflowJson, nodeId])
+
+  // Helper to get node info by child ID
+  const getNodeInfo = (childId: string) => {
+    return childNodes.find(n => n.id === childId) || { id: childId, fullId: `${nodeId}:${childId}`, title: childId, classType: '' }
+  }
+
+  useEffect(() => {
+    setNodesOrder(config.nodesOrder || [])
+  }, [config.nodesOrder])
+
+  const handleUpdateNodesOrder = (newOrder: string[]) => {
+    setNodesOrder(newOrder)
+    onUpdate({
+      ...config,
+      nodesOrder: newOrder.length > 0 ? newOrder : undefined
+    })
+  }
+
+  const moveNode = (index: number, direction: 'up' | 'down') => {
+    const newOrder = [...nodesOrder]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex >= 0 && newIndex < newOrder.length) {
+      [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]]
+      handleUpdateNodesOrder(newOrder)
+    }
+  }
+
+  const removeNode = (index: number) => {
+    const newOrder = nodesOrder.filter((_, i) => i !== index)
+    handleUpdateNodesOrder(newOrder)
+  }
+
+  const addNode = () => {
+    if (newNodeId.trim() && !nodesOrder.includes(newNodeId.trim())) {
+      handleUpdateNodesOrder([...nodesOrder, newNodeId.trim()])
+      setNewNodeId('')
+    }
+  }
+
+  const availableNodes = childNodes.filter(node => !nodesOrder.includes(node.id))
+
+  return (
+    <div className="subgraph-editor">
+      <div className="subgraph-header" onClick={() => setExpanded(!expanded)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+          {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+          <strong>Subgraph {nodeId}</strong>
+          {config.label && <span style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>— {config.label}</span>}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            if (confirm(`Delete subgraph ${nodeId}?`)) {
+              onDelete()
+            }
+          }}
+          className="btn-icon-small"
+          title="Delete subgraph"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="subgraph-content">
+          <div className="info-grid">
+            <div className="info-item">
+              <label>Label</label>
+              <input
+                type="text"
+                value={config.label || ''}
+                onChange={(e) => onUpdate({ ...config, label: e.target.value || undefined })}
+                placeholder="Subgraph label"
+                className="info-input"
+              />
+            </div>
+            <div className="info-item">
+              <label>Hide Node Labels</label>
+              <select
+                value={typeof config.hideNodeLabels === 'boolean' ? (config.hideNodeLabels ? 'all' : 'none') : 'array'}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === 'all') {
+                    onUpdate({ ...config, hideNodeLabels: true })
+                  } else if (value === 'none') {
+                    onUpdate({ ...config, hideNodeLabels: false })
+                  } else {
+                    onUpdate({ ...config, hideNodeLabels: config.hideNodeLabels || [] })
+                  }
+                }}
+                className="info-input"
+              >
+                <option value="none">None</option>
+                <option value="all">All</option>
+                <option value="array">Specific nodes (edit in JSON)</option>
+              </select>
+            </div>
+            <div className="info-item">
+              <label>Show Node Labels</label>
+              <select
+                value={typeof config.showNodeLabels === 'boolean' ? (config.showNodeLabels ? 'all' : 'none') : 'array'}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === 'all') {
+                    onUpdate({ ...config, showNodeLabels: true })
+                  } else if (value === 'none') {
+                    onUpdate({ ...config, showNodeLabels: false })
+                  } else {
+                    onUpdate({ ...config, showNodeLabels: config.showNodeLabels || [] })
+                  }
+                }}
+                className="info-input"
+              >
+                <option value="none">None</option>
+                <option value="all">All</option>
+                <option value="array">Specific nodes (edit in JSON)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="info-item info-item-full" style={{ marginTop: '16px' }}>
+            <label>Nodes Order</label>
+            <small style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>
+              Specify the display order of child nodes. Only use the child node ID (part after the colon).
+            </small>
+            {nodesOrder.length > 0 ? (
+              <div className="nodes-order-list">
+                {nodesOrder.map((childId, index) => {
+                  const nodeInfo = getNodeInfo(childId)
+                  return (
+                    <div key={index} className="nodes-order-item">
+                      <GripVertical size={16} className="grip-icon" />
+                      <div className="node-info">
+                        <div className="node-id-row">
+                          <span className="node-id">{childId}</span>
+                          <span className="full-node-id">{nodeInfo.fullId}</span>
+                        </div>
+                        <div className="node-title">{nodeInfo.title}</div>
+                        {nodeInfo.classType && (
+                          <div className="node-class-type">{nodeInfo.classType}</div>
+                        )}
+                      </div>
+                      <div className="nodes-order-actions">
+                        <button
+                          onClick={() => moveNode(index, 'up')}
+                          disabled={index === 0}
+                          className="btn-icon-small"
+                          title="Move up"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          onClick={() => moveNode(index, 'down')}
+                          disabled={index === nodesOrder.length - 1}
+                          className="btn-icon-small"
+                          title="Move down"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                        <button
+                          onClick={() => removeNode(index)}
+                          className="btn-icon-small"
+                          title="Remove"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '4px', marginBottom: '8px' }}>
+                <small style={{ color: 'var(--text-secondary)' }}>No nodes in order. Nodes will appear in default order.</small>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <select
+                value={newNodeId}
+                onChange={(e) => setNewNodeId(e.target.value)}
+                className="info-input"
+                style={{ flex: 1 }}
+              >
+                <option value="">Select a node to add...</option>
+                {availableNodes.map(node => (
+                  <option key={node.id} value={node.id}>
+                    {node.id}: {node.title} ({node.classType})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addNode}
+                disabled={!newNodeId.trim()}
+                className="btn btn-secondary"
+              >
+                <Plus size={16} />
+                Add
+              </button>
+            </div>
+            {childNodes.length > 0 && (
+              <small style={{ display: 'block', marginTop: '8px', color: 'var(--text-secondary)' }}>
+                Available child nodes: {childNodes.map(n => `${n.id} (${n.title})`).join(', ')}
+              </small>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const { name } = useParams<{ name: string }>()
   const [params, setParams] = useState<WorkflowParams | null>(null)
+  const [originalParams, setOriginalParams] = useState<WorkflowParams | null>(null)
   const [workflowJson, setWorkflowJson] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -36,6 +287,11 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [iconError, setIconError] = useState(false)
   const [iconDragOver, setIconDragOver] = useState(false)
   const [workflowDragOver, setWorkflowDragOver] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [hasExternalChanges, setHasExternalChanges] = useState(false)
+  const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
+  const [checkInterval, setCheckInterval] = useState<NodeJS.Timeout | null>(null)
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -56,6 +312,41 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }, [name])
 
+  // Check for external changes periodically
+  useEffect(() => {
+    if (!name || !params || !originalParams) return
+
+    const checkForExternalChanges = async () => {
+      try {
+        const currentFileParams = await getWorkflowParams(name)
+        const currentFileStr = JSON.stringify(currentFileParams, null, 2)
+        const originalStr = JSON.stringify(originalParams, null, 2)
+        
+        if (currentFileStr !== originalStr) {
+          // External changes detected
+          const currentParamsStr = JSON.stringify(params, null, 2)
+          if (currentFileStr !== currentParamsStr) {
+            setHasExternalChanges(true)
+            setExternalParams(currentFileParams)
+          }
+        } else {
+          setHasExternalChanges(false)
+          setExternalParams(null)
+        }
+      } catch (err) {
+        // Silently fail - file might not exist or be accessible
+        console.error('Error checking for external changes:', err)
+      }
+    }
+
+    // Check every 5 seconds
+    const interval = setInterval(checkForExternalChanges, 5000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [name, params, originalParams])
+
   useEffect(() => {
     if (params && !editParamsJson) {
       setParamsText(JSON.stringify(params, null, 2))
@@ -68,11 +359,14 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setLoading(true)
       setError(null)
       setEditParamsJson(false)
+      setHasExternalChanges(false)
+      setExternalParams(null)
       const [paramsData, jsonData] = await Promise.all([
         getWorkflowParams(name),
         getWorkflowJson(name).catch(() => null),
       ])
       setParams(paramsData)
+      setOriginalParams(JSON.parse(JSON.stringify(paramsData))) // Deep clone
       setParamsText(JSON.stringify(paramsData, null, 2))
       setWorkflowJson(jsonData)
       setIconError(false)
@@ -83,33 +377,121 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }
 
-  const handleSave = async () => {
+  const handleSaveClick = async () => {
+    if (!name || !params) return
+    
+    // Check for external changes before showing modal
+    try {
+      const currentFileParams = await getWorkflowParams(name)
+      const currentFileStr = JSON.stringify(currentFileParams, null, 2)
+      const originalStr = JSON.stringify(originalParams, null, 2)
+      
+      if (currentFileStr !== originalStr) {
+        const currentParamsStr = JSON.stringify(params, null, 2)
+        if (currentFileStr !== currentParamsStr) {
+          setHasExternalChanges(true)
+          setExternalParams(currentFileParams)
+        } else {
+          setHasExternalChanges(false)
+          setExternalParams(null)
+        }
+      } else {
+        setHasExternalChanges(false)
+        setExternalParams(null)
+      }
+    } catch (err) {
+      // Continue even if check fails
+      console.error('Error checking for external changes:', err)
+      setHasExternalChanges(false)
+      setExternalParams(null)
+    }
+    
+    setShowSaveModal(true)
+  }
+
+  const handleSaveConfirm = async () => {
     if (!name || !params) return
     try {
       setSaving(true)
       setError(null)
       await saveWorkflowParams(name, params)
+      setOriginalParams(JSON.parse(JSON.stringify(params))) // Update original
+      setHasExternalChanges(false)
+      setExternalParams(null)
+      setShowSaveModal(false)
+      setShowSuccessMessage(true)
       onUpdate()
-      alert('Workflow saved successfully!')
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false)
+      }, 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save workflow')
+      setShowSaveModal(false)
     } finally {
       setSaving(false)
     }
   }
 
+  const handleReload = async () => {
+    if (!name) return
+    try {
+      setLoading(true)
+      setError(null)
+      setEditParamsJson(false)
+      const freshParams = await getWorkflowParams(name)
+      setParams(freshParams)
+      setOriginalParams(JSON.parse(JSON.stringify(freshParams))) // Deep clone
+      setParamsText(JSON.stringify(freshParams, null, 2))
+      setHasExternalChanges(false)
+      setExternalParams(null)
+      setShowSaveModal(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reload workflow')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleOverwrite = async () => {
+    await handleSaveConfirm()
+  }
+
   const handleSaveParamsJson = async () => {
     if (!name || !paramsText) return
     try {
+      const parsedParams = JSON.parse(paramsText)
+      
+      // Check for external changes
+      try {
+        const currentFileParams = await getWorkflowParams(name)
+        const currentFileStr = JSON.stringify(currentFileParams, null, 2)
+        const originalStr = JSON.stringify(originalParams, null, 2)
+        
+        if (currentFileStr !== originalStr) {
+          const parsedStr = JSON.stringify(parsedParams, null, 2)
+          if (currentFileStr !== parsedStr) {
+            if (!confirm('Warning: params.json has been modified externally. Saving will overwrite those changes. Continue?')) {
+              return
+            }
+          }
+        }
+      } catch (err) {
+        // Continue even if check fails
+        console.error('Error checking for external changes:', err)
+      }
+      
       setSaving(true)
       setError(null)
-      const parsedParams = JSON.parse(paramsText)
       await saveWorkflowParams(name, parsedParams)
       setParams(parsedParams)
+      setOriginalParams(JSON.parse(JSON.stringify(parsedParams))) // Deep clone
       setEditParamsJson(false)
       setParamsText(JSON.stringify(parsedParams, null, 2))
+      setHasExternalChanges(false)
+      setExternalParams(null)
       onUpdate()
-      alert('Workflow saved successfully!')
     } catch (err) {
       if (err instanceof SyntaxError) {
         setError('Invalid JSON format')
@@ -138,6 +520,27 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }
 
+  // Detect if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (!originalParams || !params) return false
+    return JSON.stringify(originalParams, null, 2) !== JSON.stringify(params, null, 2)
+  }, [originalParams, params])
+
+  // Check if a specific field has changed
+  const isFieldChanged = (fieldPath: string): boolean => {
+    if (!originalParams || !params) return false
+    const paths = fieldPath.split('.')
+    let originalValue: any = originalParams
+    let currentValue: any = params
+    
+    for (const path of paths) {
+      originalValue = originalValue?.[path]
+      currentValue = currentValue?.[path]
+    }
+    
+    return JSON.stringify(originalValue) !== JSON.stringify(currentValue)
+  }
+
   const handleReset = async () => {
     if (!name) return
     if (!confirm('Are you sure you want to reset? All unsaved changes will be lost.')) {
@@ -148,7 +551,10 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setError(null)
       const freshParams = await getWorkflowParams(name)
       setParams(freshParams)
+      setOriginalParams(JSON.parse(JSON.stringify(freshParams))) // Deep clone
       setParamsText(JSON.stringify(freshParams, null, 2))
+      setHasExternalChanges(false)
+      setExternalParams(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset workflow')
     } finally {
@@ -182,7 +588,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <ArrowLeft size={16} /> Back
         </Link>
         <div className="workflow-title-section">
-          <h1>{name}</h1>
+          <h1>{params?.label || name}</h1>
         </div>
         <div className="header-actions">
           <button
@@ -193,12 +599,20 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           >
             <RotateCcw size={16} /> Reset
           </button>
+          {hasExternalChanges && (
+            <div className="external-changes-indicator" title="params.json has been modified externally">
+              <AlertCircle size={16} />
+              <span>External Changes</span>
+            </div>
+          )}
           <button
-            onClick={handleSave}
+            onClick={handleSaveClick}
             disabled={saving}
-            className="btn btn-primary"
+            className={`btn btn-primary ${hasUnsavedChanges ? 'has-changes' : ''}`}
+            title={hasUnsavedChanges ? 'Apply changes' : 'View current state and apply'}
           >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+            <Save size={16} /> {saving ? 'Applying...' : 'Apply'}
+            {hasUnsavedChanges && <span className="unsaved-indicator" />}
           </button>
         </div>
       </div>
@@ -243,13 +657,34 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <span>{params.parser === 'comfyui' ? 'ComfyUI' : 'Default'}</span>
                   </div>
                   <div className="info-item">
+                    <label>Label</label>
+                    <input
+                      type="text"
+                      value={params.label || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, label: e.target.value || undefined })}
+                      placeholder="Display name (optional)"
+                      className={`info-input ${isFieldChanged('label') ? 'field-changed' : ''}`}
+                    />
+                    <small>Used as workflow name instead of folder name</small>
+                  </div>
+                  <div className="info-item">
+                    <label>Category</label>
+                    <input
+                      type="text"
+                      value={params.category || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, category: e.target.value || undefined })}
+                      placeholder="Workflow category"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
                     <label>Description</label>
                     <input
                       type="text"
                       value={params.description || ''}
                       onChange={(e) => handleParamsUpdate({ ...params, description: e.target.value || undefined })}
                       placeholder="Workflow description"
-                      className="info-input"
+                      className={`info-input ${isFieldChanged('description') ? 'field-changed' : ''}`}
                     />
                   </div>
                   <div className="info-item">
@@ -257,7 +692,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <select
                       value={params.scope || ''}
                       onChange={(e) => handleParamsUpdate({ ...params, scope: e.target.value || undefined })}
-                      className="info-input"
+                      className={`info-input ${isFieldChanged('scope') ? 'field-changed' : ''}`}
                     >
                       <option value="">None</option>
                       <option value="item">Item</option>
@@ -298,6 +733,16 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     />
                   </div>
                   <div className="info-item">
+                    <label>Order</label>
+                    <input
+                      type="number"
+                      value={params.order || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, order: e.target.value ? Number(e.target.value) : undefined })}
+                      placeholder="Display order"
+                      className="info-input"
+                    />
+                  </div>
+                  <div className="info-item">
                     <label>Dev Mode</label>
                     <label className="checkbox-label">
                       <input
@@ -307,6 +752,75 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                       />
                       <span>Enabled</span>
                     </label>
+                  </div>
+                  <div className="info-item">
+                    <label>Force Local</label>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={params.forceLocal || false}
+                        onChange={(e) => handleParamsUpdate({ ...params, forceLocal: e.target.checked || undefined })}
+                      />
+                      <span>Enabled</span>
+                    </label>
+                    <small>Force execution locally even in HTTP mode</small>
+                  </div>
+                  <div className="info-item info-item-full">
+                    <label>Documentation</label>
+                    <input
+                      type="text"
+                      value={params.documentation || ''}
+                      onChange={(e) => handleParamsUpdate({ ...params, documentation: e.target.value || undefined })}
+                      placeholder="Path to .md documentation file (absolute path)"
+                      className="info-input"
+                    />
+                    <small>Path to markdown file for workflow documentation</small>
+                  </div>
+                  <div className="info-item info-item-full">
+                    <label>Icon Badge</label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={params.iconBadge?.content || ''}
+                        onChange={(e) => handleParamsUpdate({
+                          ...params,
+                          iconBadge: e.target.value ? { ...params.iconBadge, content: e.target.value } : undefined
+                        })}
+                        placeholder="Badge content"
+                        className="info-input"
+                        style={{ flex: '1', minWidth: '150px' }}
+                      />
+                      <select
+                        value={params.iconBadge?.colorVariant || ''}
+                        onChange={(e) => handleParamsUpdate({
+                          ...params,
+                          iconBadge: params.iconBadge ? {
+                            ...params.iconBadge,
+                            colorVariant: e.target.value || undefined
+                          } : { content: '', colorVariant: e.target.value || undefined }
+                        })}
+                        className="info-input"
+                        style={{ width: '150px' }}
+                      >
+                        <option value="">Default</option>
+                        <option value="primary">Primary</option>
+                        <option value="secondary">Secondary</option>
+                        <option value="error">Error</option>
+                        <option value="warning">Warning</option>
+                        <option value="info">Info</option>
+                        <option value="success">Success</option>
+                      </select>
+                      {params.iconBadge && (
+                        <button
+                          type="button"
+                          onClick={() => handleParamsUpdate({ ...params, iconBadge: undefined })}
+                          className="btn-icon"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <small>Badge displayed on workflow card</small>
                   </div>
                   <div className="info-item info-item-full">
                     <label>Icon</label>
@@ -322,18 +836,15 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                               try {
                                 // Delete the icon file
                                 await deleteWorkflowFile(name, iconFilename);
-                                // Update params and save
+                                // Update params (don't auto-save - user must click Apply)
                                 const updatedParams = { ...params, icon: undefined };
                                 handleParamsUpdate(updatedParams);
-                                await saveWorkflowParams(name, updatedParams);
-                                onUpdate();
                               } catch (error) {
                                 console.error('Failed to delete icon:', error);
                                 // Still remove from params even if file deletion fails
                                 const updatedParams = { ...params, icon: undefined };
                                 handleParamsUpdate(updatedParams);
-                                await saveWorkflowParams(name, updatedParams);
-                                onUpdate();
+                                // Don't auto-save - user must click Apply
                               }
                             }}
                             className="btn-icon"
@@ -342,7 +853,31 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                           </button>
                         </div>
                       ) : (
-                        <label className="file-drop-zone">
+                        <label 
+                          className={`file-drop-zone ${iconDragOver ? 'drag-over' : ''}`}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIconDragOver(true);
+                          }}
+                          onDragLeave={() => setIconDragOver(false)}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            setIconDragOver(false);
+                            const file = e.dataTransfer.files[0];
+                            if (file && file.type.startsWith('image/') && name) {
+                              try {
+                                // Compress image before uploading
+                                const compressedFile = await compressImage(file, 800, 0.85);
+                                const result = await uploadFile(name, compressedFile);
+                                const updatedParams = { ...params, icon: result.relativePath };
+                                handleParamsUpdate(updatedParams);
+                                // Don't auto-save - user must click Apply
+                              } catch (error) {
+                                alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                              }
+                            }
+                          }}
+                        >
                           <input
                             type="file"
                             accept="image/*"
@@ -355,9 +890,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                   const result = await uploadFile(name, compressedFile);
                                   const updatedParams = { ...params, icon: result.relativePath };
                                   handleParamsUpdate(updatedParams);
-                                  // Automatically save params.json with the icon reference
-                                  await saveWorkflowParams(name, updatedParams);
-                                  onUpdate(); // Refresh the workflow list if needed
+                                  // Don't auto-save - user must click Apply
                                 } catch (error) {
                                   alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
                                 }
@@ -374,6 +907,180 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                 </div>
               </div>
             </div>
+
+            {/* Dashboard Config Section */}
+            {(params.dashboard || params.parser !== 'comfyui') && (
+              <div className="detail-section">
+                <div className="section-header">
+                  <Settings size={20} />
+                  <h2>Dashboard Configuration</h2>
+                  {!params.dashboard && (
+                    <button
+                      onClick={() => handleParamsUpdate({ ...params, dashboard: {} })}
+                      className="btn btn-secondary"
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      Add Dashboard Config
+                    </button>
+                  )}
+                </div>
+                {params.dashboard && (
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <label>Disable Dashboard</label>
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={params.dashboard.disable || false}
+                          onChange={(e) => handleParamsUpdate({
+                            ...params,
+                            dashboard: { ...params.dashboard, disable: e.target.checked || undefined }
+                          })}
+                        />
+                        <span>Disable</span>
+                      </label>
+                    </div>
+                    <div className="info-item">
+                      <label>Break Size</label>
+                      <input
+                        type="number"
+                        value={params.dashboard.breakSize || ''}
+                        onChange={(e) => handleParamsUpdate({
+                          ...params,
+                          dashboard: { ...params.dashboard, breakSize: e.target.value ? Number(e.target.value) : undefined }
+                        })}
+                        placeholder="Panel size threshold"
+                        className="info-input"
+                      />
+                      <small>Size at which dashboard appears</small>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Use/Selectors Section */}
+            {(params.use || params.parser !== 'comfyui') && (
+              <div className="detail-section">
+                <div className="section-header">
+                  <Settings size={20} />
+                  <h2>Data Selectors</h2>
+                  {!params.use && (
+                    <button
+                      onClick={() => handleParamsUpdate({ ...params, use: {} })}
+                      className="btn btn-secondary"
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      Add Selectors
+                    </button>
+                  )}
+                </div>
+                {params.use && (
+                  <>
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <label>Current Project</label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={!!params.use.currentProject}
+                            onChange={(e) => handleParamsUpdate({
+                              ...params,
+                              use: {
+                                ...params.use,
+                                currentProject: e.target.checked ? (typeof params.use.currentProject === 'object' ? params.use.currentProject : true) : undefined
+                              }
+                            })}
+                          />
+                          <span>Enable</span>
+                        </label>
+                      </div>
+                      <div className="info-item">
+                        <label>App Config</label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={!!params.use.appConfig}
+                            onChange={(e) => handleParamsUpdate({
+                              ...params,
+                              use: {
+                                ...params.use,
+                                appConfig: e.target.checked ? (typeof params.use.appConfig === 'object' ? params.use.appConfig : true) : undefined
+                              }
+                            })}
+                          />
+                          <span>Enable</span>
+                        </label>
+                      </div>
+                      <div className="info-item">
+                        <label>Items</label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={!!params.use.items}
+                            onChange={(e) => handleParamsUpdate({
+                              ...params,
+                              use: {
+                                ...params.use,
+                                items: e.target.checked ? (typeof params.use.items === 'object' ? params.use.items : true) : undefined
+                              }
+                            })}
+                          />
+                          <span>Enable</span>
+                        </label>
+                      </div>
+                      <div className="info-item">
+                        <label>Selected Images</label>
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={!!params.use.selectedImages}
+                            onChange={(e) => handleParamsUpdate({
+                              ...params,
+                              use: {
+                                ...params.use,
+                                selectedImages: e.target.checked ? (typeof params.use.selectedImages === 'object' ? params.use.selectedImages : true) : undefined
+                              }
+                            })}
+                          />
+                          <span>Enable</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                      <small style={{ color: 'var(--text-secondary)' }}>
+                        Advanced selector configuration can be edited in the JSON editor below.
+                        Use fields, objectTypeFields, scope, and includesScenes can be configured there.
+                      </small>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* UI Configuration Section */}
+            {params.parser !== 'comfyui' && params.ui && (
+              <div className="detail-section">
+                <div className="section-header">
+                  <Settings size={20} />
+                  <h2>UI Configuration (Categories & Rows)</h2>
+                </div>
+                <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  <p style={{ marginBottom: '12px', color: 'var(--text-secondary)' }}>
+                    UI configuration allows you to organize parameters into categories and rows.
+                    Use the JSON editor below to configure categories, rows, and parameter visibility.
+                  </p>
+                  <div style={{ marginTop: '12px' }}>
+                    <strong>Available Categories:</strong>
+                    <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                      {Object.keys(params.ui).map(category => (
+                        <li key={category}>{category}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ComfyUI Config Section */}
             {params.parser === 'comfyui' && params.comfyui_config && (
@@ -396,7 +1103,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                         }
                       })}
                       placeholder="http://127.0.0.1:8188"
-                      className="info-input"
+                      className={`info-input ${isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}`}
                     />
                   </div>
                   <div className="info-item info-item-full">
@@ -570,15 +1277,135 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                       className="info-input"
                     />
                   </div>
+                  <div className="info-item info-item-full">
+                    <label>Output Comparator</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={params.comfyui_config.outputComparator?.inputNodeId || ''}
+                        onChange={(e) => handleParamsUpdate({
+                          ...params,
+                          comfyui_config: {
+                            ...params.comfyui_config,
+                            outputComparator: e.target.value ? {
+                              ...params.comfyui_config.outputComparator,
+                              inputNodeId: e.target.value,
+                              defaultEnabled: params.comfyui_config.outputComparator?.defaultEnabled || false
+                            } : undefined
+                          }
+                        })}
+                        placeholder="Input node ID for comparison"
+                        className="info-input"
+                        style={{ flex: '1', minWidth: '200px' }}
+                      />
+                      {params.comfyui_config.outputComparator && (
+                        <>
+                          <label className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={params.comfyui_config.outputComparator.defaultEnabled || false}
+                              onChange={(e) => handleParamsUpdate({
+                                ...params,
+                                comfyui_config: {
+                                  ...params.comfyui_config,
+                                  outputComparator: {
+                                    ...params.comfyui_config.outputComparator,
+                                    defaultEnabled: e.target.checked
+                                  }
+                                }
+                              })}
+                            />
+                            <span>Default Enabled</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleParamsUpdate({
+                              ...params,
+                              comfyui_config: {
+                                ...params.comfyui_config,
+                                outputComparator: undefined
+                              }
+                            })}
+                            className="btn-icon"
+                          >
+                            <X size={16} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <small>Enable wipe comparison feature for output images/videos</small>
+                  </div>
+                  <div className="info-item info-item-full">
+                    <label>Subgraphs Configuration</label>
+                    <div style={{ marginTop: '8px' }}>
+                      {params.comfyui_config.subgraphs && Object.keys(params.comfyui_config.subgraphs).length > 0 ? (
+                        <div className="subgraphs-list">
+                          {Object.entries(params.comfyui_config.subgraphs).map(([nodeId, config]: [string, any]) => (
+                            <SubgraphEditor
+                              key={nodeId}
+                              nodeId={nodeId}
+                              config={config}
+                              workflowJson={workflowJson}
+                              onUpdate={(updatedConfig) => {
+                                handleParamsUpdate({
+                                  ...params,
+                                  comfyui_config: {
+                                    ...params.comfyui_config,
+                                    subgraphs: {
+                                      ...params.comfyui_config.subgraphs,
+                                      [nodeId]: updatedConfig
+                                    }
+                                  }
+                                })
+                              }}
+                              onDelete={() => {
+                                const newSubgraphs = { ...params.comfyui_config.subgraphs }
+                                delete newSubgraphs[nodeId]
+                                handleParamsUpdate({
+                                  ...params,
+                                  comfyui_config: {
+                                    ...params.comfyui_config,
+                                    subgraphs: Object.keys(newSubgraphs).length > 0 ? newSubgraphs : undefined
+                                  }
+                                })
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                          <small style={{ color: 'var(--text-secondary)' }}>
+                            No subgraphs configured. Use the JSON editor below to add subgraph configurations.
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Node Manager inside ComfyUI section */}
-                {workflowJson && (
+                {workflowJson ? (
                   <NodeManager
                     workflowJson={workflowJson}
                     params={params}
                     onUpdateParams={handleParamsUpdate}
                   />
+                ) : (
+                  <div className="detail-section">
+                    <div className="section-header">
+                      <Settings size={20} />
+                      <h2>Node Manager</h2>
+                    </div>
+                    <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                      <p style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                        <strong>Node Manager is not available</strong>
+                      </p>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>
+                        To use the Node Manager, you need to upload a workflow.json file first.
+                        Use the "Workflow File" field above to upload your ComfyUI workflow JSON file.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -665,7 +1492,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                       disabled={saving}
                       className="btn btn-primary"
                     >
-                      <Save size={16} /> {saving ? 'Saving...' : 'Save JSON'}
+                      <Save size={16} /> {saving ? 'Applying...' : 'Apply JSON'}
                     </button>
                   </>
                 )}
@@ -716,6 +1543,29 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           </div>
         )}
       </div>
+
+      {/* Save Confirmation Modal */}
+      {showSaveModal && (
+        <SaveConfirmationModal
+          originalParams={originalParams}
+          currentParams={params}
+          hasExternalChanges={hasExternalChanges}
+          externalParams={externalParams}
+          onSave={handleSaveConfirm}
+          onCancel={() => setShowSaveModal(false)}
+          onReload={handleReload}
+          onOverwrite={handleOverwrite}
+        />
+      )}
+
+      {showSuccessMessage && (
+        <div className="success-toast">
+          <div className="success-toast-content">
+            <Save size={20} />
+            <span>Changes applied successfully!</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

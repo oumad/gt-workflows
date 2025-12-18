@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Workflow } from '../types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search } from 'lucide-react'
 import QuickEditModal from './QuickEditModal'
 import BulkEditModal from './BulkEditModal'
 import './WorkflowList.css'
@@ -18,6 +18,40 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [selectedWorkflows, setSelectedWorkflows] = useState<Set<string>>(new Set())
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Filter workflows based on search term
+  const filteredWorkflows = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return workflows
+    }
+
+    const term = searchTerm.toLowerCase().trim()
+    return workflows.filter((workflow) => {
+      const name = workflow.name.toLowerCase()
+      const label = workflow.params.label?.toLowerCase() || ''
+      const description = workflow.params.description?.toLowerCase() || ''
+      const category = workflow.params.category?.toLowerCase() || ''
+      const tags = workflow.params.tags?.map(t => t.toLowerCase()).join(' ') || ''
+      
+      return (
+        name.includes(term) ||
+        label.includes(term) ||
+        description.includes(term) ||
+        category.includes(term) ||
+        tags.includes(term)
+      )
+    })
+  }, [workflows, searchTerm])
+
+  const sortedWorkflows = useMemo(() => {
+    return [...filteredWorkflows].sort((a, b) => {
+      const orderA = a.params.order ?? 999
+      const orderB = b.params.order ?? 999
+      return orderA - orderB
+    })
+  }, [filteredWorkflows])
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -38,12 +72,6 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     )
   }
 
-  const sortedWorkflows = [...workflows].sort((a, b) => {
-    const orderA = a.params.order ?? 999
-    const orderB = b.params.order ?? 999
-    return orderA - orderB
-  })
-
   const toggleSelection = (workflowName: string) => {
     const newSelection = new Set(selectedWorkflows)
     if (newSelection.has(workflowName)) {
@@ -55,10 +83,10 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   }
 
   const toggleSelectAll = () => {
-    if (selectedWorkflows.size === workflows.length) {
+    if (selectedWorkflows.size === filteredWorkflows.length) {
       setSelectedWorkflows(new Set())
     } else {
-      setSelectedWorkflows(new Set(workflows.map((w) => w.name)))
+      setSelectedWorkflows(new Set(filteredWorkflows.map((w) => w.name)))
     }
   }
 
@@ -71,7 +99,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     setSelectionMode(true)
   }
 
-  const selectedWorkflowsList = workflows.filter((w) =>
+  const selectedWorkflowsList = filteredWorkflows.filter((w) =>
     selectedWorkflows.has(w.name)
   )
 
@@ -79,7 +107,10 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     <div className="workflow-list">
       <div className="list-header">
         <div className="header-left">
-          <h2>Workflows ({workflows.length})</h2>
+          <h2>
+            Workflows ({filteredWorkflows.length}
+            {searchTerm && filteredWorkflows.length !== workflows.length && ` of ${workflows.length}`})
+          </h2>
           {selectionMode && (
             <span className="selection-mode-badge">
               {selectedWorkflows.size > 0
@@ -87,6 +118,27 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                 : 'Select workflows to edit'}
             </span>
           )}
+        </div>
+        <div className="search-container">
+          <div className="search-input-wrapper">
+            <Search size={18} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search workflows..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="search-clear"
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="header-actions">
           {!selectionMode ? (
@@ -104,18 +156,18 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
             </>
           ) : (
             <>
-              {workflows.length > 0 && (
+              {filteredWorkflows.length > 0 && (
                 <button
                   onClick={toggleSelectAll}
                   className="btn btn-secondary"
                   title={
-                    selectedWorkflows.size === workflows.length
+                    selectedWorkflows.size === filteredWorkflows.length
                       ? 'Deselect all'
                       : 'Select all'
                   }
                 >
                   <CheckSquare size={16} />
-                  {selectedWorkflows.size === workflows.length
+                  {selectedWorkflows.size === filteredWorkflows.length
                     ? 'Deselect All'
                     : 'Select All'}
                 </button>
@@ -147,6 +199,16 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
           <Link to="/create" className="btn btn-primary">
             Create Your First Workflow
           </Link>
+        </div>
+      ) : filteredWorkflows.length === 0 ? (
+        <div className="empty-state">
+          <p>No workflows match your search "{searchTerm}"</p>
+          <button
+            onClick={() => setSearchTerm('')}
+            className="btn btn-secondary"
+          >
+            Clear Search
+          </button>
         </div>
       ) : (
         <>
@@ -193,7 +255,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                   </div>
                 )}
                 <div className="workflow-title-section">
-                  <h3>{workflow.name}</h3>
+                  <h3>{workflow.params.label || workflow.name}</h3>
                   {workflow.params.iconBadge && (
                     <span
                       className="workflow-badge"
@@ -206,7 +268,11 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                             : workflow.params.iconBadge.colorVariant === 'success'
                             ? 'var(--success)'
                             : 'var(--accent)',
-                        ...(workflow.params.iconBadge as any),
+                        ...(Object.fromEntries(
+                          Object.entries(workflow.params.iconBadge as any).filter(([key]) => 
+                            key !== 'content' && key !== 'colorVariant'
+                          )
+                        )),
                       }}
                     >
                       {workflow.params.iconBadge.content}

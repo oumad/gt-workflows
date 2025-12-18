@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { WorkflowParams } from '../types'
 import { 
   Search, Plus, X, Eye, EyeOff, Package, Settings, 
@@ -25,6 +25,8 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<'input' | 'output' | 'all' | 'appinfo'>('input')
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [expandedSubgraphs, setExpandedSubgraphs] = useState<Set<string>>(new Set())
+  const [groupBySubgraph, setGroupBySubgraph] = useState(true)
   const [editingParser, setEditingParser] = useState<{ nodeId: string; nodeType: string; nodeInputs: Record<string, any> } | null>(null)
 
   // Extract nodes from workflow JSON
@@ -106,18 +108,89 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const hasExplicitInputIds = params.comfyui_config?.input_ids !== undefined
   const hasExplicitOutputIds = params.comfyui_config?.output_ids !== undefined
 
+  // Helper function to get node parser
+  const getNodeParser = useCallback((nodeId: string) => {
+    return params.comfyui_config?.node_parsers?.input_nodes?.[nodeId]
+  }, [params.comfyui_config?.node_parsers])
+
   // Determine which nodes are inputs/outputs
+  // Include subgraph nodes if they have parsers configured (they are parsed)
   const inputNodes = useMemo(() => {
     const ids = configuredInputIds.length > 0 ? configuredInputIds : appInfoInputIds
-    return nodes.filter(node => ids.includes(node.id))
-  }, [nodes, configuredInputIds, appInfoInputIds])
+    const explicitInputNodes = nodes.filter(node => ids.includes(node.id))
+    
+    // Also include subgraph nodes (nodes with ":" in ID) that have parsers configured
+    const nodeParsers = params.comfyui_config?.node_parsers?.input_nodes || {}
+    const subgraphNodesWithParsers = nodes.filter(node => {
+      // Check if it's a subgraph node (contains ":")
+      if (!node.id.includes(':')) return false
+      // Check if it has a parser configured
+      return !!nodeParsers[node.id]
+    })
+    
+    // Combine and deduplicate
+    const allInputNodes = [...explicitInputNodes, ...subgraphNodesWithParsers]
+    const uniqueNodes = Array.from(new Map(allInputNodes.map(node => [node.id, node])).values())
+    return uniqueNodes
+  }, [nodes, configuredInputIds, appInfoInputIds, params.comfyui_config?.node_parsers])
 
   const outputNodes = useMemo(() => {
     const ids = configuredOutputIds.length > 0 ? configuredOutputIds : appInfoOutputIds
     return nodes.filter(node => ids.includes(node.id))
   }, [nodes, configuredOutputIds, appInfoOutputIds])
 
-  // Filter nodes based on search and category
+  // Group nodes by subgraph
+  const groupedNodes = useMemo(() => {
+    const topLevel: NodeInfo[] = []
+    const subgraphGroups: Record<string, NodeInfo[]> = {}
+    
+    let nodesToGroup = nodes
+    if (selectedCategory === 'input') nodesToGroup = inputNodes
+    else if (selectedCategory === 'output') nodesToGroup = outputNodes
+    else if (selectedCategory === 'appinfo') nodesToGroup = appInfoNodes
+
+    // Filter by search term if provided
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      nodesToGroup = nodesToGroup.filter(node => 
+        node.id.toLowerCase().includes(term) ||
+        node.class_type?.toLowerCase().includes(term) ||
+        node._meta?.title?.toLowerCase().includes(term) ||
+        node.title?.toLowerCase().includes(term)
+      )
+    }
+
+    // Group nodes
+    nodesToGroup.forEach(node => {
+      if (node.id.includes(':')) {
+        const subgraphId = node.id.split(':')[0]
+        if (!subgraphGroups[subgraphId]) {
+          subgraphGroups[subgraphId] = []
+        }
+        subgraphGroups[subgraphId].push(node)
+      } else {
+        topLevel.push(node)
+      }
+    })
+
+    // Sort subgraph groups and their nodes
+    Object.keys(subgraphGroups).forEach(key => {
+      subgraphGroups[key].sort((a, b) => {
+        const aChild = a.id.split(':')[1]
+        const bChild = b.id.split(':')[1]
+        return aChild.localeCompare(bChild)
+      })
+    })
+
+    return { topLevel, subgraphGroups }
+  }, [nodes, inputNodes, outputNodes, appInfoNodes, selectedCategory, searchTerm])
+
+  // Get subgraph labels from params
+  const getSubgraphLabel = (subgraphId: string) => {
+    return params.comfyui_config?.subgraphs?.[subgraphId]?.label || `Subgraph ${subgraphId}`
+  }
+
+  // Filter nodes based on search and category (for backward compatibility)
   const filteredNodes = useMemo(() => {
     let filtered = nodes
     if (selectedCategory === 'input') filtered = inputNodes
@@ -144,6 +217,16 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       newExpanded.add(nodeId)
     }
     setExpandedNodes(newExpanded)
+  }
+
+  const toggleSubgraph = (subgraphId: string) => {
+    const newExpanded = new Set(expandedSubgraphs)
+    if (newExpanded.has(subgraphId)) {
+      newExpanded.delete(subgraphId)
+    } else {
+      newExpanded.add(subgraphId)
+    }
+    setExpandedSubgraphs(newExpanded)
   }
 
   const addToArray = (arrayName: 'input_ids' | 'output_ids' | 'hiddenNodeIds' | 'wrappedNodeIds', nodeId: string) => {
@@ -180,10 +263,6 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     
     updatedParams.comfyui_config[arrayName] = currentArray.filter(id => id !== nodeId)
     onUpdateParams(updatedParams)
-  }
-
-  const getNodeParser = (nodeId: string) => {
-    return params.comfyui_config?.node_parsers?.input_nodes?.[nodeId]
   }
 
   const handleSaveParser = (nodeId: string, parserConfig: any) => {
@@ -278,36 +357,57 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
 
     return (
       <div key={node.id} className="node-item">
-        <div className="node-header" onClick={() => toggleNode(node.id)}>
-          <div className="node-expand-icon">
-            {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
+        <div className="node-header">
+          <div className="node-header-left" onClick={() => toggleNode(node.id)}>
+            <div className="node-expand-icon">
+              {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
+            </div>
+            <div className="node-id-section">
+              <span className="node-id">{node.id}</span>
+            </div>
+            <div className="node-type-section">
+              <span className="node-type">{node.class_type}</span>
+            </div>
+            <div className="node-title-section">
+              {(node._meta?.title || node.title) && (
+                <span className="node-title">{node._meta?.title || node.title}</span>
+              )}
+            </div>
+            <div className="node-badges-section">
+              {isInput && <span className="node-badge input-badge">Input</span>}
+              {isOutput && <span className="node-badge output-badge">Output</span>}
+              {isHidden && <span className="node-badge hidden-badge">Hidden</span>}
+              {isWrapped && <span className="node-badge wrapped-badge">Wrapped</span>}
+              {hasParser && <span className="node-badge parser-badge">Parsed</span>}
+            </div>
+            <div className="node-value-section">
+              {valuePreview && (
+                <span 
+                  className="node-value-preview" 
+                  title={valuePreview}
+                >
+                  {valuePreview}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="node-id-section">
-            <span className="node-id">{node.id}</span>
-          </div>
-          <div className="node-type-section">
-            <span className="node-type">{node.class_type}</span>
-          </div>
-          <div className="node-title-section">
-            {(node._meta?.title || node.title) && (
-              <span className="node-title">{node._meta?.title || node.title}</span>
-            )}
-          </div>
-          <div className="node-badges-section">
-            {isInput && <span className="node-badge input-badge">Input</span>}
-            {isOutput && <span className="node-badge output-badge">Output</span>}
-            {isHidden && <span className="node-badge hidden-badge">Hidden</span>}
-            {isWrapped && <span className="node-badge wrapped-badge">Wrapped</span>}
-            {hasParser && <span className="node-badge parser-badge">Parsed</span>}
-          </div>
-          <div className="node-value-section">
-            {valuePreview && (
-              <span 
-                className="node-value-preview" 
-                title={valuePreview}
+          <div className="node-header-actions" onClick={(e) => e.stopPropagation()}>
+            {!isHidden ? (
+              <button
+                onClick={() => addToArray('hiddenNodeIds', node.id)}
+                className="node-quick-action-btn"
+                title="Hide this node from UI"
               >
-                {valuePreview}
-              </span>
+                <EyeOff size={14} />
+              </button>
+            ) : (
+              <button
+                onClick={() => removeFromArray('hiddenNodeIds', node.id)}
+                className="node-quick-action-btn node-quick-action-btn-active"
+                title="Show this node in UI"
+              >
+                <Eye size={14} />
+              </button>
             )}
           </div>
         </div>
@@ -485,6 +585,14 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
             >
               All ({nodes.length})
             </button>
+            <button
+              className={`group-toggle ${groupBySubgraph ? 'active' : ''}`}
+              onClick={() => setGroupBySubgraph(!groupBySubgraph)}
+              title={groupBySubgraph ? 'Show flat list' : 'Group by subgraph'}
+            >
+              <Package size={14} />
+              {groupBySubgraph ? 'Grouped' : 'Flat'}
+            </button>
           </div>
         </div>
       </div>
@@ -512,21 +620,67 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
 
       <div className="nodes-list">
         {filteredNodes.length > 0 && (
-          <div className="nodes-list-header">
-            <div></div>
-            <div>ID</div>
-            <div>Type</div>
-            <div>Title</div>
-            <div>Status</div>
-            <div>Value</div>
-          </div>
+          <>
+            <div className="nodes-list-header">
+              <div></div>
+              <div>ID</div>
+              <div>Type</div>
+              <div>Title</div>
+              <div>Status</div>
+              <div>Value</div>
+              <div></div>
+            </div>
+            {groupBySubgraph ? (
+              <>
+                {/* Top-level nodes */}
+                {groupedNodes.topLevel.length > 0 && (
+                  <div className="node-group">
+                    <div className="node-group-header">
+                      <span className="group-label">Top-Level Nodes</span>
+                      <span className="group-count">({groupedNodes.topLevel.length})</span>
+                    </div>
+                    <div className="node-group-content">
+                      {groupedNodes.topLevel.map(renderNode)}
+                    </div>
+                  </div>
+                )}
+                {/* Subgraph groups */}
+                {Object.entries(groupedNodes.subgraphGroups)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([subgraphId, subgraphNodes]) => {
+                    const isExpanded = expandedSubgraphs.has(subgraphId)
+                    const subgraphLabel = getSubgraphLabel(subgraphId)
+                    return (
+                      <div key={subgraphId} className="node-group subgraph-group">
+                        <div 
+                          className="node-group-header subgraph-header" 
+                          onClick={() => toggleSubgraph(subgraphId)}
+                        >
+                          <div className="subgraph-expand-icon">
+                            {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
+                          </div>
+                          <span className="group-label">{subgraphLabel}</span>
+                          <span className="group-count">({subgraphNodes.length})</span>
+                          <span className="subgraph-id">ID: {subgraphId}</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="node-group-content subgraph-content">
+                            {subgraphNodes.map(renderNode)}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+              </>
+            ) : (
+              filteredNodes.map(renderNode)
+            )}
+          </>
         )}
-        {filteredNodes.length === 0 ? (
+        {filteredNodes.length === 0 && (
           <div className="empty-nodes">
             <p>No nodes found</p>
           </div>
-        ) : (
-          filteredNodes.map(renderNode)
         )}
       </div>
 

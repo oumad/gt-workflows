@@ -1,0 +1,170 @@
+.save-confirmation-modal {
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.save-confirmation-modal .modal-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.conflict-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.conflict-banner {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-warning);
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.conflict-banner svg {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.conflict-banner > div {
+  flex: 1;
+}
+
+.conflict-banner strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.conflict-banner p {
+  margin: 0 0 12px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.changes-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.changes-summary p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.change-item {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.change-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.change-type-badge {
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: white;
+}
+
+.change-path {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.change-value {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 3px;
+}
+
+.change-value.removed {
+  background: rgba(255, 0, 0, 0.1);
+  border-left: 3px solid var(--error);
+}
+
+.change-value.added {
+  background: rgba(0, 255, 0, 0.1);
+  border-left: 3px solid var(--success);
+}
+
+.change-value strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.change-value pre {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Courier New', monospace;
+}
+
+.no-changes {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.more-changes {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-secondary);
+}
+
+.more-changes p {
+  margin: 0 0 8px 0;
+}
+
+.btn-warning {
+  background: var(--warning);
+  color: white;
+}
+
+.btn-warning:hover {
+  background: var(--warning);
+  opacity: 0.9;
+}
+
