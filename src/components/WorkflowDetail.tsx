@@ -14,6 +14,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
 import NodeManager from './NodeManager'
 import SaveConfirmationModal from './SaveConfirmationModal'
+import ResetConfirmationModal from './ResetConfirmationModal'
 import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
@@ -288,6 +289,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [iconDragOver, setIconDragOver] = useState(false)
   const [workflowDragOver, setWorkflowDragOver] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [fileParams, setFileParams] = useState<WorkflowParams | null>(null)
   const [hasExternalChanges, setHasExternalChanges] = useState(false)
   const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
   const [checkInterval, setCheckInterval] = useState<NodeJS.Timeout | null>(null)
@@ -414,8 +417,17 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     try {
       setSaving(true)
       setError(null)
-      await saveWorkflowParams(name, params)
-      setOriginalParams(JSON.parse(JSON.stringify(params))) // Update original
+      // Remove temporary flags before saving
+      const paramsToSave = { ...params }
+      if (paramsToSave.comfyui_config?._workflowUploaded) {
+        const { _workflowUploaded, ...comfyuiConfig } = paramsToSave.comfyui_config
+        paramsToSave.comfyui_config = comfyuiConfig
+      }
+      await saveWorkflowParams(name, paramsToSave)
+      // Update originalParams with the saved params (without temporary flags)
+      setOriginalParams(JSON.parse(JSON.stringify(paramsToSave))) // Update original
+      // Also update current params to remove temporary flags
+      setParams(paramsToSave)
       setHasExternalChanges(false)
       setExternalParams(null)
       setShowSaveModal(false)
@@ -541,11 +553,23 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     return JSON.stringify(originalValue) !== JSON.stringify(currentValue)
   }
 
-  const handleReset = async () => {
-    if (!name) return
-    if (!confirm('Are you sure you want to reset? All unsaved changes will be lost.')) {
-      return
+  const handleResetClick = async () => {
+    if (!name || !params) return
+    
+    // Load current file params to compare
+    try {
+      const currentFileParams = await getWorkflowParams(name)
+      setFileParams(currentFileParams)
+      setShowResetModal(true)
+    } catch (err) {
+      // If we can't load file params, still show modal
+      setFileParams(null)
+      setShowResetModal(true)
     }
+  }
+
+  const handleResetConfirm = async () => {
+    if (!name) return
     try {
       setLoading(true)
       setError(null)
@@ -555,6 +579,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setParamsText(JSON.stringify(freshParams, null, 2))
       setHasExternalChanges(false)
       setExternalParams(null)
+      setFileParams(null)
+      setShowResetModal(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset workflow')
     } finally {
@@ -592,7 +618,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         </div>
         <div className="header-actions">
           <button
-            onClick={handleReset}
+            onClick={handleResetClick}
             disabled={loading || saving}
             className="btn btn-secondary"
             title="Reset to saved version"
@@ -1141,16 +1167,22 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             if (file && file.name.endsWith('.json') && name) {
                               try {
                                 const result = await uploadFile(name, file);
-                                handleParamsUpdate({
+                                // Always update params with workflow path and a timestamp to ensure change detection
+                                // even if the path stays the same (same filename)
+                                const updatedParams = {
                                   ...params,
                                   comfyui_config: {
                                     ...params.comfyui_config,
-                                    workflow: result.relativePath
+                                    workflow: result.relativePath,
+                                    _workflowUploaded: Date.now() // Temporary flag to track upload
                                   }
-                                });
+                                };
+                                handleParamsUpdate(updatedParams);
                                 // Reload workflow JSON after upload
                                 const jsonData = await getWorkflowJson(name);
                                 setWorkflowJson(jsonData);
+                                // Note: We don't update originalParams here - that happens when user clicks Apply
+                                // This ensures the workflow file change is detected as an unsaved change
                               } catch (error) {
                                 alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
                               }
@@ -1165,16 +1197,22 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                               if (file && name) {
                                 try {
                                   const result = await uploadFile(name, file);
-                                  handleParamsUpdate({
+                                  // Always update params with workflow path and a timestamp to ensure change detection
+                                  // even if the path stays the same (same filename)
+                                  const updatedParams = {
                                     ...params,
                                     comfyui_config: {
                                       ...params.comfyui_config,
-                                      workflow: result.relativePath
+                                      workflow: result.relativePath,
+                                      _workflowUploaded: Date.now() // Temporary flag to track upload
                                     }
-                                  });
+                                  };
+                                  handleParamsUpdate(updatedParams);
                                   // Reload workflow JSON after upload
                                   const jsonData = await getWorkflowJson(name);
                                   setWorkflowJson(jsonData);
+                                  // Note: We don't update originalParams here - that happens when user clicks Apply
+                                  // This ensures the workflow file change is detected as an unsaved change
                                 } catch (error) {
                                   alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
                                 }
@@ -1555,6 +1593,19 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           onCancel={() => setShowSaveModal(false)}
           onReload={handleReload}
           onOverwrite={handleOverwrite}
+        />
+      )}
+
+      {showResetModal && (
+        <ResetConfirmationModal
+          currentParams={params}
+          fileParams={fileParams}
+          hasUnsavedChanges={hasUnsavedChanges}
+          onReset={handleResetConfirm}
+          onCancel={() => {
+            setShowResetModal(false)
+            setFileParams(null)
+          }}
         />
       )}
 

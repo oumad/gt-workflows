@@ -110,7 +110,8 @@
 }
 
 .nodes-list {
-  max-height: 600px;
+  max-height: 800px;
+  min-height: 400px;
   overflow-y: auto;
   overflow-x: auto;
   background: var(--bg-primary);
@@ -120,7 +121,7 @@
 
 .nodes-list-header {
   display: grid;
-  grid-template-columns: auto 80px minmax(100px, 0.6fr) minmax(60px, 0.5fr) minmax(280px, auto) minmax(180px, 1fr) auto;
+  grid-template-columns: 24px 100px 1fr 1.5fr 200px 1fr 40px;
   gap: 1rem;
   padding: 0.875rem 1rem;
   border-bottom: 2px solid var(--border);
@@ -140,15 +141,36 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding-left: 0.5rem;
+  padding: 0;
 }
 
 .nodes-list-header > div:first-child {
-  padding-left: 0;
+  justify-content: center;
+}
+
+.nodes-list-header > div:nth-child(2) {
+  /* ID column */
+}
+
+.nodes-list-header > div:nth-child(3) {
+  /* Title column */
 }
 
 .nodes-list-header > div:nth-child(4) {
-  padding-left: 0;
+  /* Type column */
+}
+
+.nodes-list-header > div:nth-child(5) {
+  /* Status column */
+  justify-content: flex-start;
+}
+
+.nodes-list-header > div:nth-child(6) {
+  /* Value column */
+}
+
+.nodes-list-header > div:last-child {
+  justify-content: center;
 }
 
 .node-item {
@@ -161,7 +183,7 @@
 
 .node-header {
   display: grid;
-  grid-template-columns: auto 80px minmax(100px, 0.6fr) minmax(60px, 0.5fr) minmax(280px, auto) minmax(180px, 1fr) auto;
+  grid-template-columns: 24px 100px 1fr 1.5fr 200px 1fr 40px;
   gap: 1rem;
   align-items: center;
   padding: 0.875rem 1rem;
@@ -183,7 +205,8 @@
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
-  justify-content: flex-end;
+  justify-content: center;
+  padding-left: 0;
 }
 
 .node-quick-action-btn {
@@ -234,8 +257,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 24px;
   flex-shrink: 0;
+  padding-left: 0;
 }
 
 .node-id-section {
@@ -244,6 +268,7 @@
   gap: 0.5rem;
   min-width: 0;
   justify-content: flex-start;
+  padding: 0;
 }
 
 .node-type-section {
@@ -252,6 +277,7 @@
   gap: 0.5rem;
   min-width: 0;
   justify-content: flex-start;
+  padding: 0;
 }
 
 .node-title-section {
@@ -262,6 +288,7 @@
   overflow: hidden;
   justify-content: flex-start;
   text-align: left;
+  padding: 0;
 }
 
 .node-title {
@@ -278,6 +305,8 @@
   flex-wrap: wrap;
   min-width: 0;
   justify-content: flex-start;
+  overflow: visible;
+  padding: 0;
 }
 
 .node-value-section {
@@ -285,6 +314,7 @@
   align-items: center;
   min-width: 0;
   justify-content: flex-start;
+  padding: 0;
 }
 
 .node-id {
@@ -300,11 +330,9 @@
 
 .node-type {
   font-family: 'Courier New', monospace;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  background: var(--bg-tertiary);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  opacity: 0.7;
   display: inline-block;
 }
 
@@ -317,9 +345,11 @@
 .node-badge {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .node-value-preview {
@@ -401,6 +431,62 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
+  position: relative;
+}
+
+.more-menu-wrapper {
+  position: relative;
+}
+
+.more-menu-btn {
+  position: relative;
+}
+
+.more-menu-btn.active {
+  background: var(--bg-primary);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.more-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: left;
+}
+
+.more-menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.more-menu-item.remove {
+  color: var(--error);
+}
+
+.more-menu-item.remove:hover {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .action-btn {
@@ -570,6 +656,105 @@
 .group-label {
   flex: 1;
   font-weight: 600;
+}
+
+.subgraph-label-clickable {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.subgraph-label-clickable:hover {
+  background: var(--bg-tertiary);
+}
+
+.subgraph-label-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.subgraph-label-input {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: inherit;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.subgraph-label-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.subgraph-label-save-btn,
+.subgraph-label-cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.subgraph-label-save-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.subgraph-label-cancel-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-error, #ef4444);
+}
+
+.subgraph-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.subgraph-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.subgraph-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.subgraph-action-btn-active {
+  color: var(--accent);
+}
+
+.subgraph-action-btn-active:hover {
+  background: var(--bg-tertiary);
+  opacity: 0.8;
 }
 
 .group-count {

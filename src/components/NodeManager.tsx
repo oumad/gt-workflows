@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { WorkflowParams } from '../types'
 import { 
   Search, Plus, X, Eye, EyeOff, Package, Settings, 
-  ArrowRight, ArrowDown, Info, Edit2
+  ArrowRight, ArrowDown, Info, Edit2, MoreVertical, Tag, Check
 } from 'lucide-react'
 import NodeParserEditor from './NodeParserEditor'
 import './NodeManager.css'
@@ -28,6 +28,23 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const [expandedSubgraphs, setExpandedSubgraphs] = useState<Set<string>>(new Set())
   const [groupBySubgraph, setGroupBySubgraph] = useState(true)
   const [editingParser, setEditingParser] = useState<{ nodeId: string; nodeType: string; nodeInputs: Record<string, any> } | null>(null)
+  const [moreMenuOpen, setMoreMenuOpen] = useState<string | null>(null)
+  const [editingSubgraphLabel, setEditingSubgraphLabel] = useState<string | null>(null)
+  const [subgraphLabelValue, setSubgraphLabelValue] = useState<string>('')
+
+  // Close more menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.more-menu-wrapper') && !target.closest('.more-menu-btn')) {
+        setMoreMenuOpen(null)
+      }
+    }
+    if (moreMenuOpen) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [moreMenuOpen])
 
   // Extract nodes from workflow JSON
   const nodes = useMemo(() => {
@@ -160,7 +177,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       )
     }
 
-    // Group nodes
+    // Group nodes - only create subgraph groups for nodes that match the filter
     nodesToGroup.forEach(node => {
       if (node.id.includes(':')) {
         const subgraphId = node.id.split(':')[0]
@@ -173,21 +190,157 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       }
     })
 
-    // Sort subgraph groups and their nodes
-    Object.keys(subgraphGroups).forEach(key => {
-      subgraphGroups[key].sort((a, b) => {
-        const aChild = a.id.split(':')[1]
-        const bChild = b.id.split(':')[1]
-        return aChild.localeCompare(bChild)
+    // For subgraph groups, also include ALL child nodes from workflowJson (not just filtered ones)
+    // This ensures we show all nodes that exist in the subgraph, even if they're not inputs/outputs
+    Object.keys(subgraphGroups).forEach(subgraphId => {
+      const allSubgraphNodes: NodeInfo[] = []
+      const prefix = `${subgraphId}:`
+      
+      // Get all nodes that belong to this subgraph from the full nodes list
+      nodes.forEach(node => {
+        if (node.id.startsWith(prefix)) {
+          // Check if it's already in the filtered list
+          const alreadyIncluded = subgraphGroups[subgraphId].some(n => n.id === node.id)
+          if (!alreadyIncluded) {
+            // Add it so we show all subgraph nodes, not just filtered ones
+            allSubgraphNodes.push(node)
+          }
+        }
       })
+      
+      // Merge with already filtered nodes
+      subgraphGroups[subgraphId] = [...subgraphGroups[subgraphId], ...allSubgraphNodes]
+      
+      // Remove duplicates
+      const uniqueNodes = Array.from(new Map(subgraphGroups[subgraphId].map(node => [node.id, node])).values())
+      subgraphGroups[subgraphId] = uniqueNodes
+    })
+
+    // For subgraph groups, include additional nodes based on the current filter
+    if (selectedCategory === 'all') {
+      // When showing all nodes, include ALL child nodes from each subgraph
+      // First, identify all subgraphs that exist
+      const allSubgraphIds = new Set<string>()
+      nodes.forEach(node => {
+        if (node.id.includes(':')) {
+          const subgraphId = node.id.split(':')[0]
+          allSubgraphIds.add(subgraphId)
+        }
+      })
+      
+      // Initialize all subgraph groups and add all their nodes
+      allSubgraphIds.forEach(subgraphId => {
+        if (!subgraphGroups[subgraphId]) {
+          subgraphGroups[subgraphId] = []
+        }
+        const prefix = `${subgraphId}:`
+        nodes.forEach(node => {
+          if (node.id.startsWith(prefix)) {
+            const alreadyIncluded = subgraphGroups[subgraphId].some(n => n.id === node.id)
+            if (!alreadyIncluded) {
+              subgraphGroups[subgraphId].push(node)
+            }
+          }
+        })
+      })
+    }
+    
+    // Remove duplicates from all subgraph groups
+    Object.keys(subgraphGroups).forEach(subgraphId => {
+      const uniqueNodes = Array.from(new Map(subgraphGroups[subgraphId].map(node => [node.id, node])).values())
+      subgraphGroups[subgraphId] = uniqueNodes
+    })
+
+    // Sort subgraph groups and their nodes according to nodesOrder if configured
+    Object.keys(subgraphGroups).forEach(subgraphId => {
+      const subgraphConfig = params.comfyui_config?.subgraphs?.[subgraphId]
+      const nodesOrder = subgraphConfig?.nodesOrder
+      
+      if (nodesOrder && Array.isArray(nodesOrder)) {
+        // Sort according to nodesOrder
+        subgraphGroups[subgraphId].sort((a, b) => {
+          const aChild = a.id.split(':')[1]
+          const bChild = b.id.split(':')[1]
+          
+          const aIndex = nodesOrder.indexOf(aChild)
+          const bIndex = nodesOrder.indexOf(bChild)
+          
+          // If both are in nodesOrder, sort by their position
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex
+          }
+          // If only a is in nodesOrder, it comes first
+          if (aIndex !== -1) return -1
+          // If only b is in nodesOrder, it comes first
+          if (bIndex !== -1) return 1
+          // If neither is in nodesOrder, maintain original order (they go to the end)
+          return 0
+        })
+      } else {
+        // Default: sort alphabetically by child ID
+        subgraphGroups[subgraphId].sort((a, b) => {
+          const aChild = a.id.split(':')[1]
+          const bChild = b.id.split(':')[1]
+          return aChild.localeCompare(bChild)
+        })
+      }
     })
 
     return { topLevel, subgraphGroups }
-  }, [nodes, inputNodes, outputNodes, appInfoNodes, selectedCategory, searchTerm])
+  }, [nodes, inputNodes, outputNodes, appInfoNodes, selectedCategory, searchTerm, params])
 
   // Get subgraph labels from params
   const getSubgraphLabel = (subgraphId: string) => {
     return params.comfyui_config?.subgraphs?.[subgraphId]?.label || `Subgraph ${subgraphId}`
+  }
+
+  // Update subgraph label
+  const updateSubgraphLabel = (subgraphId: string, label: string) => {
+    const updatedParams = { ...params }
+    if (!updatedParams.comfyui_config) {
+      updatedParams.comfyui_config = {
+        serverUrl: 'http://127.0.0.1:8188',
+        workflow: './workflow.json',
+      }
+    }
+    if (!updatedParams.comfyui_config.subgraphs) {
+      updatedParams.comfyui_config.subgraphs = {}
+    }
+    
+    const currentConfig = updatedParams.comfyui_config.subgraphs[subgraphId] || {}
+    if (label.trim()) {
+      updatedParams.comfyui_config.subgraphs[subgraphId] = {
+        ...currentConfig,
+        label: label.trim()
+      }
+    } else {
+      // Remove label if empty
+      const { label: _, ...rest } = currentConfig
+      if (Object.keys(rest).length > 0) {
+        updatedParams.comfyui_config.subgraphs[subgraphId] = rest
+      } else {
+        delete updatedParams.comfyui_config.subgraphs[subgraphId]
+        if (Object.keys(updatedParams.comfyui_config.subgraphs).length === 0) {
+          updatedParams.comfyui_config.subgraphs = undefined
+        }
+      }
+    }
+    
+    onUpdateParams(updatedParams)
+    setEditingSubgraphLabel(null)
+  }
+
+  // Start editing subgraph label
+  const startEditingSubgraphLabel = (subgraphId: string) => {
+    const currentLabel = params.comfyui_config?.subgraphs?.[subgraphId]?.label || ''
+    setSubgraphLabelValue(currentLabel)
+    setEditingSubgraphLabel(subgraphId)
+  }
+
+  // Cancel editing subgraph label
+  const cancelEditingSubgraphLabel = () => {
+    setEditingSubgraphLabel(null)
+    setSubgraphLabelValue('')
   }
 
   // Filter nodes based on search and category (for backward compatibility)
@@ -262,6 +415,142 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     }
     
     updatedParams.comfyui_config[arrayName] = currentArray.filter(id => id !== nodeId)
+    onUpdateParams(updatedParams)
+  }
+
+  // Check if a node's label is hidden (for subgraph nodes)
+  const isNodeLabelHidden = (nodeId: string): boolean => {
+    if (!nodeId.includes(':')) return false // Not a subgraph node
+    
+    const [subgraphId, childId] = nodeId.split(':')
+    const subgraphConfig = params.comfyui_config?.subgraphs?.[subgraphId]
+    if (!subgraphConfig) return false
+
+    // showNodeLabels takes precedence
+    if (subgraphConfig.showNodeLabels !== undefined) {
+      if (typeof subgraphConfig.showNodeLabels === 'boolean') {
+        return !subgraphConfig.showNodeLabels // If showNodeLabels is true, label is NOT hidden
+      }
+      if (Array.isArray(subgraphConfig.showNodeLabels)) {
+        return !subgraphConfig.showNodeLabels.includes(childId) // If in showNodeLabels array, label is NOT hidden
+      }
+    }
+
+    // Check hideNodeLabels
+    if (subgraphConfig.hideNodeLabels !== undefined) {
+      if (typeof subgraphConfig.hideNodeLabels === 'boolean') {
+        return subgraphConfig.hideNodeLabels // If true, all labels are hidden
+      }
+      if (Array.isArray(subgraphConfig.hideNodeLabels)) {
+        return subgraphConfig.hideNodeLabels.includes(childId) // If in array, label is hidden
+      }
+    }
+
+    return false
+  }
+
+  // Toggle node label visibility for subgraph nodes
+  const toggleNodeLabelHidden = (nodeId: string) => {
+    if (!nodeId.includes(':')) return // Not a subgraph node
+    
+    const [subgraphId, childId] = nodeId.split(':')
+    const updatedParams = { ...params }
+    
+    if (!updatedParams.comfyui_config) {
+      updatedParams.comfyui_config = {
+        serverUrl: 'http://127.0.0.1:8188',
+        workflow: '',
+      }
+    }
+    
+    if (!updatedParams.comfyui_config.subgraphs) {
+      updatedParams.comfyui_config.subgraphs = {}
+    }
+    
+    const subgraphConfig = updatedParams.comfyui_config.subgraphs[subgraphId] || {}
+    const isHidden = isNodeLabelHidden(nodeId)
+    
+    // If showNodeLabels exists, we need to manage that instead
+    if (subgraphConfig.showNodeLabels !== undefined) {
+      if (typeof subgraphConfig.showNodeLabels === 'boolean') {
+        // Convert to array format
+        if (isHidden) {
+          // Show this label: add to showNodeLabels array
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            showNodeLabels: [childId]
+          }
+        } else {
+          // Hide this label: remove from showNodeLabels (or set to empty array)
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            showNodeLabels: []
+          }
+        }
+      } else if (Array.isArray(subgraphConfig.showNodeLabels)) {
+        if (isHidden) {
+          // Show this label: add to array
+          const newArray = [...subgraphConfig.showNodeLabels, childId]
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            showNodeLabels: newArray
+          }
+        } else {
+          // Hide this label: remove from array
+          const newArray = subgraphConfig.showNodeLabels.filter(id => id !== childId)
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            showNodeLabels: newArray.length > 0 ? newArray : undefined
+          }
+        }
+      }
+    } else {
+      // Use hideNodeLabels
+      if (isHidden) {
+        // Show this label: remove from hideNodeLabels array
+        if (typeof subgraphConfig.hideNodeLabels === 'boolean') {
+          // Convert boolean to array format, excluding this node
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: [] // Empty array means no labels hidden
+          }
+        } else if (Array.isArray(subgraphConfig.hideNodeLabels)) {
+          const newArray = subgraphConfig.hideNodeLabels.filter(id => id !== childId)
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: newArray.length > 0 ? newArray : undefined
+          }
+        } else {
+          // No hideNodeLabels config, create array without this node
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: []
+          }
+        }
+      } else {
+        // Hide this label: add to hideNodeLabels array
+        if (typeof subgraphConfig.hideNodeLabels === 'boolean') {
+          // Convert boolean to array format
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: [childId]
+          }
+        } else if (Array.isArray(subgraphConfig.hideNodeLabels)) {
+          const newArray = [...subgraphConfig.hideNodeLabels, childId]
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: newArray
+          }
+        } else {
+          // No hideNodeLabels config, create array with this node
+          updatedParams.comfyui_config.subgraphs[subgraphId] = {
+            ...subgraphConfig,
+            hideNodeLabels: [childId]
+          }
+        }
+      }
+    }
+    
     onUpdateParams(updatedParams)
   }
 
@@ -351,6 +640,8 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     const isOutput = outputNodes.some(n => n.id === node.id)
     const isHidden = hiddenNodeIds.includes(node.id)
     const isWrapped = wrappedNodeIds.includes(node.id)
+    const isSubgraphNode = node.id.includes(':')
+    const isLabelHidden = isSubgraphNode ? isNodeLabelHidden(node.id) : false
     const nodeParser = getNodeParser(node.id)
     const hasParser = !!nodeParser
     const valuePreview = !isExpanded ? getNodeValuePreview(node) : null
@@ -365,13 +656,13 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
             <div className="node-id-section">
               <span className="node-id">{node.id}</span>
             </div>
-            <div className="node-type-section">
-              <span className="node-type">{node.class_type}</span>
-            </div>
             <div className="node-title-section">
               {(node._meta?.title || node.title) && (
                 <span className="node-title">{node._meta?.title || node.title}</span>
               )}
+            </div>
+            <div className="node-type-section">
+              <span className="node-type">{node.class_type}</span>
             </div>
             <div className="node-badges-section">
               {isInput && <span className="node-badge input-badge">Input</span>}
@@ -398,7 +689,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                 className="node-quick-action-btn"
                 title="Hide this node from UI"
               >
-                <EyeOff size={14} />
+                <Eye size={14} />
               </button>
             ) : (
               <button
@@ -406,7 +697,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                 className="node-quick-action-btn node-quick-action-btn-active"
                 title="Show this node in UI"
               >
-                <Eye size={14} />
+                <EyeOff size={14} />
               </button>
             )}
           </div>
@@ -415,70 +706,6 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
         {isExpanded && (
           <div className="node-details">
             <div className="node-actions">
-              {!isInput && (
-                <button
-                  onClick={() => addToArray('input_ids', node.id)}
-                  className="action-btn"
-                >
-                  <Plus size={12} /> Add to Input IDs
-                </button>
-              )}
-              {isInput && (
-                <button
-                  onClick={() => removeFromArray('input_ids', node.id)}
-                  className="action-btn remove"
-                >
-                  <X size={12} /> Remove from Input IDs
-                </button>
-              )}
-              {!isOutput && (
-                <button
-                  onClick={() => addToArray('output_ids', node.id)}
-                  className="action-btn"
-                >
-                  <Plus size={12} /> Add to Output IDs
-                </button>
-              )}
-              {isOutput && (
-                <button
-                  onClick={() => removeFromArray('output_ids', node.id)}
-                  className="action-btn remove"
-                >
-                  <X size={12} /> Remove from Output IDs
-                </button>
-              )}
-              {!isHidden && (
-                <button
-                  onClick={() => addToArray('hiddenNodeIds', node.id)}
-                  className="action-btn"
-                >
-                  <EyeOff size={12} /> Hide Node
-                </button>
-              )}
-              {isHidden && (
-                <button
-                  onClick={() => removeFromArray('hiddenNodeIds', node.id)}
-                  className="action-btn remove"
-                >
-                  <Eye size={12} /> Show Node
-                </button>
-              )}
-              {!isWrapped && (
-                <button
-                  onClick={() => addToArray('wrappedNodeIds', node.id)}
-                  className="action-btn"
-                >
-                  <Package size={12} /> Wrap Node
-                </button>
-              )}
-              {isWrapped && (
-                <button
-                  onClick={() => removeFromArray('wrappedNodeIds', node.id)}
-                  className="action-btn remove"
-                >
-                  <Package size={12} /> Unwrap Node
-                </button>
-              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -496,6 +723,113 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
               >
                 <Edit2 size={12} /> {hasParser ? 'Edit Parser' : 'Configure Parser'}
               </button>
+              {!isWrapped ? (
+                <button
+                  onClick={() => addToArray('wrappedNodeIds', node.id)}
+                  className="action-btn"
+                >
+                  <Package size={12} /> Wrap Node
+                </button>
+              ) : (
+                <button
+                  onClick={() => removeFromArray('wrappedNodeIds', node.id)}
+                  className="action-btn remove"
+                >
+                  <Package size={12} /> Unwrap Node
+                </button>
+              )}
+              {!isHidden ? (
+                <button
+                  onClick={() => addToArray('hiddenNodeIds', node.id)}
+                  className="action-btn"
+                >
+                  <EyeOff size={12} /> Hide Node
+                </button>
+              ) : (
+                <button
+                  onClick={() => removeFromArray('hiddenNodeIds', node.id)}
+                  className="action-btn remove"
+                >
+                  <Eye size={12} /> Show Node
+                </button>
+              )}
+              {isSubgraphNode && (
+                isLabelHidden ? (
+                  <button
+                    onClick={() => toggleNodeLabelHidden(node.id)}
+                    className="action-btn remove"
+                    title="Show node label"
+                  >
+                    <Tag size={12} /> Show Label
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => toggleNodeLabelHidden(node.id)}
+                    className="action-btn"
+                    title="Hide node label"
+                  >
+                    <Tag size={12} /> Hide Label
+                  </button>
+                )
+              )}
+              <div className="more-menu-wrapper">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMoreMenuOpen(moreMenuOpen === node.id ? null : node.id)
+                  }}
+                  className={`action-btn more-menu-btn ${moreMenuOpen === node.id ? 'active' : ''}`}
+                  title="More options"
+                >
+                  <MoreVertical size={12} /> More
+                </button>
+                {moreMenuOpen === node.id && (
+                  <div className="more-menu-dropdown">
+                    {!isInput ? (
+                      <button
+                        onClick={() => {
+                          addToArray('input_ids', node.id)
+                          setMoreMenuOpen(null)
+                        }}
+                        className="more-menu-item"
+                      >
+                        <Plus size={12} /> Add to Input IDs
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          removeFromArray('input_ids', node.id)
+                          setMoreMenuOpen(null)
+                        }}
+                        className="more-menu-item remove"
+                      >
+                        <X size={12} /> Remove from Input IDs
+                      </button>
+                    )}
+                    {!isOutput ? (
+                      <button
+                        onClick={() => {
+                          addToArray('output_ids', node.id)
+                          setMoreMenuOpen(null)
+                        }}
+                        className="more-menu-item"
+                      >
+                        <Plus size={12} /> Add to Output IDs
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          removeFromArray('output_ids', node.id)
+                          setMoreMenuOpen(null)
+                        }}
+                        className="more-menu-item remove"
+                      >
+                        <X size={12} /> Remove from Output IDs
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {hasParser && (
@@ -624,8 +958,8 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
             <div className="nodes-list-header">
               <div></div>
               <div>ID</div>
-              <div>Type</div>
               <div>Title</div>
+              <div>Type</div>
               <div>Status</div>
               <div>Value</div>
               <div></div>
@@ -650,18 +984,90 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                   .map(([subgraphId, subgraphNodes]) => {
                     const isExpanded = expandedSubgraphs.has(subgraphId)
                     const subgraphLabel = getSubgraphLabel(subgraphId)
+                    const isSubgraphWrapped = wrappedNodeIds.includes(subgraphId)
                     return (
                       <div key={subgraphId} className="node-group subgraph-group">
                         <div 
                           className="node-group-header subgraph-header" 
-                          onClick={() => toggleSubgraph(subgraphId)}
+                          onClick={(e) => {
+                            // Don't toggle if clicking on the label edit area or action buttons
+                            if ((e.target as HTMLElement).closest('.subgraph-label-edit') ||
+                                (e.target as HTMLElement).closest('.subgraph-header-actions')) {
+                              return
+                            }
+                            toggleSubgraph(subgraphId)
+                          }}
                         >
                           <div className="subgraph-expand-icon">
                             {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
                           </div>
-                          <span className="group-label">{subgraphLabel}</span>
+                          {editingSubgraphLabel === subgraphId ? (
+                            <div className="subgraph-label-edit" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                value={subgraphLabelValue}
+                                onChange={(e) => setSubgraphLabelValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    updateSubgraphLabel(subgraphId, subgraphLabelValue)
+                                  } else if (e.key === 'Escape') {
+                                    cancelEditingSubgraphLabel()
+                                  }
+                                }}
+                                onBlur={() => updateSubgraphLabel(subgraphId, subgraphLabelValue)}
+                                autoFocus
+                                className="subgraph-label-input"
+                                placeholder={`Subgraph ${subgraphId}`}
+                              />
+                              <button
+                                onClick={() => updateSubgraphLabel(subgraphId, subgraphLabelValue)}
+                                className="subgraph-label-save-btn"
+                                title="Save"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={cancelEditingSubgraphLabel}
+                                className="subgraph-label-cancel-btn"
+                                title="Cancel"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              className="group-label subgraph-label-clickable"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                startEditingSubgraphLabel(subgraphId)
+                              }}
+                              title="Click to edit label"
+                            >
+                              {subgraphLabel}
+                            </span>
+                          )}
                           <span className="group-count">({subgraphNodes.length})</span>
                           <span className="subgraph-id">ID: {subgraphId}</span>
+                          {isSubgraphWrapped && <span className="node-badge wrapped-badge" style={{ marginLeft: '8px' }}>Wrapped</span>}
+                          <div className="subgraph-header-actions" onClick={(e) => e.stopPropagation()}>
+                            {!isSubgraphWrapped ? (
+                              <button
+                                onClick={() => addToArray('wrappedNodeIds', subgraphId)}
+                                className="subgraph-action-btn"
+                                title="Wrap subgraph"
+                              >
+                                <Package size={14} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => removeFromArray('wrappedNodeIds', subgraphId)}
+                                className="subgraph-action-btn subgraph-action-btn-active"
+                                title="Unwrap subgraph"
+                              >
+                                <Package size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {isExpanded && (
                           <div className="node-group-content subgraph-content">
@@ -690,6 +1096,8 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
           nodeType={editingParser.nodeType}
           nodeInputs={editingParser.nodeInputs}
           currentParser={getNodeParser(editingParser.nodeId)}
+          workflowJson={workflowJson}
+          params={params}
           onSave={(parserConfig) => handleSaveParser(editingParser.nodeId, parserConfig)}
           onClose={() => setEditingParser(null)}
         />
