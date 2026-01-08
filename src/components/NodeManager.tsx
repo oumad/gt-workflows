@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { WorkflowParams } from '../types'
 import { 
   Search, Plus, X, Eye, EyeOff, Package, Settings, 
-  ArrowRight, ArrowDown, Info, Edit2, MoreVertical, Tag, Check
+  ArrowRight, ArrowDown, ArrowUp, Info, Edit2, MoreVertical, Tag, Check
 } from 'lucide-react'
 import NodeParserEditor from './NodeParserEditor'
 import './NodeManager.css'
@@ -216,6 +216,129 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       subgraphGroups[subgraphId] = uniqueNodes
     })
 
+    // Detect implicit subgraphs: IDs in input_ids/output_ids that don't exist as top-level nodes
+    // but have child nodes (e.g., "66" doesn't exist but "66:11", "66:13" do)
+    // Determine which IDs to check based on selected category
+    let relevantIds: string[] = []
+    if (selectedCategory === 'input') {
+      relevantIds = configuredInputIds.length > 0 ? configuredInputIds : appInfoInputIds
+    } else if (selectedCategory === 'output') {
+      relevantIds = configuredOutputIds.length > 0 ? configuredOutputIds : appInfoOutputIds
+    } else if (selectedCategory === 'all' || selectedCategory === 'appinfo') {
+      // For 'all' or 'appinfo', check all input/output IDs
+      relevantIds = [
+        ...configuredInputIds,
+        ...appInfoInputIds,
+        ...configuredOutputIds,
+        ...appInfoOutputIds
+      ]
+    }
+    
+    // Get all top-level node IDs (nodes without ":")
+    const topLevelNodeIds = new Set(nodes.filter(node => !node.id.includes(':')).map(node => node.id))
+    
+    // Find IDs that are declared but don't exist as top-level nodes
+    const implicitSubgraphIds = Array.from(new Set(relevantIds)).filter(id => !topLevelNodeIds.has(id))
+    
+    // For each implicit subgraph ID, check if it has child nodes
+    const term = searchTerm ? searchTerm.toLowerCase() : ''
+    implicitSubgraphIds.forEach(subgraphId => {
+      const prefix = `${subgraphId}:`
+      const childNodes = nodes.filter(node => node.id.startsWith(prefix))
+      const hasChildNodes = childNodes.length > 0
+      
+      if (hasChildNodes) {
+        // Check if subgraph should be included based on search term
+        // Include if: no search term, or subgraph ID matches, or any child node matches
+        let shouldInclude = !term || subgraphId.toLowerCase().includes(term)
+        
+        // If there's a search term and subgraph ID doesn't match, check if any child node matches
+        if (term && !shouldInclude) {
+          shouldInclude = childNodes.some(node => 
+            node.id.toLowerCase().includes(term) ||
+            node.class_type?.toLowerCase().includes(term) ||
+            node._meta?.title?.toLowerCase().includes(term) ||
+            node.title?.toLowerCase().includes(term)
+          )
+        }
+        
+        if (shouldInclude) {
+          // This is an implicit subgraph - ensure it exists in subgraphGroups
+          if (!subgraphGroups[subgraphId]) {
+            subgraphGroups[subgraphId] = []
+          }
+          
+          // Add all child nodes for this implicit subgraph from the full nodes list
+          childNodes.forEach(node => {
+            const alreadyIncluded = subgraphGroups[subgraphId].some(n => n.id === node.id)
+            if (!alreadyIncluded) {
+              // If there's a search term, only include nodes that match
+              if (term) {
+                const nodeMatches = 
+                  node.id.toLowerCase().includes(term) ||
+                  node.class_type?.toLowerCase().includes(term) ||
+                  node._meta?.title?.toLowerCase().includes(term) ||
+                  node.title?.toLowerCase().includes(term)
+                if (nodeMatches) {
+                  subgraphGroups[subgraphId].push(node)
+                }
+              } else {
+                // No search term: include all child nodes
+                subgraphGroups[subgraphId].push(node)
+              }
+            }
+          })
+        }
+      }
+    })
+
+    // Include explicitly declared subgraphs from params.comfyui_config.subgraphs
+    // These should always be shown even if they don't have visible child nodes in the current filter
+    const declaredSubgraphs = params.comfyui_config?.subgraphs || {}
+    Object.keys(declaredSubgraphs).forEach(subgraphId => {
+      const subgraphConfig = declaredSubgraphs[subgraphId]
+      const subgraphLabel = subgraphConfig?.label || `Subgraph ${subgraphId}`
+      
+      // Check if subgraph should be included based on search term
+      // Include if: no search term, or subgraph label/ID matches search term
+      const term = searchTerm ? searchTerm.toLowerCase() : ''
+      const shouldInclude = !term || 
+        subgraphLabel.toLowerCase().includes(term) || 
+        subgraphId.toLowerCase().includes(term)
+      
+      if (shouldInclude) {
+        // Ensure the subgraph group exists
+        if (!subgraphGroups[subgraphId]) {
+          subgraphGroups[subgraphId] = []
+        }
+        
+        // Add all child nodes for this declared subgraph from the full nodes list
+        // If there's a search term, filter child nodes; otherwise include all
+        const prefix = `${subgraphId}:`
+        nodes.forEach(node => {
+          if (node.id.startsWith(prefix)) {
+            const alreadyIncluded = subgraphGroups[subgraphId].some(n => n.id === node.id)
+            if (!alreadyIncluded) {
+              // If there's a search term, only include nodes that match
+              if (term) {
+                const nodeMatches = 
+                  node.id.toLowerCase().includes(term) ||
+                  node.class_type?.toLowerCase().includes(term) ||
+                  node._meta?.title?.toLowerCase().includes(term) ||
+                  node.title?.toLowerCase().includes(term)
+                if (nodeMatches) {
+                  subgraphGroups[subgraphId].push(node)
+                }
+              } else {
+                // No search term: include all child nodes
+                subgraphGroups[subgraphId].push(node)
+              }
+            }
+          }
+        })
+      }
+    })
+
     // For subgraph groups, include additional nodes based on the current filter
     if (selectedCategory === 'all') {
       // When showing all nodes, include ALL child nodes from each subgraph
@@ -341,6 +464,69 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const cancelEditingSubgraphLabel = () => {
     setEditingSubgraphLabel(null)
     setSubgraphLabelValue('')
+  }
+
+  // Reorder node within subgraph
+  const reorderSubgraphNode = (subgraphId: string, nodeId: string, direction: 'up' | 'down') => {
+    const updatedParams = { ...params }
+    if (!updatedParams.comfyui_config) {
+      updatedParams.comfyui_config = {
+        serverUrl: 'http://127.0.0.1:8188',
+        workflow: './workflow.json',
+      }
+    }
+    if (!updatedParams.comfyui_config.subgraphs) {
+      updatedParams.comfyui_config.subgraphs = {}
+    }
+    
+    const subgraphConfig = updatedParams.comfyui_config.subgraphs[subgraphId] || {}
+    const currentOrder = subgraphConfig.nodesOrder || []
+    
+    // Extract child ID (part after ":")
+    const childId = nodeId.includes(':') ? nodeId.split(':')[1] : nodeId
+    
+    // Get all child nodes for this subgraph to build complete order if needed
+    const prefix = `${subgraphId}:`
+    const allChildNodes = nodes
+      .filter(node => node.id.startsWith(prefix))
+      .map(node => node.id.split(':')[1])
+      .sort((a, b) => a.localeCompare(b))
+    
+    // Build the order array: start with currentOrder, then add any missing nodes
+    let newOrder = [...currentOrder]
+    allChildNodes.forEach(childId => {
+      if (!newOrder.includes(childId)) {
+        newOrder.push(childId)
+      }
+    })
+    
+    // Find current index
+    const currentIndex = newOrder.indexOf(childId)
+    if (currentIndex === -1) return // Node not found
+    
+    // Calculate new index
+    let newIndex: number
+    if (direction === 'up') {
+      newIndex = Math.max(0, currentIndex - 1)
+    } else {
+      newIndex = Math.min(newOrder.length - 1, currentIndex + 1)
+    }
+    
+    // If position didn't change, do nothing
+    if (newIndex === currentIndex) return
+    
+    // Swap nodes
+    const temp = newOrder[currentIndex]
+    newOrder[currentIndex] = newOrder[newIndex]
+    newOrder[newIndex] = temp
+    
+    // Update params
+    updatedParams.comfyui_config.subgraphs[subgraphId] = {
+      ...subgraphConfig,
+      nodesOrder: newOrder
+    }
+    
+    onUpdateParams(updatedParams)
   }
 
   // Filter nodes based on search and category (for backward compatibility)
@@ -634,7 +820,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     return `${inputKeys.length} inputs`
   }
 
-  const renderNode = (node: NodeInfo) => {
+  const renderNode = (node: NodeInfo, subgraphId?: string, nodeIndex?: number, totalNodes?: number) => {
     const isExpanded = expandedNodes.has(node.id)
     const isInput = inputNodes.some(n => n.id === node.id)
     const isOutput = outputNodes.some(n => n.id === node.id)
@@ -645,14 +831,54 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     const nodeParser = getNodeParser(node.id)
     const hasParser = !!nodeParser
     const valuePreview = !isExpanded ? getNodeValuePreview(node) : null
+    // Only show reorder buttons for actual subgraph nodes (with ":" in ID) within a subgraph group
+    const showReorderButtons = isSubgraphNode && subgraphId !== undefined && nodeIndex !== undefined && totalNodes !== undefined
+    const canMoveUp = showReorderButtons && nodeIndex > 0
+    const canMoveDown = showReorderButtons && nodeIndex < totalNodes! - 1
 
     return (
       <div key={node.id} className="node-item">
         <div className="node-header">
-          <div className="node-header-left" onClick={() => toggleNode(node.id)}>
-            <div className="node-expand-icon">
+          {showReorderButtons ? (
+            <div className="node-header-controls">
+              <div className="node-reorder-buttons" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (canMoveUp && subgraphId) {
+                      reorderSubgraphNode(subgraphId, node.id, 'up')
+                    }
+                  }}
+                  className={`node-reorder-btn ${canMoveUp ? '' : 'disabled'}`}
+                  title="Move up"
+                  disabled={!canMoveUp}
+                >
+                  <ArrowUp size={12} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (canMoveDown && subgraphId) {
+                      reorderSubgraphNode(subgraphId, node.id, 'down')
+                    }
+                  }}
+                  className={`node-reorder-btn ${canMoveDown ? '' : 'disabled'}`}
+                  title="Move down"
+                  disabled={!canMoveDown}
+                >
+                  <ArrowDown size={12} />
+                </button>
+              </div>
+              <div className="node-expand-icon" onClick={() => toggleNode(node.id)}>
+                {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
+              </div>
+            </div>
+          ) : (
+            <div className="node-expand-icon" onClick={() => toggleNode(node.id)}>
               {isExpanded ? <ArrowDown size={16} /> : <ArrowRight size={16} />}
             </div>
+          )}
+          <div className="node-header-left" onClick={() => toggleNode(node.id)}>
             <div className="node-id-section">
               <span className="node-id">{node.id}</span>
             </div>
@@ -1071,7 +1297,9 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                         </div>
                         {isExpanded && (
                           <div className="node-group-content subgraph-content">
-                            {subgraphNodes.map(renderNode)}
+                            {subgraphNodes.map((node, index) => 
+                              renderNode(node, subgraphId, index, subgraphNodes.length)
+                            )}
                           </div>
                         )}
                       </div>

@@ -121,7 +121,7 @@
 
 .nodes-list-header {
   display: grid;
-  grid-template-columns: 24px 100px 1fr 1.5fr 200px 1fr 40px;
+  grid-template-columns: 52px 100px 1fr 1.5fr 200px 1fr 40px;
   gap: 1rem;
   padding: 0.875rem 1rem;
   border-bottom: 2px solid var(--border);
@@ -183,7 +183,7 @@
 
 .node-header {
   display: grid;
-  grid-template-columns: 24px 100px 1fr 1.5fr 200px 1fr 40px;
+  grid-template-columns: 52px 100px 1fr 1.5fr 200px 1fr 40px;
   gap: 1rem;
   align-items: center;
   padding: 0.875rem 1rem;
@@ -249,8 +249,53 @@
   border-bottom: none;
 }
 
+.node-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  justify-content: flex-start;
+}
+
 .node-header-left {
   display: contents;
+}
+
+.node-reorder-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.node-reorder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.node-reorder-btn:hover:not(.disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.node-reorder-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .node-expand-icon {
@@ -260,6 +305,7 @@
   width: 24px;
   flex-shrink: 0;
   padding-left: 0;
+  cursor: pointer;
 }
 
 .node-id-section {
