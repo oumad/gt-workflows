@@ -7,8 +7,9 @@ import {
   saveWorkflowParams,
   uploadFile,
   deleteWorkflowFile,
+  downloadWorkflow,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
@@ -295,6 +296,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
   const [checkInterval, setCheckInterval] = useState<NodeJS.Timeout | null>(null)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -588,6 +590,19 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }
 
+  const handleDownload = async () => {
+    if (!name) return
+    try {
+      setDownloading(true)
+      setError(null)
+      await downloadWorkflow(name)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download workflow')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -617,6 +632,14 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <h1>{params?.label || name}</h1>
         </div>
         <div className="header-actions">
+          <button
+            onClick={handleDownload}
+            disabled={downloading || loading}
+            className="btn btn-secondary"
+            title="Download workflow as zip file"
+          >
+            <Download size={16} /> {downloading ? 'Downloading...' : 'Download'}
+          </button>
           <button
             onClick={handleResetClick}
             disabled={loading || saving}

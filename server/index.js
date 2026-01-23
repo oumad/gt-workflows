@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import multer from 'multer';
+import archiver from 'archiver';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -363,6 +364,248 @@ app.delete('/api/workflows/:name/file/:filename', async (req, res) => {
   } catch (error) {
     console.error('Error deleting file:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Health check endpoint for ComfyUI servers
+// Based on ComfyUI API: https://github.com/Comfy-Org/ComfyUI/tree/master/comfy_api
+// Tries multiple endpoints in order of reliability:
+// 1. /object_info - Core API endpoint that returns node information (most reliable)
+// 2. /system_stats - System statistics endpoint
+// 3. /queue - Queue status endpoint
+app.post('/api/servers/health-check', async (req, res) => {
+  try {
+    const { serverUrl } = req.body;
+    
+    if (!serverUrl) {
+      return res.status(400).json({ error: 'Server URL is required' });
+    }
+
+    // Normalize server URL (remove trailing slash)
+    const normalizedUrl = serverUrl.replace(/\/$/, '');
+    
+    // Try multiple ComfyUI endpoints as fallbacks
+    // /system_stats is the most reliable GET endpoint (confirmed working)
+    // /object_info requires POST, so we'll try GET first, then POST if needed
+    // /queue is also a GET endpoint
+    const endpoints = [
+      { path: '/system_stats', name: 'system_stats', method: 'GET' },
+      { path: '/queue', name: 'queue', method: 'GET' },
+      { path: '/object_info', name: 'object_info', method: 'POST' },
+    ];
+
+    let lastError = null;
+    let lastStatus = null;
+    
+    // Try endpoints sequentially with a small delay to avoid overwhelming the server
+    for (let i = 0; i < endpoints.length; i++) {
+      const endpoint = endpoints[i];
+      const healthCheckUrl = `${normalizedUrl}${endpoint.path}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout per endpoint
+      
+      try {
+        // Add a small delay between endpoint attempts (except for the first one)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between endpoints
+        }
+        
+        const fetchOptions = {
+          method: endpoint.method,
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          },
+        };
+        
+        // Add body and Content-Type for POST requests
+        if (endpoint.method === 'POST') {
+          fetchOptions.headers['Content-Type'] = 'application/json';
+          fetchOptions.body = JSON.stringify({});
+        }
+        
+        const response = await fetch(healthCheckUrl, fetchOptions);
+        
+        clearTimeout(timeoutId);
+        lastStatus = response.status;
+        
+        // Only log errors, not successful checks
+        if (response.status >= 400) {
+          console.log(`[Health Check] ${endpoint.name} returned ${response.status} for ${normalizedUrl}`);
+        }
+        
+        // If we get a response with status < 500, the server is reachable
+        // Status 200-299: Success
+        // Status 400-499: Client errors (server is up, but endpoint might not exist or need auth)
+        // Status 500+: Server errors (server might be having issues)
+        if (response.status < 500) {
+          // Server is responding - consider it healthy
+          const isHealthy = response.status >= 200 && response.status < 400;
+          
+          // Success - no logging needed to reduce noise
+          
+          res.json({ 
+            healthy: isHealthy, 
+            serverUrl: normalizedUrl,
+            status: response.status,
+            endpoint: endpoint.name,
+            timestamp: new Date().toISOString(),
+            ...(response.status >= 400 && response.status < 500 ? {
+              warning: `Endpoint returned ${response.status}, server may require authentication or endpoint may not be available`
+            } : {})
+          });
+          return;
+        } else {
+          // Server error (5xx)
+          lastError = `Server returned status ${response.status} from ${endpoint.name}`;
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          lastError = `Timeout checking ${endpoint.name} (3s timeout)`;
+        } else {
+          // Network errors, DNS failures, connection refused, etc.
+          const errorMsg = fetchError.message || 'Connection failed';
+          const errorCode = fetchError.code || '';
+          // Only log actual errors, not transient network issues
+          if (errorCode && (errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND')) {
+            console.error(`[Health Check] Connection error for ${normalizedUrl}: ${errorMsg}`);
+          }
+          // Check for common error types
+          if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('ENOTFOUND') || errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND') {
+            lastError = `Cannot connect to server: ${errorMsg}`;
+          } else if (errorMsg.includes('fetch failed') || errorMsg.includes('network')) {
+            lastError = `Network error: ${errorMsg}`;
+          } else {
+            lastError = `${endpoint.name}: ${errorMsg}`;
+          }
+        }
+        // Continue to next endpoint
+        continue;
+      }
+    }
+    
+    // If all endpoints failed, server is unhealthy
+    res.json({ 
+      healthy: false, 
+      serverUrl: normalizedUrl,
+      error: lastError || 'All health check endpoints failed',
+      lastStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error checking server health:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Download workflow as zip
+app.get('/api/workflows/:name/download', async (req, res) => {
+  let archive = null;
+  
+  try {
+    const workflowName = decodeURIComponent(req.params.name);
+    const workflowPath = path.join(WORKFLOWS_PATH, workflowName);
+    
+    // Verify workflow exists
+    try {
+      await fs.access(workflowPath);
+    } catch {
+      return res.status(404).json({ error: 'Workflow not found' });
+    }
+    
+    // Create zip archive
+    archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
+    });
+    
+    // Track if we've sent an error response
+    let errorSent = false;
+    
+    // Handle archive errors
+    archive.on('error', (err) => {
+      console.error('Archive error:', err);
+      if (!errorSent && !res.headersSent) {
+        errorSent = true;
+        res.status(500).json({ error: `Failed to create archive: ${err.message}` });
+      }
+    });
+    
+    // Handle response errors
+    res.on('error', (err) => {
+      console.error('Response error:', err);
+      if (archive) {
+        archive.abort();
+      }
+    });
+    
+    // Wait for archive to finish
+    const archivePromise = new Promise((resolve, reject) => {
+      archive.on('end', () => {
+        console.log(`Archive finalized. Total bytes: ${archive.pointer()}`);
+        resolve(undefined);
+      });
+      
+      archive.on('error', (err) => {
+        reject(err);
+      });
+    });
+    
+    // Set response headers
+    const zipFilename = `${workflowName}.zip`;
+    res.attachment(zipFilename);
+    res.type('application/zip');
+    
+    // Pipe archive to response
+    archive.pipe(res);
+    
+    // Read all files in the workflow directory
+    const files = await fs.readdir(workflowPath, { withFileTypes: true });
+    
+    if (files.length === 0) {
+      if (!errorSent && !res.headersSent) {
+        errorSent = true;
+        return res.status(400).json({ error: 'Workflow directory is empty' });
+      }
+    }
+    
+    // Add each file to the archive
+    for (const file of files) {
+      const filePath = path.join(workflowPath, file.name);
+      
+      try {
+        if (file.isFile()) {
+          // Verify file exists before adding
+          try {
+            await fs.access(filePath);
+            // Add file to archive with its name (not full path)
+            archive.file(filePath, { name: file.name });
+          } catch (accessError) {
+            console.warn(`File ${file.name} is not accessible, skipping:`, accessError.message);
+          }
+        } else if (file.isDirectory()) {
+          // Add directory recursively
+          archive.directory(filePath, file.name);
+        }
+      } catch (fileError) {
+        console.error(`Error adding file ${file.name} to archive:`, fileError);
+        // Continue with other files even if one fails
+      }
+    }
+    
+    // Finalize the archive and wait for it to complete
+    archive.finalize();
+    await archivePromise;
+    
+  } catch (error) {
+    console.error('Error creating workflow zip:', error);
+    if (archive) {
+      archive.abort();
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Failed to create workflow archive' });
+    }
   }
 });
 

@@ -1,9 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Workflow } from '../types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download } from 'lucide-react'
 import QuickEditModal from './QuickEditModal'
 import BulkEditModal from './BulkEditModal'
+import HealthCheckModal from './HealthCheckModal'
+import { useServerHealthCheck } from '../hooks/useServerHealthCheck'
+import { getSettings } from '../utils/settings'
+import { downloadWorkflow } from '../api/workflows'
 import './WorkflowList.css'
 
 interface WorkflowListProps {
@@ -19,6 +23,35 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [settings, setSettings] = useState(getSettings())
+  const [downloadingWorkflows, setDownloadingWorkflows] = useState<Set<string>>(new Set())
+  const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
+
+  // Health check hook - only check servers from settings (manual only)
+  // Filter out empty strings and invalid entries
+  const monitoredServers = useMemo(() => {
+    const servers = settings.monitoredServers || []
+    return servers.filter(server => server && server.trim().length > 0)
+  }, [settings.monitoredServers]);
+  
+  const { getHealthStatus, checkAllServers, isChecking, healthStatuses } = useServerHealthCheck(monitoredServers, {
+    enabled: true, // Enable checks - they're still manual via button click
+  })
+
+  // Update settings when they change
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setSettings(getSettings())
+    }
+    // Listen for custom settings update event (fired from Settings page)
+    window.addEventListener('settingsUpdated', handleStorageChange)
+    // Also listen for storage events (from other tabs)
+    window.addEventListener('storage', handleStorageChange)
+    return () => {
+      window.removeEventListener('settingsUpdated', handleStorageChange)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
 
   // Filter workflows based on search term
   const filteredWorkflows = useMemo(() => {
@@ -103,6 +136,25 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     selectedWorkflows.has(w.name)
   )
 
+  const handleDownload = async (workflowName: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    try {
+      setDownloadingWorkflows(prev => new Set(prev).add(workflowName))
+      await downloadWorkflow(workflowName)
+    } catch (error) {
+      console.error('Error downloading workflow:', error)
+      alert('Failed to download workflow: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setDownloadingWorkflows(prev => {
+        const next = new Set(prev)
+        next.delete(workflowName)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="workflow-list">
       <div className="list-header">
@@ -143,6 +195,30 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
         <div className="header-actions">
           {!selectionMode ? (
             <>
+              {monitoredServers.length > 0 ? (
+                <button
+                  onClick={() => {
+                    setShowHealthCheckModal(true)
+                    // Start checks immediately
+                    checkAllServers()
+                  }}
+                  className="btn btn-secondary"
+                  disabled={isChecking}
+                  title={`Check health of ${monitoredServers.length} monitored server${monitoredServers.length !== 1 ? 's' : ''}`}
+                >
+                  <Activity size={16} className={isChecking ? 'spinner' : ''} />
+                  {isChecking ? 'Checking...' : 'Check Health'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowHealthCheckModal(true)}
+                  className="btn btn-secondary"
+                  title="No servers configured. Add servers in Settings."
+                >
+                  <Activity size={16} />
+                  Check Health
+                </button>
+              )}
               <button
                 onClick={enterSelectionMode}
                 className="btn btn-primary"
@@ -287,15 +363,54 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
 
                   <div className="workflow-quick-info">
                     {workflow.params.parser === 'comfyui' &&
-                      workflow.params.comfyui_config?.serverUrl && (
-                        <div className="quick-info-item">
-                          <Server size={14} />
-                          <span className="quick-info-label">Server:</span>
-                          <span className="quick-info-value" title={workflow.params.comfyui_config.serverUrl}>
-                            {workflow.params.comfyui_config.serverUrl.replace(/^https?:\/\//, '').split(':')[0]}
-                          </span>
-                        </div>
-                      )}
+                      workflow.params.comfyui_config?.serverUrl && (() => {
+                        const serverUrl = workflow.params.comfyui_config!.serverUrl!
+                        // Normalize server URL for comparison (remove trailing slash, ensure consistent format)
+                        const normalizedServerUrl = serverUrl.replace(/\/$/, '')
+                        const normalizedMonitoredServers = (settings.monitoredServers || []).map(s => s.replace(/\/$/, ''))
+                        
+                        // Check if this server is being monitored
+                        const isMonitored = normalizedMonitoredServers.includes(normalizedServerUrl)
+                        
+                        // Get health status if monitored
+                        const healthStatus = isMonitored ? getHealthStatus(normalizedServerUrl) : null
+                        const isHealthy = healthStatus?.healthy === true
+                        const isUnhealthy = healthStatus?.healthy === false
+                        
+                        return (
+                          <div className="quick-info-item">
+                            <Server size={14} />
+                            <span className="quick-info-label">Server:</span>
+                            <span className="quick-info-value" title={serverUrl}>
+                              {serverUrl.replace(/^https?:\/\//, '')}
+                            </span>
+                            {isMonitored && healthStatus && (
+                              <span 
+                                className={`server-health-indicator ${
+                                  isHealthy ? 'healthy' : 
+                                  isUnhealthy ? 'unhealthy' : 
+                                  'checking'
+                                }`}
+                                title={
+                                  isHealthy ? 'Server is healthy' :
+                                  isUnhealthy ? `Server is unhealthy: ${healthStatus.error || 'Connection failed'}` :
+                                  'Checking server health...'
+                                }
+                              >
+                                <Activity size={12} />
+                              </span>
+                            )}
+                            {!isMonitored && (
+                              <span 
+                                className="server-health-indicator not-monitored"
+                                title="This server is not in the monitored servers list. Add it in Settings to see health status."
+                              >
+                                <Activity size={12} />
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     {workflow.params.timeout && (
                       <div className="quick-info-item">
                         <Clock size={14} />
@@ -341,17 +456,27 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                   </div>
                 </Link>
                 {!selectionMode && (
-                  <button
-                    className="quick-edit-btn"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setEditingWorkflow(workflow)
-                    }}
-                    title="Quick Edit"
-                  >
-                    <Edit2 size={16} />
-                  </button>
+                  <>
+                    <button
+                      className="quick-download-btn"
+                      onClick={(e) => handleDownload(workflow.name, e)}
+                      disabled={downloadingWorkflows.has(workflow.name)}
+                      title="Download workflow"
+                    >
+                      <Download size={16} className={downloadingWorkflows.has(workflow.name) ? 'spinner' : ''} />
+                    </button>
+                    <button
+                      className="quick-edit-btn"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setEditingWorkflow(workflow)
+                      }}
+                      title="Quick Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  </>
                 )}
               </div>
               )
@@ -379,6 +504,14 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                 exitSelectionMode()
                 onRefresh()
               }}
+            />
+          )}
+          {showHealthCheckModal && (
+            <HealthCheckModal
+              healthStatuses={healthStatuses}
+              isChecking={isChecking}
+              monitoredServers={monitoredServers}
+              onClose={() => setShowHealthCheckModal(false)}
             />
           )}
         </>

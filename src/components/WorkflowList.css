@@ -150,6 +150,11 @@
   margin-bottom: 1rem;
 }
 
+.btn .spinner {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -228,10 +233,10 @@
   box-shadow: 0 4px 12px var(--shadow);
 }
 
-.quick-edit-btn {
+.quick-edit-btn,
+.quick-download-btn {
   position: absolute;
   top: 1rem;
-  right: 1rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -247,18 +252,40 @@
   z-index: 10;
 }
 
-.workflow-card-wrapper:not(.selection-mode):hover .quick-edit-btn {
+.quick-edit-btn {
+  right: 1rem;
+}
+
+.quick-download-btn {
+  right: 3.5rem;
+}
+
+.workflow-card-wrapper:not(.selection-mode):hover .quick-edit-btn,
+.workflow-card-wrapper:not(.selection-mode):hover .quick-download-btn {
   opacity: 1;
 }
 
-.quick-edit-btn:hover {
+.quick-edit-btn:hover,
+.quick-download-btn:hover {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
 }
 
-/* When selection indicator is present, hide quick edit button */
-.workflow-card-wrapper.selection-mode .quick-edit-btn {
+.quick-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quick-download-btn:disabled:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+/* When selection indicator is present, hide quick action buttons */
+.workflow-card-wrapper.selection-mode .quick-edit-btn,
+.workflow-card-wrapper.selection-mode .quick-download-btn {
   display: none;
 }
 
@@ -298,6 +325,49 @@
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+.server-health-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.server-health-indicator.healthy {
+  color: var(--success);
+}
+
+.server-health-indicator.healthy svg {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.server-health-indicator.unhealthy {
+  color: var(--error);
+}
+
+.server-health-indicator.checking {
+  color: var(--text-muted);
+}
+
+.server-health-indicator.checking svg {
+  animation: spin 1s linear infinite;
+}
+
+.server-health-indicator.not-monitored {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .workflow-card-header {
