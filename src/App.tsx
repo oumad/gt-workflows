@@ -1,23 +1,31 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { Workflow } from './types'
 import { listWorkflows } from './api/workflows'
 import WorkflowList from './components/WorkflowList'
 import WorkflowDetail from './components/WorkflowDetail'
 import WorkflowCreate from './components/WorkflowCreate'
+import Settings from './components/Settings'
 import './App.css'
 
 function App() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loadingRef = useRef(false)
 
   useEffect(() => {
     loadWorkflows()
   }, [])
 
   const loadWorkflows = async () => {
+    // Prevent concurrent requests
+    if (loadingRef.current) {
+      return
+    }
+
     try {
+      loadingRef.current = true
       setLoading(true)
       setError(null)
       const data = await listWorkflows()
@@ -26,6 +34,7 @@ function App() {
       setError(err instanceof Error ? err.message : 'Failed to load workflows')
     } finally {
       setLoading(false)
+      loadingRef.current = false
     }
   }
 
@@ -38,6 +47,7 @@ function App() {
             <nav>
               <Link to="/" className="nav-link">Workflows</Link>
               <Link to="/create" className="nav-link">Create New</Link>
+              <Link to="/settings" className="nav-link">Settings</Link>
             </nav>
           </div>
         </header>
@@ -62,6 +72,10 @@ function App() {
             <Route
               path="/create"
               element={<WorkflowCreate onCreated={loadWorkflows} />}
+            />
+            <Route
+              path="/settings"
+              element={<Settings />}
             />
           </Routes>
         </main>

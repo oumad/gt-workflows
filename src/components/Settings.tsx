@@ -1,0 +1,160 @@
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, Save, Settings as SettingsIcon, Activity, Plus, X, Server } from 'lucide-react'
+import { getSettings, saveSettings, AppSettings } from '../utils/settings'
+import './Settings.css'
+
+export default function Settings() {
+  const [settings, setSettings] = useState<AppSettings>(getSettings())
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    // Reset saved message after 2 seconds
+    if (saved) {
+      const timer = setTimeout(() => setSaved(false), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [saved])
+
+  const handleSave = () => {
+    saveSettings(settings)
+    setSaved(true)
+    // Trigger custom event so other components can update
+    window.dispatchEvent(new Event('settingsUpdated'))
+  }
+
+  const handleAddServer = () => {
+    const newServer = prompt('Enter ComfyUI server URL (e.g., http://127.0.0.1:8188):')
+    if (newServer && newServer.trim()) {
+      const trimmed = newServer.trim()
+      // Normalize URL (add http:// if missing, remove trailing slash)
+      let normalized = trimmed
+      if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+        normalized = `http://${normalized}`
+      }
+      normalized = normalized.replace(/\/$/, '')
+      
+      if (!settings.monitoredServers.includes(normalized)) {
+        setSettings({
+          ...settings,
+          monitoredServers: [...settings.monitoredServers, normalized]
+        })
+      }
+    }
+  }
+
+  const handleRemoveServer = (index: number) => {
+    setSettings({
+      ...settings,
+      monitoredServers: settings.monitoredServers.filter((_, i) => i !== index)
+    })
+  }
+
+  const handleServerUrlChange = (index: number, newUrl: string) => {
+    const updated = [...settings.monitoredServers]
+    let normalized = newUrl.trim()
+    // Normalize URL (remove trailing slash)
+    normalized = normalized.replace(/\/$/, '')
+    updated[index] = normalized
+    setSettings({ ...settings, monitoredServers: updated })
+  }
+
+  return (
+    <div className="settings-page">
+      <div className="settings-header">
+        <Link to="/" className="back-link">
+          <ArrowLeft size={20} />
+          Back to Workflows
+        </Link>
+        <h1>
+          <SettingsIcon size={24} />
+          Settings
+        </h1>
+      </div>
+
+      <div className="settings-content">
+        <div className="settings-section">
+          <div className="section-header">
+            <Activity size={20} />
+            <h2>Server Health Checks</h2>
+          </div>
+
+          <div className="settings-group">
+            <div className="setting-item">
+              <label>
+                <span className="label-text">Health Checks</span>
+                <span className="label-description">
+                  Health checks are now manual only. Use the "Check Health" button in the workflow list to check server status on demand.
+                </span>
+              </label>
+              <div className="setting-control">
+                <small className="setting-hint">
+                  Manual checks improve performance and reduce server load.
+                </small>
+              </div>
+            </div>
+
+            <div className="setting-item setting-item-full">
+              <label>
+                <span className="label-text">Monitored Servers</span>
+                <span className="label-description">
+                  List of ComfyUI servers to monitor. Workflows will show health status based on these servers.
+                </span>
+              </label>
+              <div className="setting-control servers-list">
+                <div className="servers-list-items">
+                  {settings.monitoredServers.map((server, index) => (
+                    <div key={index} className="server-item">
+                      <Server size={16} />
+                      <input
+                        type="text"
+                        value={server}
+                        onChange={(e) => handleServerUrlChange(index, e.target.value)}
+                        placeholder="http://127.0.0.1:8188"
+                        className="server-url-input"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveServer(index)}
+                        className="remove-server-btn"
+                        title="Remove server"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddServer}
+                  className="add-server-btn"
+                >
+                  <Plus size={16} />
+                  Add Server
+                </button>
+                {settings.monitoredServers.length === 0 && (
+                  <small className="setting-hint">
+                    No servers configured. Add at least one server to enable health checks.
+                  </small>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="settings-actions">
+          <button onClick={handleSave} className="btn btn-primary">
+            <Save size={16} />
+            Save Settings
+          </button>
+          {saved && (
+            <span className="save-message">
+              Settings saved!
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
