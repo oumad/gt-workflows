@@ -33,8 +33,8 @@ npm run dev:all
 ```
 
 This will start:
-- Backend API server on `http://localhost:3011`
-- Frontend dev server on `http://localhost:3010` (opens automatically)
+- Backend API server on `http://localhost:3011` (accessible from network at `http://<your-ip>:3011`)
+- Frontend dev server on `http://localhost:3010` (accessible from network at `http://<your-ip>:3010`, opens automatically)
 
 #### Run Separately
 
@@ -103,6 +103,24 @@ GT_WORKFLOWS_PATH="/path/to/your/workflows" npm run dev:server
 ```
 
 The path can be absolute or relative. If not set, it defaults to `../data/gt-workflows` relative to the server file location.
+
+#### Network Access
+
+By default, both the backend and frontend servers are configured to accept connections from other machines on your network. You can access the application from other devices using your machine's IP address:
+
+- Frontend: `http://<your-ip>:3010`
+- Backend API: `http://<your-ip>:3011`
+
+To restrict access to localhost only, you can set the `HOST` environment variable:
+```bash
+# Windows PowerShell
+$env:HOST="localhost"; npm run dev:server
+
+# Linux/macOS
+HOST=localhost npm run dev:server
+```
+
+**Note:** Make sure your firewall allows incoming connections on ports 3010 and 3011 if you want to access the app from other machines.
 
 ### Building for Production
 

@@ -616,8 +616,13 @@ app.get('/api/workflows/:name/download', async (req, res) => {
 // Serve static files from workflows directory (for icons)
 app.use('/data/gt-workflows', express.static(WORKFLOWS_PATH));
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0'; // Allow connections from network by default
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    console.log(`Server accessible from network at http://<your-ip>:${PORT}`);
+  }
   console.log(`Workflows directory: ${WORKFLOWS_PATH}`);
 });
 
