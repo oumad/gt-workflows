@@ -289,6 +289,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [iconError, setIconError] = useState(false)
   const [iconDragOver, setIconDragOver] = useState(false)
   const [workflowDragOver, setWorkflowDragOver] = useState(false)
+  const [iconVersion, setIconVersion] = useState(0) // For cache-busting when icon is updated
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [fileParams, setFileParams] = useState<WorkflowParams | null>(null)
@@ -375,6 +376,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setParamsText(JSON.stringify(paramsData, null, 2))
       setWorkflowJson(jsonData)
       setIconError(false)
+      setIconVersion(Date.now()) // Update icon version on load to ensure fresh image
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workflow')
     } finally {
@@ -686,7 +688,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                   <div className="workflow-icon-large">
                     {params.icon && !iconError ? (
                       <img 
-                        src={`/data/gt-workflows/${encodeURIComponent(name || '')}/${params.icon.replace(/^\.\//, '')}`}
+                        src={`/data/gt-workflows/${encodeURIComponent(name || '')}/${params.icon.replace(/^\.\//, '')}?v=${iconVersion}`}
                         alt={`${name} icon`}
                         className="workflow-icon-image"
                         onError={() => {
@@ -888,11 +890,17 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 // Update params (don't auto-save - user must click Apply)
                                 const updatedParams = { ...params, icon: undefined };
                                 handleParamsUpdate(updatedParams);
+                                // Update icon version to force UI refresh
+                                setIconVersion(Date.now());
+                                setIconError(false);
                               } catch (error) {
                                 console.error('Failed to delete icon:', error);
                                 // Still remove from params even if file deletion fails
                                 const updatedParams = { ...params, icon: undefined };
                                 handleParamsUpdate(updatedParams);
+                                // Update icon version to force UI refresh
+                                setIconVersion(Date.now());
+                                setIconError(false);
                                 // Don't auto-save - user must click Apply
                               }
                             }}
@@ -920,6 +928,9 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 const result = await uploadFile(name, compressedFile);
                                 const updatedParams = { ...params, icon: result.relativePath };
                                 handleParamsUpdate(updatedParams);
+                                // Update icon version to force browser cache refresh
+                                setIconVersion(Date.now());
+                                setIconError(false); // Reset error state in case it was set
                                 // Don't auto-save - user must click Apply
                               } catch (error) {
                                 alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -933,16 +944,19 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file && name) {
-                                try {
-                                  // Compress image before uploading
-                                  const compressedFile = await compressImage(file, 800, 0.85);
-                                  const result = await uploadFile(name, compressedFile);
-                                  const updatedParams = { ...params, icon: result.relativePath };
-                                  handleParamsUpdate(updatedParams);
-                                  // Don't auto-save - user must click Apply
-                                } catch (error) {
-                                  alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                                }
+                              try {
+                                // Compress image before uploading
+                                const compressedFile = await compressImage(file, 800, 0.85);
+                                const result = await uploadFile(name, compressedFile);
+                                const updatedParams = { ...params, icon: result.relativePath };
+                                handleParamsUpdate(updatedParams);
+                                // Update icon version to force browser cache refresh
+                                setIconVersion(Date.now());
+                                setIconError(false); // Reset error state in case it was set
+                                // Don't auto-save - user must click Apply
+                              } catch (error) {
+                                alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                              }
                               }
                             }}
                             style={{ display: 'none' }}

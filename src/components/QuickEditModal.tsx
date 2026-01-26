@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Save, Server, Clock, Code } from 'lucide-react'
 import { WorkflowParams } from '../types'
-import { saveWorkflowParams } from '../api/workflows'
+import { getWorkflowParams, saveWorkflowParams } from '../api/workflows'
 import './QuickEditModal.css'
 
 interface QuickEditModalProps {
@@ -22,31 +22,69 @@ export default function QuickEditModal({
   const [devMode, setDevMode] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [fullParams, setFullParams] = useState<WorkflowParams | null>(null)
 
+  // Load full params from server when modal opens
   useEffect(() => {
-    if (params.comfyui_config?.serverUrl) {
-      setServerUrl(params.comfyui_config.serverUrl)
+    const loadFullParams = async () => {
+      try {
+        setLoading(true)
+        const loadedParams = await getWorkflowParams(workflowName)
+        setFullParams(loadedParams)
+        
+        // Initialize form fields from loaded params
+        if (loadedParams.comfyui_config?.serverUrl) {
+          setServerUrl(loadedParams.comfyui_config.serverUrl)
+        }
+        if (loadedParams.timeout !== undefined) {
+          setTimeout(loadedParams.timeout)
+        }
+        if (loadedParams.devMode !== undefined) {
+          setDevMode(loadedParams.devMode)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load workflow params')
+        // Fallback to using passed params if loading fails
+        setFullParams(params)
+        if (params.comfyui_config?.serverUrl) {
+          setServerUrl(params.comfyui_config.serverUrl)
+        }
+        if (params.timeout !== undefined) {
+          setTimeout(params.timeout)
+        }
+        if (params.devMode !== undefined) {
+          setDevMode(params.devMode)
+        }
+      } finally {
+        setLoading(false)
+      }
     }
-    if (params.timeout !== undefined) {
-      setTimeout(params.timeout)
-    }
-    if (params.devMode !== undefined) {
-      setDevMode(params.devMode)
-    }
-  }, [params])
+    
+    loadFullParams()
+  }, [workflowName, params])
 
   const handleSave = async () => {
+    if (!fullParams) {
+      setError('Workflow params not loaded')
+      return
+    }
+
     try {
       setSaving(true)
       setError(null)
 
-      const updatedParams: WorkflowParams = { ...params }
+      // Start with the full params from the server
+      const updatedParams: WorkflowParams = { ...fullParams }
 
       // Update server URL for ComfyUI workflows
-      if (params.parser === 'comfyui' && updatedParams.comfyui_config) {
+      if (fullParams.parser === 'comfyui') {
+        if (!updatedParams.comfyui_config) {
+          updatedParams.comfyui_config = {}
+        }
         updatedParams.comfyui_config = {
           ...updatedParams.comfyui_config,
-          serverUrl: serverUrl,
+          serverUrl: serverUrl || undefined,
         }
       }
 
@@ -70,7 +108,25 @@ export default function QuickEditModal({
     }
   }
 
-  const isComfyUI = params.parser === 'comfyui'
+  const isComfyUI = fullParams?.parser === 'comfyui' || params.parser === 'comfyui'
+
+  if (loading) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>Quick Edit: {workflowName}</h2>
+            <button onClick={onClose} className="modal-close">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="modal-body">
+            <p>Loading workflow parameters...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -147,7 +203,7 @@ export default function QuickEditModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || (isComfyUI && !serverUrl.trim())}
+            disabled={saving || !fullParams || (isComfyUI && !serverUrl.trim())}
             className="btn btn-primary"
           >
             <Save size={16} />

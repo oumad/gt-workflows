@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, Save, Server, Clock, Code, CheckSquare } from 'lucide-react'
 import { Workflow } from '../types'
-import { saveWorkflowParams } from '../api/workflows'
+import { getWorkflowParams, saveWorkflowParams } from '../api/workflows'
 import './BulkEditModal.css'
 
 interface BulkEditModalProps {
@@ -34,48 +34,46 @@ export default function BulkEditModal({
       setError(null)
       setProgress({ current: 0, total: workflows.length })
 
-      const updates: Array<{ name: string; params: any }> = []
-
+      // Save all workflows
       for (let i = 0; i < workflows.length; i++) {
         const workflow = workflows[i]
-        const updatedParams = { ...workflow.params }
-
-        // Update server URL for ComfyUI workflows
-        if (
-          workflow.params.parser === 'comfyui' &&
-          serverUrl.trim() &&
-          updatedParams.comfyui_config
-        ) {
-          updatedParams.comfyui_config = {
-            ...updatedParams.comfyui_config,
-            serverUrl: serverUrl.trim(),
-          }
-        }
-
-        // Update timeout
-        if (timeout !== undefined) {
-          if (timeout > 0) {
-            updatedParams.timeout = timeout
-          } else {
-            delete updatedParams.timeout
-          }
-        }
-
-        // Update dev mode
-        if (devMode !== undefined) {
-          updatedParams.devMode = devMode || undefined
-        }
-
-        updates.push({ name: workflow.name, params: updatedParams })
-      }
-
-      // Save all workflows
-      for (let i = 0; i < updates.length; i++) {
         try {
-          await saveWorkflowParams(updates[i].name, updates[i].params)
-          setProgress({ current: i + 1, total: updates.length })
+          // Load full params from server to preserve all fields
+          const fullParams = await getWorkflowParams(workflow.name)
+          const updatedParams = { ...fullParams }
+
+          // Update server URL for ComfyUI workflows
+          if (
+            workflow.params.parser === 'comfyui' &&
+            serverUrl.trim()
+          ) {
+            if (!updatedParams.comfyui_config) {
+              updatedParams.comfyui_config = {}
+            }
+            updatedParams.comfyui_config = {
+              ...updatedParams.comfyui_config,
+              serverUrl: serverUrl.trim(),
+            }
+          }
+
+          // Update timeout
+          if (timeout !== undefined) {
+            if (timeout > 0) {
+              updatedParams.timeout = timeout
+            } else {
+              delete updatedParams.timeout
+            }
+          }
+
+          // Update dev mode
+          if (devMode !== undefined) {
+            updatedParams.devMode = devMode || undefined
+          }
+
+          await saveWorkflowParams(workflow.name, updatedParams)
+          setProgress({ current: i + 1, total: workflows.length })
         } catch (err) {
-          console.error(`Failed to save ${updates[i].name}:`, err)
+          console.error(`Failed to save ${workflow.name}:`, err)
           // Continue with other workflows even if one fails
         }
       }

@@ -36,12 +36,34 @@ const storage = multer.diskStorage({
       cb(error);
     }
   },
-  filename: (req, file, cb) => {
+  filename: async (req, file, cb) => {
     // Rename image files to icon.jpg, JSON workflow files to workflow.json
     let finalFilename = file.originalname;
     if (file.mimetype && file.mimetype.startsWith('image/')) {
       // Always use .jpg for images since they're compressed to JPEG format
       finalFilename = 'icon.jpg';
+      
+      // Delete old icon.jpg file if it exists to ensure proper replacement
+      const workflowName = req.params.name || req.body.workflowName;
+      if (workflowName) {
+        try {
+          const workflowPath = path.join(WORKFLOWS_PATH, workflowName);
+          const iconPath = path.join(workflowPath, 'icon.jpg');
+          try {
+            await fs.access(iconPath);
+            // File exists, delete it so multer can save the new one
+            await fs.unlink(iconPath);
+          } catch (error) {
+            // Ignore if file doesn't exist - that's fine
+            if (error.code !== 'ENOENT') {
+              console.warn('Failed to delete old icon before upload:', error.message);
+            }
+          }
+        } catch (error) {
+          // Ignore errors in cleanup - continue with upload
+          console.warn('Error during icon cleanup:', error.message);
+        }
+      }
     } else if (file.mimetype === 'application/json' || file.originalname.toLowerCase().endsWith('.json')) {
       // Rename JSON workflow files to workflow.json for consistency
       finalFilename = 'workflow.json';
@@ -289,15 +311,20 @@ app.post('/api/workflows/:name/upload', upload.single('file'), async (req, res) 
     // Delete old files if they exist (icon or workflow)
     const params = await readParamsJson(workflowPath);
     
-    // If this is an icon upload, delete the old icon file if it exists
-    if (params?.icon && req.file.filename === 'icon.jpg') {
+    // If this is an icon upload, delete any old icon file referenced in params if it's different
+    // Note: icon.jpg is already deleted in the filename callback before multer saves
+    if (req.file.filename === 'icon.jpg' && params?.icon) {
       const oldIconPath = path.join(workflowPath, params.icon.replace(/^\.\//, ''));
-      try {
-        await fs.unlink(oldIconPath);
-      } catch (error) {
-        // Ignore if file doesn't exist
-        if (error.code !== 'ENOENT') {
-          console.warn('Failed to delete old icon:', error.message);
+      const newIconPath = req.file.path;
+      // Only delete if it's a different file (not the same as the new icon.jpg)
+      if (oldIconPath !== newIconPath) {
+        try {
+          await fs.unlink(oldIconPath);
+        } catch (error) {
+          // Ignore if file doesn't exist
+          if (error.code !== 'ENOENT') {
+            console.warn('Failed to delete old icon file:', error.message);
+          }
         }
       }
     }

@@ -24,7 +24,7 @@ import BulkEditModal from './BulkEditModal'
 import HealthCheckModal from './HealthCheckModal'
 import { useServerHealthCheck } from '../hooks/useServerHealthCheck'
 import { getSettings } from '../utils/settings'
-import { downloadWorkflow, saveWorkflowParams } from '../api/workflows'
+import { downloadWorkflow, getWorkflowParams, saveWorkflowParams } from '../api/workflows'
 import './WorkflowList.css'
 
 interface WorkflowListProps {
@@ -620,11 +620,21 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     try {
       await Promise.all(
         Array.from(editedWorkflows.entries()).map(async ([workflowName, changes]) => {
-          const workflow = localWorkflows.find(w => w.name === workflowName)
-          if (workflow) {
-            const updatedParams = { ...workflow.params, ...changes }
-            await saveWorkflowParams(workflowName, updatedParams)
+          // Load full params from server to preserve all fields
+          const fullParams = await getWorkflowParams(workflowName)
+          
+          // Merge changes into full params
+          const updatedParams = { ...fullParams, ...changes }
+          
+          // Handle nested fields like comfyui_config.serverUrl
+          if (changes.comfyui_config) {
+            updatedParams.comfyui_config = {
+              ...fullParams.comfyui_config,
+              ...changes.comfyui_config,
+            }
           }
+          
+          await saveWorkflowParams(workflowName, updatedParams)
         })
       )
       setEditedWorkflows(new Map())
