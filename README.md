@@ -48,6 +48,62 @@ npm run dev:server
 npm run dev
 ```
 
+### Configuration
+
+#### Setting Custom Workflow Location
+
+By default, workflows are stored in `data/gt-workflows/` relative to the project root. To use a different location on a different computer, you can configure it using a `.env` file or environment variable.
+
+**Using .env file (Recommended):**
+
+1. Copy the example file:
+```bash
+cp .env.example .env
+```
+
+2. Edit `.env` and set your workflows path:
+```env
+GT_WORKFLOWS_PATH=C:\path\to\your\workflows
+```
+
+Or on Linux/macOS:
+```env
+GT_WORKFLOWS_PATH=/path/to/your/workflows
+```
+
+The `.env` file is automatically loaded when the server starts.
+
+**Using Environment Variable:**
+
+**Windows (PowerShell):**
+```powershell
+$env:GT_WORKFLOWS_PATH="C:\path\to\your\workflows"
+npm run dev:server
+```
+
+**Windows (Command Prompt):**
+```cmd
+set GT_WORKFLOWS_PATH=C:\path\to\your\workflows
+npm run dev:server
+```
+
+**Linux/macOS:**
+```bash
+export GT_WORKFLOWS_PATH="/path/to/your/workflows"
+npm run dev:server
+```
+
+**Or set it inline:**
+```bash
+# Windows PowerShell
+$env:GT_WORKFLOWS_PATH="C:\path\to\your\workflows"; npm run dev:server
+
+# Linux/macOS
+GT_WORKFLOWS_PATH="/path/to/your/workflows" npm run dev:server
+```
+
+The path can be absolute or relative. If not set, it defaults to `../data/gt-workflows` relative to the server file location.
+
 ### Building for Production
 
 ```bash

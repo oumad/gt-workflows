@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs/promises';
@@ -12,7 +13,10 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = 3011;
-const WORKFLOWS_PATH = path.join(__dirname, '../data/gt-workflows');
+// Allow custom workflows path via environment variable, fallback to default location
+const WORKFLOWS_PATH = process.env.GT_WORKFLOWS_PATH 
+  ? path.resolve(process.env.GT_WORKFLOWS_PATH)
+  : path.join(__dirname, '../data/gt-workflows');
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -614,5 +618,6 @@ app.use('/data/gt-workflows', express.static(WORKFLOWS_PATH));
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Workflows directory: ${WORKFLOWS_PATH}`);
 });
 
