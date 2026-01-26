@@ -57,7 +57,7 @@ function SortableWorkflowCard({
   editMode,
   settings,
   getHealthStatus,
-  monitoredServers,
+  monitoredServers: _monitoredServers, // Used in health status checks
   downloadingWorkflows,
   editedParams,
   onToggleSelection,
@@ -168,7 +168,7 @@ function SortableWorkflowCard({
             workflow.params.comfyui_config?.serverUrl && (() => {
               const serverUrl = (editedParams.comfyui_config?.serverUrl ?? workflow.params.comfyui_config!.serverUrl!) || ''
               const normalizedServerUrl = serverUrl.replace(/\/$/, '')
-              const normalizedMonitoredServers = (settings.monitoredServers || []).map(s => s.replace(/\/$/, ''))
+              const normalizedMonitoredServers = (settings.monitoredServers || []).map((s: string) => s.replace(/\/$/, ''))
               const isMonitored = normalizedMonitoredServers.includes(normalizedServerUrl)
               const healthStatus = isMonitored ? getHealthStatus(normalizedServerUrl) : null
               const isHealthy = healthStatus?.healthy === true
@@ -321,7 +321,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [localWorkflows, setLocalWorkflows] = useState<Workflow[]>(workflows)
-  const [isReordering, setIsReordering] = useState(false)
+  const [isReordering] = useState(false) // Reserved for future drag-and-drop reordering
   const [editMode, setEditMode] = useState(false)
   const [editedWorkflows, setEditedWorkflows] = useState<Map<string, Partial<Workflow['params']>>>(new Map())
 
@@ -409,7 +409,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     })
     
     // Sort workflows within each category
-    categories.forEach((workflows, category) => {
+    categories.forEach((workflows) => {
       workflows.sort((a, b) => {
         // First sort by order if provided
         const orderA = a.params.order

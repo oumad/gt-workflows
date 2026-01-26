@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { WorkflowParams } from '../types'
+import { WorkflowParams, IconBadge } from '../types'
 import {
   getWorkflowParams,
   getWorkflowJson,
@@ -9,7 +9,7 @@ import {
   deleteWorkflowFile,
   downloadWorkflow,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Tag, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
@@ -295,7 +295,6 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [fileParams, setFileParams] = useState<WorkflowParams | null>(null)
   const [hasExternalChanges, setHasExternalChanges] = useState(false)
   const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
-  const [checkInterval, setCheckInterval] = useState<NodeJS.Timeout | null>(null)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
@@ -422,10 +421,14 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setSaving(true)
       setError(null)
       // Remove temporary flags before saving
-      const paramsToSave = { ...params }
+      const paramsToSave: any = { ...params }
       if (paramsToSave.comfyui_config?._workflowUploaded) {
         const { _workflowUploaded, ...comfyuiConfig } = paramsToSave.comfyui_config
         paramsToSave.comfyui_config = comfyuiConfig
+      }
+      // Remove temporary icon upload flag
+      if (paramsToSave._iconUploaded !== undefined) {
+        delete paramsToSave._iconUploaded
       }
       await saveWorkflowParams(name, paramsToSave)
       // Update originalParams with the saved params (without temporary flags)
@@ -843,13 +846,16 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                       />
                       <select
                         value={params.iconBadge?.colorVariant || ''}
-                        onChange={(e) => handleParamsUpdate({
-                          ...params,
-                          iconBadge: params.iconBadge ? {
-                            ...params.iconBadge,
-                            colorVariant: e.target.value || undefined
-                          } : { content: '', colorVariant: e.target.value || undefined }
-                        })}
+                        onChange={(e) => {
+                          const colorVariant = e.target.value as IconBadge['colorVariant'] | '';
+                          handleParamsUpdate({
+                            ...params,
+                            iconBadge: params.iconBadge ? {
+                              ...params.iconBadge,
+                              colorVariant: colorVariant || undefined
+                            } : { content: '', colorVariant: colorVariant || undefined }
+                          });
+                        }}
                         className="info-input"
                         style={{ width: '150px' }}
                       >
@@ -882,7 +888,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                           <button
                             type="button"
                             onClick={async () => {
-                              if (!name) return;
+                              if (!name || !params.icon) return;
                               const iconFilename = params.icon.replace(/^\.\//, '');
                               try {
                                 // Delete the icon file
@@ -926,7 +932,12 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 // Compress image before uploading
                                 const compressedFile = await compressImage(file, 800, 0.85);
                                 const result = await uploadFile(name, compressedFile);
-                                const updatedParams = { ...params, icon: result.relativePath };
+                                // Add temporary flag to track icon upload even if path is the same
+                                const updatedParams = { 
+                                  ...params, 
+                                  icon: result.relativePath,
+                                  _iconUploaded: Date.now() // Temporary flag to track upload
+                                };
                                 handleParamsUpdate(updatedParams);
                                 // Update icon version to force browser cache refresh
                                 setIconVersion(Date.now());
@@ -948,7 +959,12 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 // Compress image before uploading
                                 const compressedFile = await compressImage(file, 800, 0.85);
                                 const result = await uploadFile(name, compressedFile);
-                                const updatedParams = { ...params, icon: result.relativePath };
+                                // Add temporary flag to track icon upload even if path is the same
+                                const updatedParams = { 
+                                  ...params, 
+                                  icon: result.relativePath,
+                                  _iconUploaded: Date.now() // Temporary flag to track upload
+                                };
                                 handleParamsUpdate(updatedParams);
                                 // Update icon version to force browser cache refresh
                                 setIconVersion(Date.now());
@@ -1050,8 +1066,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onChange={(e) => handleParamsUpdate({
                               ...params,
                               use: {
-                                ...params.use,
-                                currentProject: e.target.checked ? (typeof params.use.currentProject === 'object' ? params.use.currentProject : true) : undefined
+                                ...(params.use || {}),
+                                currentProject: e.target.checked ? (typeof params.use?.currentProject === 'object' ? params.use.currentProject : true) : undefined
                               }
                             })}
                           />
@@ -1067,8 +1083,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onChange={(e) => handleParamsUpdate({
                               ...params,
                               use: {
-                                ...params.use,
-                                appConfig: e.target.checked ? (typeof params.use.appConfig === 'object' ? params.use.appConfig : true) : undefined
+                                ...(params.use || {}),
+                                appConfig: e.target.checked ? (typeof params.use?.appConfig === 'object' ? params.use.appConfig : true) : undefined
                               }
                             })}
                           />
@@ -1084,8 +1100,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onChange={(e) => handleParamsUpdate({
                               ...params,
                               use: {
-                                ...params.use,
-                                items: e.target.checked ? (typeof params.use.items === 'object' ? params.use.items : true) : undefined
+                                ...(params.use || {}),
+                                items: e.target.checked ? (typeof params.use?.items === 'object' ? params.use.items : true) : undefined
                               }
                             })}
                           />
@@ -1101,8 +1117,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onChange={(e) => handleParamsUpdate({
                               ...params,
                               use: {
-                                ...params.use,
-                                selectedImages: e.target.checked ? (typeof params.use.selectedImages === 'object' ? params.use.selectedImages : true) : undefined
+                                ...(params.use || {}),
+                                selectedImages: e.target.checked ? (typeof params.use?.selectedImages === 'object' ? params.use.selectedImages : true) : undefined
                               }
                             })}
                           />
@@ -1157,11 +1173,11 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <label>Server URL</label>
                     <input
                       type="text"
-                      value={params.comfyui_config.serverUrl || ''}
+                      value={params.comfyui_config?.serverUrl || ''}
                       onChange={(e) => handleParamsUpdate({
                         ...params,
                         comfyui_config: {
-                          ...params.comfyui_config,
+                          ...(params.comfyui_config || {}),
                           serverUrl: e.target.value || undefined
                         }
                       })}
@@ -1180,7 +1196,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onClick={() => handleParamsUpdate({
                               ...params,
                               comfyui_config: {
-                                ...params.comfyui_config,
+                                ...(params.comfyui_config || {}),
                                 workflow: undefined
                               }
                             })}
@@ -1209,7 +1225,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 const updatedParams = {
                                   ...params,
                                   comfyui_config: {
-                                    ...params.comfyui_config,
+                                    ...(params.comfyui_config || {}),
                                     workflow: result.relativePath,
                                     _workflowUploaded: Date.now() // Temporary flag to track upload
                                   }
@@ -1267,11 +1283,11 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <label>Save Output Path</label>
                     <input
                       type="text"
-                      value={params.comfyui_config.saveOutputPath || ''}
+                      value={params.comfyui_config?.saveOutputPath || ''}
                       onChange={(e) => handleParamsUpdate({
                         ...params,
                         comfyui_config: {
-                          ...params.comfyui_config,
+                          ...(params.comfyui_config || {}),
                           saveOutputPath: e.target.value || undefined
                         }
                       })}
@@ -1283,11 +1299,11 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <label>Save Input Path</label>
                     <input
                       type="text"
-                      value={params.comfyui_config.SAVE_INPUT_PATH || ''}
+                      value={params.comfyui_config?.SAVE_INPUT_PATH || ''}
                       onChange={(e) => handleParamsUpdate({
                         ...params,
                         comfyui_config: {
-                          ...params.comfyui_config,
+                          ...(params.comfyui_config || {}),
                           SAVE_INPUT_PATH: e.target.value || undefined
                         }
                       })}
@@ -1305,7 +1321,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                         handleParamsUpdate({
                           ...params,
                           comfyui_config: {
-                            ...params.comfyui_config,
+                            ...(params.comfyui_config || {}),
                             ACCEPTED_IMG_FORMATS: formats.length > 0 ? formats : undefined
                           }
                         });
@@ -1324,7 +1340,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                         handleParamsUpdate({
                           ...params,
                           comfyui_config: {
-                            ...params.comfyui_config,
+                            ...(params.comfyui_config || {}),
                             ACCEPTED_VIDEO_FORMATS: formats.length > 0 ? formats : undefined
                           }
                         });
@@ -1343,7 +1359,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                         handleParamsUpdate({
                           ...params,
                           comfyui_config: {
-                            ...params.comfyui_config,
+                            ...(params.comfyui_config || {}),
                             ACCEPTED_FILE_FORMATS: formats.length > 0 ? formats : undefined
                           }
                         });
@@ -1357,15 +1373,15 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input
                         type="text"
-                        value={params.comfyui_config.outputComparator?.inputNodeId || ''}
+                        value={params.comfyui_config?.outputComparator?.inputNodeId || ''}
                         onChange={(e) => handleParamsUpdate({
                           ...params,
                           comfyui_config: {
-                            ...params.comfyui_config,
+                            ...(params.comfyui_config || {}),
                             outputComparator: e.target.value ? {
-                              ...params.comfyui_config.outputComparator,
+                              ...(params.comfyui_config?.outputComparator || {}),
                               inputNodeId: e.target.value,
-                              defaultEnabled: params.comfyui_config.outputComparator?.defaultEnabled || false
+                              defaultEnabled: params.comfyui_config?.outputComparator?.defaultEnabled || false
                             } : undefined
                           }
                         })}
@@ -1378,13 +1394,14 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                           <label className="checkbox-label">
                             <input
                               type="checkbox"
-                              checked={params.comfyui_config.outputComparator.defaultEnabled || false}
+                              checked={params.comfyui_config?.outputComparator?.defaultEnabled || false}
                               onChange={(e) => handleParamsUpdate({
                                 ...params,
                                 comfyui_config: {
-                                  ...params.comfyui_config,
+                                  ...(params.comfyui_config || {}),
                                   outputComparator: {
-                                    ...params.comfyui_config.outputComparator,
+                                    ...(params.comfyui_config?.outputComparator || {}),
+                                    inputNodeId: params.comfyui_config?.outputComparator?.inputNodeId,
                                     defaultEnabled: e.target.checked
                                   }
                                 }
@@ -1397,7 +1414,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                             onClick={() => handleParamsUpdate({
                               ...params,
                               comfyui_config: {
-                                ...params.comfyui_config,
+                                ...(params.comfyui_config || {}),
                                 outputComparator: undefined
                               }
                             })}
@@ -1425,21 +1442,21 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 handleParamsUpdate({
                                   ...params,
                                   comfyui_config: {
-                                    ...params.comfyui_config,
+                                    ...(params.comfyui_config || {}),
                                     subgraphs: {
-                                      ...params.comfyui_config.subgraphs,
+                                      ...(params.comfyui_config?.subgraphs || {}),
                                       [nodeId]: updatedConfig
                                     }
                                   }
                                 })
                               }}
                               onDelete={() => {
-                                const newSubgraphs = { ...params.comfyui_config.subgraphs }
+                                const newSubgraphs = { ...(params.comfyui_config?.subgraphs || {}) }
                                 delete newSubgraphs[nodeId]
                                 handleParamsUpdate({
                                   ...params,
                                   comfyui_config: {
-                                    ...params.comfyui_config,
+                                    ...(params.comfyui_config || {}),
                                     subgraphs: Object.keys(newSubgraphs).length > 0 ? newSubgraphs : undefined
                                   }
                                 })

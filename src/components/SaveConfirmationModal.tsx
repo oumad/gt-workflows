@@ -25,7 +25,7 @@ export default function SaveConfirmationModal({
   originalParams,
   currentParams,
   hasExternalChanges,
-  externalParams,
+  externalParams: _externalParams, // Currently unused but kept for API consistency
   onSave,
   onCancel,
   onReload,

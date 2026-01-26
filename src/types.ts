@@ -111,8 +111,8 @@ export interface DashboardConfig {
 }
 
 export interface ComfyUIConfig {
-  serverUrl: string;
-  workflow: string;
+  serverUrl?: string;
+  workflow?: string;
   parser_type?: string;
   input_ids?: string[];
   output_ids?: string[];
@@ -141,7 +141,7 @@ export interface SubgraphConfig {
 
 export interface OutputComparatorConfig {
   defaultEnabled?: boolean;
-  inputNodeId: string;
+  inputNodeId?: string;
 }
 
 export interface IconBadge {
