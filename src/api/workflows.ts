@@ -137,6 +137,25 @@ export async function deleteWorkflow(workflowName: string): Promise<void> {
   }
 }
 
+export async function duplicateWorkflow(workflowName: string, newName: string): Promise<void> {
+  try {
+    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/duplicate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ newName }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to duplicate workflow' }));
+      throw new Error(errorData.error || 'Failed to duplicate workflow');
+    }
+  } catch (error) {
+    console.error('Error duplicating workflow:', error);
+    throw error;
+  }
+}
+
 export async function uploadFile(workflowName: string, file: File): Promise<{ filename: string; path: string; relativePath: string }> {
   try {
     const formData = new FormData();

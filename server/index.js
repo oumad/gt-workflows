@@ -261,6 +261,77 @@ app.post('/api/workflows/create', async (req, res) => {
   }
 });
 
+// Duplicate workflow
+app.post('/api/workflows/:name/duplicate', async (req, res) => {
+  try {
+    const sourceWorkflowName = decodeURIComponent(req.params.name);
+    const { newName } = req.body;
+    
+    if (!newName || !newName.trim()) {
+      return res.status(400).json({ error: 'New workflow name is required' });
+    }
+    
+    const sourceWorkflowPath = path.join(WORKFLOWS_PATH, sourceWorkflowName);
+    const newWorkflowName = newName.trim();
+    const newWorkflowPath = path.join(WORKFLOWS_PATH, newWorkflowName);
+    
+    // Verify source workflow exists
+    try {
+      await fs.access(sourceWorkflowPath);
+    } catch {
+      return res.status(404).json({ error: 'Source workflow not found' });
+    }
+    
+    // Check if new workflow already exists
+    try {
+      await fs.access(newWorkflowPath);
+      return res.status(409).json({ error: 'Workflow with that name already exists' });
+    } catch {
+      // Directory doesn't exist, which is what we want
+    }
+    
+    // Read source workflow params
+    const sourceParams = await readParamsJson(sourceWorkflowPath);
+    if (!sourceParams) {
+      return res.status(400).json({ error: 'Source workflow params.json not found' });
+    }
+    
+    // Create new workflow directory
+    await fs.mkdir(newWorkflowPath, { recursive: true });
+    
+    // Copy all files from source to new workflow
+    const files = await fs.readdir(sourceWorkflowPath, { withFileTypes: true });
+    
+    for (const file of files) {
+      const sourcePath = path.join(sourceWorkflowPath, file.name);
+      const destPath = path.join(newWorkflowPath, file.name);
+      
+      if (file.isFile()) {
+        // Copy file
+        await fs.copyFile(sourcePath, destPath);
+      } else if (file.isDirectory()) {
+        // Copy directory recursively
+        await fs.cp(sourcePath, destPath, { recursive: true });
+      }
+    }
+    
+    // Update params.json with new workflow name (update label if it matches the old name)
+    const updatedParams = { ...sourceParams };
+    if (updatedParams.label === sourceWorkflowName) {
+      updatedParams.label = newWorkflowName;
+    }
+    
+    // Write updated params.json
+    const paramsPath = path.join(newWorkflowPath, 'params.json');
+    await fs.writeFile(paramsPath, JSON.stringify(updatedParams, null, 2), 'utf-8');
+    
+    res.json({ success: true, name: newWorkflowName });
+  } catch (error) {
+    console.error('Error duplicating workflow:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete workflow
 app.delete('/api/workflows/:name', async (req, res) => {
   try {

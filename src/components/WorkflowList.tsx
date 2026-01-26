@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Workflow } from '../types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities'
 import QuickEditModal from './QuickEditModal'
 import BulkEditModal from './BulkEditModal'
 import HealthCheckModal from './HealthCheckModal'
+import DuplicateModal from './DuplicateModal'
 import { useServerHealthCheck } from '../hooks/useServerHealthCheck'
 import { getSettings } from '../utils/settings'
 import { downloadWorkflow, getWorkflowParams, saveWorkflowParams } from '../api/workflows'
@@ -47,6 +48,7 @@ interface SortableWorkflowCardProps {
   editedParams: Partial<Workflow['params']>
   onToggleSelection: (name: string) => void
   onDownload: (name: string, e: React.MouseEvent) => void
+  onDuplicate: (name: string, e: React.MouseEvent) => void
   onFieldChange: (workflowName: string, field: string, value: any) => void
 }
 
@@ -62,6 +64,7 @@ function SortableWorkflowCard({
   editedParams,
   onToggleSelection,
   onDownload,
+  onDuplicate,
   onFieldChange,
 }: SortableWorkflowCardProps) {
   const {
@@ -297,14 +300,33 @@ function SortableWorkflowCard({
         </div>
       </Link>
       {!selectionMode && (
-        <button
-          className="quick-download-btn"
-          onClick={(e) => onDownload(workflow.name, e)}
-          disabled={downloadingWorkflows.has(workflow.name)}
-          title="Download workflow"
-        >
-          <Download size={16} className={downloadingWorkflows.has(workflow.name) ? 'spinner' : ''} />
-        </button>
+        <>
+          <button
+            className="quick-duplicate-btn"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onDuplicate(workflow.name, e)
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            title="Duplicate workflow"
+            type="button"
+          >
+            <Copy size={16} />
+          </button>
+          <button
+            className="quick-download-btn"
+            onClick={(e) => onDownload(workflow.name, e)}
+            disabled={downloadingWorkflows.has(workflow.name)}
+            title="Download workflow"
+            type="button"
+          >
+            <Download size={16} className={downloadingWorkflows.has(workflow.name) ? 'spinner' : ''} />
+          </button>
+        </>
       )}
     </div>
   )
@@ -319,6 +341,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [settings, setSettings] = useState(getSettings())
   const [downloadingWorkflows, setDownloadingWorkflows] = useState<Set<string>>(new Set())
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
+  const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [localWorkflows, setLocalWorkflows] = useState<Workflow[]>(workflows)
   const [isReordering] = useState(false) // Reserved for future drag-and-drop reordering
@@ -523,6 +546,19 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
         return next
       })
     }
+  }
+
+  const handleDuplicate = async (workflowName: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const workflow = workflows.find(w => w.name === workflowName)
+    if (!workflow) {
+      return
+    }
+    
+    // Open duplicate modal
+    setDuplicatingWorkflow(workflow)
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -844,6 +880,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                     editedParams={editedParams}
                                     onToggleSelection={toggleSelection}
                                     onDownload={handleDownload}
+                                    onDuplicate={handleDuplicate}
                                     onFieldChange={handleFieldChange}
                                   />
                                 )
@@ -869,6 +906,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                 editedParams={{}}
                                 onToggleSelection={toggleSelection}
                                 onDownload={handleDownload}
+                                onDuplicate={handleDuplicate}
                                 onFieldChange={handleFieldChange}
                               />
                             )
@@ -915,6 +953,16 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
               isChecking={isChecking}
               monitoredServers={monitoredServers}
               onClose={() => setShowHealthCheckModal(false)}
+            />
+          )}
+          {duplicatingWorkflow && (
+            <DuplicateModal
+              workflow={duplicatingWorkflow}
+              onClose={() => setDuplicatingWorkflow(null)}
+              onSuccess={() => {
+                setDuplicatingWorkflow(null)
+                onRefresh()
+              }}
             />
           )}
         </>

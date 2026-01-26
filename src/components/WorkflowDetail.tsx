@@ -9,13 +9,14 @@ import {
   deleteWorkflowFile,
   downloadWorkflow,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
 import NodeManager from './NodeManager'
 import SaveConfirmationModal from './SaveConfirmationModal'
 import ResetConfirmationModal from './ResetConfirmationModal'
+import DuplicateModal from './DuplicateModal'
 import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
@@ -297,6 +298,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -608,6 +610,10 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }
 
+  const handleDuplicate = () => {
+    setShowDuplicateModal(true)
+  }
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -637,6 +643,14 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <h1>{params?.label || name}</h1>
         </div>
         <div className="header-actions">
+          <button
+            onClick={handleDuplicate}
+            disabled={loading}
+            className="btn btn-secondary"
+            title="Duplicate workflow"
+          >
+            <Copy size={16} /> Duplicate
+          </button>
           <button
             onClick={handleDownload}
             disabled={downloading || loading}
@@ -1670,6 +1684,27 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             <span>Changes applied successfully!</span>
           </div>
         </div>
+      )}
+
+      {showDuplicateModal && name && params && (
+        <DuplicateModal
+          workflow={{
+            name,
+            folderPath: `/data/gt-workflows/${encodeURIComponent(name)}`,
+            params,
+            hasWorkflowFile: !!workflowJson,
+          }}
+          onClose={() => setShowDuplicateModal(false)}
+          onSuccess={(newWorkflowName) => {
+            setShowDuplicateModal(false)
+            onUpdate()
+            if (newWorkflowName) {
+              // Navigate to the duplicated workflow
+              window.location.href = `/workflow/${encodeURIComponent(newWorkflowName)}`
+            }
+          }}
+          navigateToNew={false}
+        />
       )}
     </div>
   )

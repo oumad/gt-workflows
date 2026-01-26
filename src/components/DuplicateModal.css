@@ -1,0 +1,115 @@
+.duplicate-modal {
+  max-width: 600px;
+}
+
+.icon-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.icon-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.icon-preview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-preview img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.icon-remove-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--error);
+  color: white;
+  border: 2px solid var(--bg-secondary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-remove-btn:hover {
+  background: var(--error);
+  transform: scale(1.1);
+}
+
+.icon-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.icon-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+}
+
+.icon-placeholder svg {
+  opacity: 0.5;
+}
+
+.file-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.file-drop-zone:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.file-drop-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.file-drop-zone svg {
+  opacity: 0.7;
+}
+
+.file-drop-zone:hover svg {
+  opacity: 1;
+}
+
+.required {
+  color: var(--error);
+  margin-left: 0.25rem;
+}
