@@ -397,15 +397,6 @@
   opacity: 1;
 }
 
-/* Make duplicate button always visible for easier access */
-.quick-duplicate-btn {
-  opacity: 0.7;
-}
-
-.workflow-card-wrapper:not(.selection-mode):hover .quick-duplicate-btn {
-  opacity: 1;
-}
-
 .quick-edit-btn:hover,
 .quick-download-btn:hover,
 .quick-duplicate-btn:hover {

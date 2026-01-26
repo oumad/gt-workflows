@@ -7,7 +7,6 @@ import {
   saveWorkflowParams,
   uploadFile,
   deleteWorkflowFile,
-  downloadWorkflow,
 } from '../api/workflows'
 import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -17,6 +16,7 @@ import NodeManager from './NodeManager'
 import SaveConfirmationModal from './SaveConfirmationModal'
 import ResetConfirmationModal from './ResetConfirmationModal'
 import DuplicateModal from './DuplicateModal'
+import DownloadModal from './DownloadModal'
 import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
@@ -297,8 +297,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [hasExternalChanges, setHasExternalChanges] = useState(false)
   const [externalParams, setExternalParams] = useState<WorkflowParams | null>(null)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
-  const [downloading, setDownloading] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -597,17 +597,8 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     }
   }
 
-  const handleDownload = async () => {
-    if (!name) return
-    try {
-      setDownloading(true)
-      setError(null)
-      await downloadWorkflow(name)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to download workflow')
-    } finally {
-      setDownloading(false)
-    }
+  const handleDownload = () => {
+    setShowDownloadModal(true)
   }
 
   const handleDuplicate = () => {
@@ -653,11 +644,11 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           </button>
           <button
             onClick={handleDownload}
-            disabled={downloading || loading}
+            disabled={loading}
             className="btn btn-secondary"
-            title="Download workflow as zip file"
+            title="Download workflow"
           >
-            <Download size={16} /> {downloading ? 'Downloading...' : 'Download'}
+            <Download size={16} /> Download
           </button>
           <button
             onClick={handleResetClick}
@@ -1704,6 +1695,18 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             }
           }}
           navigateToNew={false}
+        />
+      )}
+
+      {showDownloadModal && name && params && (
+        <DownloadModal
+          workflow={{
+            name,
+            folderPath: `/data/gt-workflows/${encodeURIComponent(name)}`,
+            params,
+            hasWorkflowFile: !!workflowJson,
+          }}
+          onClose={() => setShowDownloadModal(false)}
         />
       )}
     </div>

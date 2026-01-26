@@ -23,9 +23,10 @@ import QuickEditModal from './QuickEditModal'
 import BulkEditModal from './BulkEditModal'
 import HealthCheckModal from './HealthCheckModal'
 import DuplicateModal from './DuplicateModal'
+import DownloadModal from './DownloadModal'
 import { useServerHealthCheck } from '../hooks/useServerHealthCheck'
 import { getSettings } from '../utils/settings'
-import { downloadWorkflow, getWorkflowParams, saveWorkflowParams } from '../api/workflows'
+import { getWorkflowParams, saveWorkflowParams } from '../api/workflows'
 import './WorkflowList.css'
 
 interface WorkflowListProps {
@@ -44,7 +45,6 @@ interface SortableWorkflowCardProps {
   settings: any
   getHealthStatus: (url: string) => any
   monitoredServers: string[]
-  downloadingWorkflows: Set<string>
   editedParams: Partial<Workflow['params']>
   onToggleSelection: (name: string) => void
   onDownload: (name: string, e: React.MouseEvent) => void
@@ -60,7 +60,6 @@ function SortableWorkflowCard({
   settings,
   getHealthStatus,
   monitoredServers: _monitoredServers, // Used in health status checks
-  downloadingWorkflows,
   editedParams,
   onToggleSelection,
   onDownload,
@@ -320,11 +319,10 @@ function SortableWorkflowCard({
           <button
             className="quick-download-btn"
             onClick={(e) => onDownload(workflow.name, e)}
-            disabled={downloadingWorkflows.has(workflow.name)}
             title="Download workflow"
             type="button"
           >
-            <Download size={16} className={downloadingWorkflows.has(workflow.name) ? 'spinner' : ''} />
+            <Download size={16} />
           </button>
         </>
       )}
@@ -339,9 +337,9 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [selectionMode, setSelectionMode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [settings, setSettings] = useState(getSettings())
-  const [downloadingWorkflows, setDownloadingWorkflows] = useState<Set<string>>(new Set())
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
+  const [downloadingWorkflow, setDownloadingWorkflow] = useState<Workflow | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [localWorkflows, setLocalWorkflows] = useState<Workflow[]>(workflows)
   const [isReordering] = useState(false) // Reserved for future drag-and-drop reordering
@@ -533,19 +531,13 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
     e.preventDefault()
     e.stopPropagation()
     
-    try {
-      setDownloadingWorkflows(prev => new Set(prev).add(workflowName))
-      await downloadWorkflow(workflowName)
-    } catch (error) {
-      console.error('Error downloading workflow:', error)
-      alert('Failed to download workflow: ' + (error instanceof Error ? error.message : 'Unknown error'))
-    } finally {
-      setDownloadingWorkflows(prev => {
-        const next = new Set(prev)
-        next.delete(workflowName)
-        return next
-      })
+    const workflow = workflows.find(w => w.name === workflowName)
+    if (!workflow) {
+      return
     }
+    
+    // Open download modal
+    setDownloadingWorkflow(workflow)
   }
 
   const handleDuplicate = async (workflowName: string, e: React.MouseEvent) => {
@@ -876,7 +868,6 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                     settings={settings}
                                     getHealthStatus={getHealthStatus}
                                     monitoredServers={monitoredServers}
-                                    downloadingWorkflows={downloadingWorkflows}
                                     editedParams={editedParams}
                                     onToggleSelection={toggleSelection}
                                     onDownload={handleDownload}
@@ -902,7 +893,6 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                 settings={settings}
                                 getHealthStatus={getHealthStatus}
                                 monitoredServers={monitoredServers}
-                                downloadingWorkflows={downloadingWorkflows}
                                 editedParams={{}}
                                 onToggleSelection={toggleSelection}
                                 onDownload={handleDownload}
@@ -963,6 +953,12 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                 setDuplicatingWorkflow(null)
                 onRefresh()
               }}
+            />
+          )}
+          {downloadingWorkflow && (
+            <DownloadModal
+              workflow={downloadingWorkflow}
+              onClose={() => setDownloadingWorkflow(null)}
             />
           )}
         </>
