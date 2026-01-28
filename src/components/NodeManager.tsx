@@ -608,7 +608,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const isNodeLabelHidden = (nodeId: string): boolean => {
     if (!nodeId.includes(':')) return false // Not a subgraph node
     
-    const [subgraphId, childId] = nodeId.split(':')
+    const [subgraphId] = nodeId.split(':')
     const subgraphConfig = params.comfyui_config?.subgraphs?.[subgraphId]
     if (!subgraphConfig) return false
 
@@ -618,7 +618,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
         return !subgraphConfig.showNodeLabels // If showNodeLabels is true, label is NOT hidden
       }
       if (Array.isArray(subgraphConfig.showNodeLabels)) {
-        return !subgraphConfig.showNodeLabels.includes(childId) // If in showNodeLabels array, label is NOT hidden
+        return !subgraphConfig.showNodeLabels.includes(nodeId) // If in showNodeLabels array, label is NOT hidden
       }
     }
 
@@ -628,7 +628,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
         return subgraphConfig.hideNodeLabels // If true, all labels are hidden
       }
       if (Array.isArray(subgraphConfig.hideNodeLabels)) {
-        return subgraphConfig.hideNodeLabels.includes(childId) // If in array, label is hidden
+        return subgraphConfig.hideNodeLabels.includes(nodeId) // If in array, label is hidden
       }
     }
 
@@ -639,7 +639,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
   const toggleNodeLabelHidden = (nodeId: string) => {
     if (!nodeId.includes(':')) return // Not a subgraph node
     
-    const [subgraphId, childId] = nodeId.split(':')
+    const [subgraphId] = nodeId.split(':')
     const updatedParams = { ...params }
     
     if (!updatedParams.comfyui_config) {
@@ -664,7 +664,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
           // Show this label: add to showNodeLabels array
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
-            showNodeLabels: [childId]
+            showNodeLabels: [nodeId]
           }
         } else {
           // Hide this label: remove from showNodeLabels (or set to empty array)
@@ -676,14 +676,14 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       } else if (Array.isArray(subgraphConfig.showNodeLabels)) {
         if (isHidden) {
           // Show this label: add to array
-          const newArray = [...subgraphConfig.showNodeLabels, childId]
+          const newArray = [...subgraphConfig.showNodeLabels, nodeId]
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
             showNodeLabels: newArray
           }
         } else {
           // Hide this label: remove from array
-          const newArray = subgraphConfig.showNodeLabels.filter(id => id !== childId)
+          const newArray = subgraphConfig.showNodeLabels.filter(id => id !== nodeId)
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
             showNodeLabels: newArray.length > 0 ? newArray : undefined
@@ -701,7 +701,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
             hideNodeLabels: [] // Empty array means no labels hidden
           }
         } else if (Array.isArray(subgraphConfig.hideNodeLabels)) {
-          const newArray = subgraphConfig.hideNodeLabels.filter(id => id !== childId)
+          const newArray = subgraphConfig.hideNodeLabels.filter(id => id !== nodeId)
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
             hideNodeLabels: newArray.length > 0 ? newArray : undefined
@@ -719,10 +719,10 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
           // Convert boolean to array format
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
-            hideNodeLabels: [childId]
+            hideNodeLabels: [nodeId]
           }
         } else if (Array.isArray(subgraphConfig.hideNodeLabels)) {
-          const newArray = [...subgraphConfig.hideNodeLabels, childId]
+          const newArray = [...subgraphConfig.hideNodeLabels, nodeId]
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
             hideNodeLabels: newArray
@@ -731,7 +731,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
           // No hideNodeLabels config, create array with this node
           updatedParams.comfyui_config.subgraphs[subgraphId] = {
             ...subgraphConfig,
-            hideNodeLabels: [childId]
+            hideNodeLabels: [nodeId]
           }
         }
       }
@@ -1200,7 +1200,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                       <span className="group-count">({groupedNodes.topLevel.length})</span>
                     </div>
                     <div className="node-group-content">
-                      {groupedNodes.topLevel.map(renderNode)}
+                      {groupedNodes.topLevel.map((node, index) => renderNode(node, undefined, index, groupedNodes.topLevel.length))}
                     </div>
                   </div>
                 )}
@@ -1307,7 +1307,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                   })}
               </>
             ) : (
-              filteredNodes.map(renderNode)
+              filteredNodes.map((node, index) => renderNode(node, undefined, index, filteredNodes.length))
             )}
           </>
         )}

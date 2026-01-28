@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Save, Plus, Trash2, ArrowUp, ArrowDown, Edit2, Image as ImageIcon, Link, GitBranch } from 'lucide-react'
+import { X, Save, Plus, Trash2, ArrowUp, ArrowDown, Edit2, Image as ImageIcon, Link } from 'lucide-react'
 import './NodeParserEditor.css'
 
 interface NodeParserEditorProps {
@@ -22,7 +22,7 @@ interface InputFieldConfig {
   max?: number | string
   step?: number | string
   accept?: string[]
-  options?: Array<string | number | { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: string }>
+  options?: Array<string | number | { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: string | boolean }>
   drawMaskEnable?: boolean
   maskNode?: { nodeId: string }
   fetchUrl?: string
@@ -156,10 +156,10 @@ export default function NodeParserEditor({
     onSave(parserConfig)
   }
 
-  const SelectOptionsEditor = ({ options, fetchUrl, onChange }: { 
-    options: Array<string | number | { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: boolean }>
-    fetchUrl?: string | boolean
-    onChange: (options: typeof options) => void
+  type SelectOption = string | number | { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: string | boolean }
+  const SelectOptionsEditor = ({ options, onChange }: { 
+    options: Array<SelectOption>
+    onChange: (options: Array<SelectOption>) => void
   }) => {
     const [editingIndex, setEditingIndex] = useState<number | null>(null)
     const [newOptionType, setNewOptionType] = useState<'simple' | 'object'>('simple')
@@ -207,10 +207,7 @@ export default function NodeParserEditor({
 
     const removeOption = (index: number) => {
       const newOptions = options.filter((_, i) => i !== index)
-      // Extract fetchUrl from first option if it exists
-      const firstOption = newOptions.length > 0 && isOptionObject(newOptions[0]) ? newOptions[0] : null
-      const extractedFetchUrl = firstOption?.fetchUrl && typeof firstOption.fetchUrl === 'string' ? firstOption.fetchUrl : undefined
-      onChange(newOptions, extractedFetchUrl)
+      onChange(newOptions)
     }
 
     const moveOption = (index: number, direction: 'up' | 'down') => {
@@ -218,10 +215,7 @@ export default function NodeParserEditor({
       const newIndex = direction === 'up' ? index - 1 : index + 1
       if (newIndex >= 0 && newIndex < newOptions.length) {
         [newOptions[index], newOptions[newIndex]] = [newOptions[newIndex], newOptions[index]]
-        // Extract fetchUrl from first option if it exists
-        const firstOption = newOptions.length > 0 && isOptionObject(newOptions[0]) ? newOptions[0] : null
-        const extractedFetchUrl = firstOption?.fetchUrl && typeof firstOption.fetchUrl === 'string' ? firstOption.fetchUrl : undefined
-        onChange(newOptions, extractedFetchUrl)
+        onChange(newOptions)
       }
     }
 
@@ -232,13 +226,10 @@ export default function NodeParserEditor({
       } else {
         newOptions[index] = updates.value || newOptions[index]
       }
-      // Extract fetchUrl from first option if it exists
-      const firstOption = newOptions.length > 0 && isOptionObject(newOptions[0]) ? newOptions[0] : null
-      const extractedFetchUrl = firstOption?.fetchUrl && typeof firstOption.fetchUrl === 'string' ? firstOption.fetchUrl : undefined
-      onChange(newOptions, extractedFetchUrl)
+      onChange(newOptions)
     }
 
-    const isOptionObject = (opt: any): opt is { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: boolean } => {
+    const isOptionObject = (opt: any): opt is { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: string | boolean } => {
       return typeof opt === 'object' && opt !== null && !Array.isArray(opt) && 'value' in opt
     }
 
@@ -553,18 +544,19 @@ export default function NodeParserEditor({
     )
   }
 
+  type ConnectToConfig = { nodeId: string; inputField: string; conditions: Array<{ whenValue: string | number | boolean; value: string | number | boolean }> }
   const ConnectToEditor = ({ 
     connectTo, 
     currentNodeId, 
     workflowJson, 
-    params,
+    params, 
     onChange 
   }: { 
-    connectTo?: { nodeId: string; inputField: string; conditions: Array<{ whenValue: string | number | boolean; value: string | number | boolean }> }
+    connectTo?: ConnectToConfig
     currentNodeId: string
     workflowJson?: any
     params?: any
-    onChange: (connectTo?: typeof connectTo) => void
+    onChange: (connectTo?: ConnectToConfig) => void
   }) => {
     const [editingConditionIndex, setEditingConditionIndex] = useState<number | null>(null)
     const [newWhenValue, setNewWhenValue] = useState('')
@@ -869,7 +861,7 @@ export default function NodeParserEditor({
                                         style={{ flex: 1 }}
                                       >
                                         <option value="">Select a value...</option>
-                                        {sourceFieldOptions.map((option, idx) => {
+                                        {sourceFieldOptions.map((option: any, idx: number) => {
                                           const optionValue = typeof option === 'object' ? option.value : option
                                           const optionLabel = typeof option === 'object' ? (option.label || String(optionValue)) : String(option)
                                           return (
@@ -970,7 +962,7 @@ export default function NodeParserEditor({
                               style={{ flex: 1 }}
                             >
                               <option value="">Select a value...</option>
-                              {sourceFieldOptions.map((option, idx) => {
+                              {sourceFieldOptions.map((option: any, idx: number) => {
                                 const optionValue = typeof option === 'object' ? option.value : option
                                 const optionLabel = typeof option === 'object' ? (option.label || String(optionValue)) : String(option)
                                 return (
@@ -1172,7 +1164,6 @@ export default function NodeParserEditor({
               {config.type === 'select' && (
                 <SelectOptionsEditor
                   options={config.options || []}
-                  fetchUrl={config.fetchUrl}
                   onChange={(newOptions) => {
                     updateFieldConfig(fieldName, { 
                       options: newOptions

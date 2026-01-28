@@ -72,9 +72,9 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
                   <div className="health-check-list">
                     {/* Show all monitored servers - either with status or as checking */}
                     {monitoredServers.map((serverUrl) => {
-                      const status = healthStatuses.find(s => s.serverUrl === serverUrl) || {
+                      const status: ServerHealthStatus = healthStatuses.find(s => s.serverUrl === serverUrl) || {
                         serverUrl,
-                        healthy: isChecking ? null : undefined
+                        healthy: isChecking ? null : false
                       }
                       return (
                         <div

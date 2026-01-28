@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Download, FileJson, Image as ImageIcon, Archive } from 'lucide-react'
+import { X, FileJson, Image as ImageIcon, Archive } from 'lucide-react'
 import { Workflow } from '../types'
 import { downloadWorkflow, getWorkflowJson, getWorkflowParams } from '../api/workflows'
 import './DownloadModal.css'
