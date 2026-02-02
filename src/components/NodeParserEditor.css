@@ -85,6 +85,16 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Searchable node select: ensure input text and placeholder use theme colors */
+.searchable-node-select input {
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+}
+
+.searchable-node-select input::placeholder {
+  color: var(--text-muted);
+}
+
 .config-textarea {
   font-family: 'Courier New', monospace;
   resize: vertical;

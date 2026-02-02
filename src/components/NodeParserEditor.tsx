@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { X, Save, Plus, Trash2, ArrowUp, ArrowDown, Edit2, Image as ImageIcon, Link } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { X, Save, Plus, Trash2, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Edit2, Image as ImageIcon, Link, Search, Copy, ClipboardPaste } from 'lucide-react'
 import './NodeParserEditor.css'
 
 interface NodeParserEditorProps {
@@ -65,6 +65,58 @@ export default function NodeParserEditor({
 }: NodeParserEditorProps) {
   const [inputConfigs, setInputConfigs] = useState<Record<string, InputFieldConfig>>({})
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set())
+  const [nodeConnectTo, setNodeConnectTo] = useState<{
+    nodeId: string
+    inputField: string
+    conditions: Array<{
+      displayedWhen?: string | number | boolean
+      hiddenWhen?: string | number | boolean
+    }>
+  } | undefined>(undefined)
+
+  const COPIED_CONNECTTO_KEY = 'gt-workflows-copied-connectTo'
+  const COPIED_NODEPARSER_KEY = 'gt-workflows-copied-nodeParser'
+
+  const hasCopiedConnectTo = (): boolean => {
+    try {
+      const raw = sessionStorage.getItem(COPIED_CONNECTTO_KEY)
+      if (!raw) return false
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed.nodeId === 'string' && typeof parsed.inputField === 'string' && Array.isArray(parsed.conditions) && parsed.conditions.length > 0
+    } catch {
+      return false
+    }
+  }
+
+  const copyVisibilityConditions = () => {
+    if (!nodeConnectTo || !nodeConnectTo.nodeId || !nodeConnectTo.inputField || nodeConnectTo.conditions.length === 0) return
+    try {
+      sessionStorage.setItem(COPIED_CONNECTTO_KEY, JSON.stringify(nodeConnectTo))
+      setCopiedFeedback(true)
+      setTimeout(() => setCopiedFeedback(false), 2000)
+    } catch (e) {
+      console.warn('Failed to copy conditions', e)
+    }
+  }
+
+  const pasteVisibilityConditions = () => {
+    try {
+      const raw = sessionStorage.getItem(COPIED_CONNECTTO_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed.nodeId === 'string' && typeof parsed.inputField === 'string' && Array.isArray(parsed.conditions)) {
+        setNodeConnectTo({
+          nodeId: parsed.nodeId,
+          inputField: parsed.inputField,
+          conditions: parsed.conditions
+        })
+      }
+    } catch (e) {
+      console.warn('Failed to paste conditions', e)
+    }
+  }
+
+  const [copiedFeedback, setCopiedFeedback] = useState(false)
 
   useEffect(() => {
     if (currentParser?.inputs) {
@@ -81,6 +133,13 @@ export default function NodeParserEditor({
       
       setInputConfigs(configs)
       setHiddenFields(hidden)
+    }
+    
+    // Load node-level connectTo if it exists
+    if (currentParser?.connectTo) {
+      setNodeConnectTo(currentParser.connectTo)
+    } else {
+      setNodeConnectTo(undefined)
     }
   }, [currentParser])
 
@@ -153,7 +212,67 @@ export default function NodeParserEditor({
       }
     })
 
+    // Add node-level connectTo if configured
+    if (nodeConnectTo && nodeConnectTo.nodeId && nodeConnectTo.inputField && nodeConnectTo.conditions.length > 0) {
+      parserConfig.connectTo = nodeConnectTo
+    }
+
     onSave(parserConfig)
+  }
+
+  const hasCopiedNodeParser = (): boolean => {
+    try {
+      const raw = sessionStorage.getItem(COPIED_NODEPARSER_KEY)
+      if (!raw) return false
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed.inputs === 'object'
+    } catch {
+      return false
+    }
+  }
+
+  const copyFullParser = () => {
+    try {
+      const inputs: Record<string, any> = {}
+      hiddenFields.forEach(fieldName => { inputs[fieldName] = false })
+      Object.entries(inputConfigs).forEach(([fieldName, config]) => { inputs[fieldName] = config })
+      const payload = {
+        inputs,
+        ...(nodeConnectTo && nodeConnectTo.nodeId && nodeConnectTo.inputField && nodeConnectTo.conditions?.length ? { connectTo: nodeConnectTo } : {}),
+      }
+      sessionStorage.setItem(COPIED_NODEPARSER_KEY, JSON.stringify(payload))
+      setCopiedFeedback(true)
+      setTimeout(() => setCopiedFeedback(false), 2000)
+    } catch (e) {
+      console.warn('Failed to copy parser', e)
+    }
+  }
+
+  const pasteFullParser = () => {
+    try {
+      const raw = sessionStorage.getItem(COPIED_NODEPARSER_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed.inputs !== 'object') return
+      const configs: Record<string, InputFieldConfig> = {}
+      const hidden = new Set<string>()
+      Object.entries(parsed.inputs).forEach(([fieldName, config]: [string, any]) => {
+        if (config === false) {
+          hidden.add(fieldName)
+        } else if (config && typeof config === 'object') {
+          configs[fieldName] = config
+        }
+      })
+      setInputConfigs(configs)
+      setHiddenFields(hidden)
+      if (parsed.connectTo && typeof parsed.connectTo.nodeId === 'string' && typeof parsed.connectTo.inputField === 'string' && Array.isArray(parsed.connectTo.conditions)) {
+        setNodeConnectTo(parsed.connectTo)
+      } else {
+        setNodeConnectTo(undefined)
+      }
+    } catch (e) {
+      console.warn('Failed to paste parser', e)
+    }
   }
 
   type SelectOption = string | number | { value: string | number; label?: string; image?: { name: string; size?: number }; fetchUrl?: string | boolean }
@@ -168,6 +287,36 @@ export default function NodeParserEditor({
     const [newOptionImage, setNewOptionImage] = useState('')
     const [newOptionImageSize, setNewOptionImageSize] = useState('')
     const [newOptionFetchUrl, setNewOptionFetchUrl] = useState(false)
+    const optionsListRef = useRef<HTMLDivElement>(null)
+    const scrollRestoreRef = useRef<number | null>(null)
+    const parentScrollRestoreRef = useRef<number | null>(null)
+
+    const getScrollParent = (el: HTMLElement | null): HTMLElement | null => {
+      if (!el) return null
+      const { overflowY } = getComputedStyle(el)
+      if (['auto', 'scroll', 'overlay'].includes(overflowY) && el.scrollHeight > el.clientHeight) return el
+      return getScrollParent(el.parentElement)
+    }
+
+    const saveScrollPositions = () => {
+      scrollRestoreRef.current = optionsListRef.current?.scrollTop ?? 0
+      const parent = getScrollParent(optionsListRef.current)
+      parentScrollRestoreRef.current = parent ? parent.scrollTop : null
+    }
+
+    const restoreScrollPositions = () => {
+      if (optionsListRef.current && scrollRestoreRef.current !== null) {
+        optionsListRef.current.scrollTop = scrollRestoreRef.current
+        scrollRestoreRef.current = null
+      }
+      if (parentScrollRestoreRef.current !== null) {
+        const parent = getScrollParent(optionsListRef.current)
+        if (parent) {
+          parent.scrollTop = parentScrollRestoreRef.current
+          parentScrollRestoreRef.current = null
+        }
+      }
+    }
 
     const addOption = () => {
       if (newOptionType === 'simple') {
@@ -214,17 +363,50 @@ export default function NodeParserEditor({
       const newOptions = [...options]
       const newIndex = direction === 'up' ? index - 1 : index + 1
       if (newIndex >= 0 && newIndex < newOptions.length) {
-        [newOptions[index], newOptions[newIndex]] = [newOptions[newIndex], newOptions[index]]
+        saveScrollPositions()
+        const a = newOptions[index]
+        const b = newOptions[newIndex]
+        newOptions[index] = b
+        newOptions[newIndex] = a
         onChange(newOptions)
       }
     }
 
+    const moveOptionToTop = (index: number) => {
+      if (index <= 0) return
+      saveScrollPositions()
+      const newOptions = [...options]
+      const [item] = newOptions.splice(index, 1)
+      newOptions.unshift(item)
+      onChange(newOptions)
+    }
+
+    const moveOptionToBottom = (index: number) => {
+      if (index >= options.length - 1) return
+      saveScrollPositions()
+      const newOptions = [...options]
+      const [item] = newOptions.splice(index, 1)
+      newOptions.push(item)
+      onChange(newOptions)
+    }
+
+    useEffect(() => {
+      if (scrollRestoreRef.current !== null || parentScrollRestoreRef.current !== null) {
+        requestAnimationFrame(() => restoreScrollPositions())
+      }
+    }, [options])
+
     const updateOption = (index: number, updates: any) => {
       const newOptions = [...options]
-      if (typeof newOptions[index] === 'object' && newOptions[index] !== null) {
-        newOptions[index] = { ...(newOptions[index] as any), ...updates }
+      const existing = newOptions[index]
+      const existingIsObject = typeof existing === 'object' && existing !== null && !Array.isArray(existing) && 'value' in (existing as any)
+      const updatesIsFullObject = updates && typeof updates === 'object' && 'value' in updates
+      if (existingIsObject) {
+        newOptions[index] = { ...(existing as any), ...updates }
+      } else if (updatesIsFullObject && (updates.label !== undefined || updates.image !== undefined || updates.fetchUrl !== undefined)) {
+        newOptions[index] = updates
       } else {
-        newOptions[index] = updates.value || newOptions[index]
+        newOptions[index] = updates?.value ?? existing
       }
       onChange(newOptions)
     }
@@ -237,7 +419,7 @@ export default function NodeParserEditor({
       <div className="select-options-editor">
         <div className="config-row">
           <label>Select Options</label>
-          <div className="options-list">
+          <div ref={optionsListRef} className="options-list">
             {options.length === 0 ? (
               <div className="empty-options">
                 <p>No options configured. Add options below.</p>
@@ -286,6 +468,14 @@ export default function NodeParserEditor({
                       </div>
                       <div className="option-actions">
                         <button
+                          onClick={() => moveOptionToTop(index)}
+                          disabled={index === 0}
+                          className="icon-btn-small"
+                          title="Move to top"
+                        >
+                          <ChevronsUp size={12} />
+                        </button>
+                        <button
                           onClick={() => moveOption(index, 'up')}
                           disabled={index === 0}
                           className="icon-btn-small"
@@ -300,6 +490,14 @@ export default function NodeParserEditor({
                           title="Move down"
                         >
                           <ArrowDown size={12} />
+                        </button>
+                        <button
+                          onClick={() => moveOptionToBottom(index)}
+                          disabled={index === options.length - 1}
+                          className="icon-btn-small"
+                          title="Move to bottom"
+                        >
+                          <ChevronsDown size={12} />
                         </button>
                         <button
                           onClick={() => {
@@ -396,7 +594,7 @@ export default function NodeParserEditor({
                                 const updated: any = {
                                   value: isNaN(Number(newOptionValue)) ? newOptionValue : Number(newOptionValue)
                                 }
-                                if (newOptionLabel.trim()) updated.label = newOptionLabel.trim()
+                                updated.label = newOptionLabel.trim() || undefined
                                 if (newOptionImage.trim()) {
                                   updated.image = {
                                     name: newOptionImage.trim(),
@@ -415,7 +613,22 @@ export default function NodeParserEditor({
                                 updateOption(index, updated)
                               } else {
                                 const value = isNaN(Number(newOptionValue)) ? newOptionValue : Number(newOptionValue)
-                                updateOption(index, { value })
+                                const hasLabel = !!newOptionLabel.trim()
+                                const hasImage = !!newOptionImage.trim()
+                                if (hasLabel || hasImage || newOptionFetchUrl) {
+                                  const optionObj: any = { value }
+                                  if (hasLabel) optionObj.label = newOptionLabel.trim()
+                                  if (hasImage) {
+                                    optionObj.image = {
+                                      name: newOptionImage.trim(),
+                                      ...(newOptionImageSize.trim() && !isNaN(Number(newOptionImageSize)) ? { size: Number(newOptionImageSize) } : {})
+                                    }
+                                  }
+                                  if (newOptionFetchUrl) optionObj.fetchUrl = true
+                                  updateOption(index, optionObj)
+                                } else {
+                                  updateOption(index, { value })
+                                }
                               }
                               setEditingIndex(null)
                             }}
@@ -544,6 +757,672 @@ export default function NodeParserEditor({
     )
   }
 
+  // Reusable searchable node selector component
+  const SearchableNodeSelect = ({
+    value,
+    onChange,
+    availableNodes,
+    currentNodeId,
+    placeholder = "Select a node..."
+  }: {
+    value: string
+    onChange: (nodeId: string) => void
+    availableNodes: Array<{ id: string; title: string; classType: string }>
+    currentNodeId: string
+    placeholder?: string
+  }) => {
+    const [searchTerm, setSearchTerm] = useState('')
+    const [isOpen, setIsOpen] = useState(false)
+    const [filteredNodes, setFilteredNodes] = useState(availableNodes)
+
+    useEffect(() => {
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase()
+        setFilteredNodes(
+          availableNodes.filter(node =>
+            node.id.toLowerCase().includes(term) ||
+            node.title.toLowerCase().includes(term) ||
+            node.classType.toLowerCase().includes(term)
+          )
+        )
+      } else {
+        setFilteredNodes(availableNodes)
+      }
+    }, [searchTerm, availableNodes])
+
+    const selectedNode = availableNodes.find(n => n.id === value)
+
+    return (
+      <div className="searchable-node-select" style={{ position: 'relative' }}>
+        <div
+          className="config-input"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            position: 'relative'
+          }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <Search size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+          <input
+            type="text"
+            value={isOpen ? searchTerm : (selectedNode ? `${selectedNode.id}: ${selectedNode.title}` : value || '')}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              if (!isOpen) setIsOpen(true)
+            }}
+            onFocus={() => setIsOpen(true)}
+            placeholder={placeholder}
+            style={{
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              flex: 1,
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
+              caretColor: 'var(--text-primary)'
+            }}
+          />
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8em' }}>
+            {isOpen ? '▼' : '▶'}
+          </span>
+        </div>
+        {isOpen && (
+          <>
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                marginTop: '4px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}
+            >
+              {filteredNodes.length === 0 ? (
+                <div style={{ padding: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                  No nodes found
+                </div>
+              ) : (
+                filteredNodes
+                  .filter(node => node.id !== currentNodeId)
+                  .map(node => (
+                    <div
+                      key={node.id}
+                      onClick={() => {
+                        onChange(node.id)
+                        setIsOpen(false)
+                        setSearchTerm('')
+                      }}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--border-color)',
+                        backgroundColor: value === node.id ? 'var(--bg-secondary)' : 'transparent',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (value !== node.id) {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (value !== node.id) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <code style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{node.id}</code>
+                        {value === node.id && <span style={{ color: 'var(--accent)', fontSize: '0.8em' }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: '0.9em', color: 'var(--text-secondary)' }}>
+                        {node.title}
+                      </div>
+                      <div style={{ fontSize: '0.8em', color: 'var(--text-muted)' }}>
+                        {node.classType}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 999
+              }}
+              onClick={() => {
+                setIsOpen(false)
+                setSearchTerm('')
+              }}
+            />
+          </>
+        )}
+      </div>
+    )
+  }
+
+  type NodeVisibilityConnectToConfig = {
+    nodeId: string
+    inputField: string
+    conditions: Array<{
+      displayedWhen?: string | number | boolean
+      hiddenWhen?: string | number | boolean
+    }>
+  }
+
+  const NodeVisibilityEditor = ({
+    connectTo,
+    currentNodeId,
+    workflowJson,
+    params,
+    onChange
+  }: {
+    connectTo?: NodeVisibilityConnectToConfig
+    currentNodeId: string
+    workflowJson?: any
+    params?: any
+    onChange: (connectTo?: NodeVisibilityConnectToConfig) => void
+  }) => {
+    const [editingConditionIndex, setEditingConditionIndex] = useState<number | null>(null)
+    const [newConditionValue, setNewConditionValue] = useState('')
+    const [newConditionType, setNewConditionType] = useState<'displayedWhen' | 'hiddenWhen'>('hiddenWhen')
+
+    // Get all nodes from workflow
+    const allNodes = useMemo(() => {
+      if (!workflowJson) return []
+      const nodeList: Array<{ id: string; title: string; classType: string }> = []
+      for (const [id, node] of Object.entries(workflowJson)) {
+        if (typeof node === 'object' && node !== null && 'class_type' in node) {
+          const nodeObj = node as any
+          const title = nodeObj._meta?.title || nodeObj.title || id
+          nodeList.push({
+            id,
+            title,
+            classType: nodeObj.class_type || ''
+          })
+        }
+      }
+      return nodeList
+    }, [workflowJson])
+
+    // Get AppInfo nodes to extract input_ids
+    const appInfoNodes = useMemo(() => {
+      return allNodes.filter(node => 
+        node.classType === 'AppInfo' || 
+        node.classType?.includes('AppInfo')
+      )
+    }, [allNodes])
+
+    // Extract input_ids from AppInfo nodes
+    const appInfoInputIds = useMemo(() => {
+      if (!workflowJson) return []
+      const ids: string[] = []
+      appInfoNodes.forEach(node => {
+        const nodeData = workflowJson[node.id]
+        if (nodeData?.inputs?.input_ids) {
+          let inputIds: string[] = []
+          if (Array.isArray(nodeData.inputs.input_ids)) {
+            inputIds = nodeData.inputs.input_ids.map(String)
+          } else {
+            const str = String(nodeData.inputs.input_ids)
+            inputIds = str
+              .split(/[,\s\n]+/)
+              .map(id => id.trim())
+              .filter(id => id.length > 0)
+          }
+          ids.push(...inputIds)
+        }
+      })
+      return [...new Set(ids)]
+    }, [appInfoNodes, workflowJson])
+
+    // Get configured input IDs from params
+    const configuredInputIds = params?.comfyui_config?.input_ids || []
+
+    // Determine which nodes are input nodes
+    const inputNodeIds = useMemo(() => {
+      const ids = configuredInputIds.length > 0 ? configuredInputIds : appInfoInputIds
+      const inputNodeIdSet = new Set(ids)
+      
+      // Include subgraph nodes that have parsers configured
+      const nodeParsers = params?.comfyui_config?.node_parsers?.input_nodes || {}
+      Object.keys(nodeParsers).forEach(nodeId => {
+        if (nodeId.includes(':')) {
+          inputNodeIdSet.add(nodeId)
+        }
+      })
+      
+      // Include ALL nodes inside declared subgraphs
+      const declaredSubgraphs = params?.comfyui_config?.subgraphs || {}
+      Object.keys(declaredSubgraphs).forEach(subgraphId => {
+        allNodes.forEach(node => {
+          if (node.id.startsWith(`${subgraphId}:`)) {
+            inputNodeIdSet.add(node.id)
+          }
+        })
+      })
+      
+      // Also include ALL subgraph nodes that exist in the workflow
+      allNodes.forEach(node => {
+        if (node.id.includes(':')) {
+          inputNodeIdSet.add(node.id)
+        }
+      })
+      
+      return inputNodeIdSet
+    }, [configuredInputIds, appInfoInputIds, params?.comfyui_config?.node_parsers, params?.comfyui_config?.subgraphs, allNodes])
+
+    // Get available nodes for selection (only input nodes)
+    const availableNodes = useMemo(() => {
+      return allNodes
+        .filter(node => inputNodeIds.has(node.id))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    }, [allNodes, inputNodeIds])
+
+    // Get available input fields for the selected source node
+    const availableInputFields = useMemo(() => {
+      if (!connectTo?.nodeId || !workflowJson) return []
+      const sourceNode = workflowJson[connectTo.nodeId]
+      if (!sourceNode || typeof sourceNode !== 'object' || !sourceNode.inputs) return []
+      return Object.keys(sourceNode.inputs)
+    }, [connectTo?.nodeId, workflowJson])
+
+    // Get source node's parser configuration to check for select options
+    const sourceNodeParser = useMemo(() => {
+      if (!connectTo?.nodeId || !params?.comfyui_config?.node_parsers?.input_nodes) return null
+      return params.comfyui_config.node_parsers.input_nodes[connectTo.nodeId]
+    }, [connectTo?.nodeId, params?.comfyui_config?.node_parsers])
+
+    // Get options for the selected source field if it's a select menu
+    const sourceFieldOptions = useMemo(() => {
+      if (!connectTo?.inputField || !sourceNodeParser?.inputs) return null
+      const fieldConfig = sourceNodeParser.inputs[connectTo.inputField]
+      if (fieldConfig?.type === 'select' && fieldConfig?.options) {
+        return fieldConfig.options
+      }
+      return null
+    }, [connectTo?.inputField, sourceNodeParser])
+
+    const addCondition = () => {
+      if (!connectTo || !newConditionValue.trim()) return
+      
+      let parsedValue: string | number | boolean = newConditionValue.trim()
+      
+      // Check if the source field is a checkbox (boolean type)
+      const sourceNodeParser = params?.comfyui_config?.node_parsers?.input_nodes?.[connectTo.nodeId]
+      const sourceFieldConfig = sourceNodeParser?.inputs?.[connectTo.inputField]
+      const isBooleanField = sourceFieldConfig?.type === 'checkbox'
+      
+      // Try to infer type from existing conditions or field type
+      if (isBooleanField) {
+        // For checkbox fields, convert "true"/"false" strings to booleans
+        const lowerValue = newConditionValue.trim().toLowerCase()
+        if (lowerValue === 'true' || lowerValue === '1') {
+          parsedValue = true
+        } else if (lowerValue === 'false' || lowerValue === '0') {
+          parsedValue = false
+        } else {
+          parsedValue = newConditionValue.trim()
+        }
+      } else if (connectTo.conditions.length > 0) {
+        const firstCondition = connectTo.conditions[0]
+        const firstValue = firstCondition.displayedWhen !== undefined ? firstCondition.displayedWhen : firstCondition.hiddenWhen
+        if (typeof firstValue === 'number') {
+          parsedValue = Number(newConditionValue.trim())
+          if (isNaN(parsedValue as number)) parsedValue = newConditionValue.trim()
+        } else if (typeof firstValue === 'boolean') {
+          const lowerValue = newConditionValue.trim().toLowerCase()
+          parsedValue = lowerValue === 'true' || lowerValue === '1'
+        }
+      } else {
+        // Try to auto-detect boolean strings
+        const lowerValue = newConditionValue.trim().toLowerCase()
+        if (lowerValue === 'true' || lowerValue === 'false') {
+          parsedValue = lowerValue === 'true'
+        } else if (!isNaN(Number(newConditionValue.trim()))) {
+          parsedValue = Number(newConditionValue.trim())
+        }
+      }
+
+      const newCondition: any = {}
+      if (newConditionType === 'displayedWhen') {
+        newCondition.displayedWhen = parsedValue
+      } else {
+        newCondition.hiddenWhen = parsedValue
+      }
+
+      onChange({
+        ...connectTo,
+        conditions: [...connectTo.conditions, newCondition]
+      })
+      setNewConditionValue('')
+    }
+
+    const removeCondition = (index: number) => {
+      if (!connectTo) return
+      const newConditions = connectTo.conditions.filter((_, i) => i !== index)
+      if (newConditions.length === 0) {
+        onChange(undefined)
+      } else {
+        onChange({ ...connectTo, conditions: newConditions })
+      }
+    }
+
+    const updateCondition = (index: number, updates: Partial<{ displayedWhen?: string | number | boolean; hiddenWhen?: string | number | boolean }>) => {
+      if (!connectTo) return
+      const newConditions = [...connectTo.conditions]
+      newConditions[index] = { ...newConditions[index], ...updates }
+      onChange({ ...connectTo, conditions: newConditions })
+    }
+
+    return (
+      <div className="connect-to-editor">
+        <div className="config-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={!!connectTo}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onChange({
+                    nodeId: '',
+                    inputField: '',
+                    conditions: []
+                  })
+                } else {
+                  onChange(undefined)
+                }
+              }}
+            />
+            Enable Node Visibility Control (connectTo)
+            <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+              Control this node's visibility based on another node's field value
+            </small>
+          </label>
+        </div>
+
+        {connectTo && (
+          <>
+            <div className="config-row">
+              <label>Source Node ID</label>
+              <SearchableNodeSelect
+                value={connectTo.nodeId}
+                onChange={(nodeId) => onChange({ ...connectTo, nodeId, inputField: '' })}
+                availableNodes={availableNodes}
+                currentNodeId={currentNodeId}
+                placeholder="Search and select a node..."
+              />
+            </div>
+
+            {connectTo.nodeId && (
+              <>
+                <div className="config-row">
+                  <label>Source Input Field</label>
+                  <select
+                    value={connectTo.inputField}
+                    onChange={(e) => onChange({ ...connectTo, inputField: e.target.value })}
+                    className="config-input"
+                  >
+                    <option value="">Select a field...</option>
+                    {availableInputFields.map(field => (
+                      <option key={field} value={field}>
+                        {field}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {connectTo.inputField && (
+                  <>
+                    <div className="config-row">
+                      <label>Visibility Conditions</label>
+                      <div className="conditions-list">
+                        {connectTo.conditions.length === 0 ? (
+                          <div className="empty-conditions">
+                            <p>No conditions configured. Add conditions below.</p>
+                          </div>
+                        ) : (
+                          connectTo.conditions.map((condition, index) => {
+                            const conditionValue = condition.displayedWhen !== undefined 
+                              ? condition.displayedWhen 
+                              : condition.hiddenWhen
+                            const conditionType = condition.displayedWhen !== undefined 
+                              ? 'displayedWhen' 
+                              : 'hiddenWhen'
+                            return (
+                              <div key={index} className="condition-item">
+                                <div className="condition-content">
+                                  <div className="condition-display">
+                                    <span className="condition-index">{index + 1}</span>
+                                    <div className="condition-details">
+                                      <div className="condition-main">
+                                        <strong>{conditionType === 'displayedWhen' ? 'Displayed when:' : 'Hidden when:'}</strong> <code>{String(conditionValue)}</code>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="condition-actions">
+                                    <button
+                                      onClick={() => {
+                                        if (editingConditionIndex === index) {
+                                          setEditingConditionIndex(null)
+                                        } else {
+                                          setEditingConditionIndex(index)
+                                          setNewConditionValue(String(conditionValue))
+                                          setNewConditionType(conditionType)
+                                        }
+                                      }}
+                                      className="icon-btn-small"
+                                      title="Edit condition"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => removeCondition(index)}
+                                      className="icon-btn-small"
+                                      title="Remove condition"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                                {editingConditionIndex === index && (
+                                  <div className="condition-edit-form">
+                                    <div className="condition-edit-row">
+                                      <label>Condition Type:</label>
+                                      <select
+                                        value={newConditionType}
+                                        onChange={(e) => setNewConditionType(e.target.value as 'displayedWhen' | 'hiddenWhen')}
+                                        className="config-input-small"
+                                        style={{ flex: 1 }}
+                                      >
+                                        <option value="hiddenWhen">Hidden When</option>
+                                        <option value="displayedWhen">Displayed When</option>
+                                      </select>
+                                    </div>
+                                    <div className="condition-edit-row">
+                                      <label>Value:</label>
+                                      {sourceFieldOptions ? (
+                                        <select
+                                          value={newConditionValue}
+                                          onChange={(e) => setNewConditionValue(e.target.value)}
+                                          className="config-input-small"
+                                          style={{ flex: 1 }}
+                                        >
+                                          <option value="">Select a value...</option>
+                                          {sourceFieldOptions.map((option: any, idx: number) => {
+                                            const optionValue = typeof option === 'object' ? option.value : option
+                                            const optionLabel = typeof option === 'object' ? (option.label || String(optionValue)) : String(option)
+                                            return (
+                                              <option key={idx} value={String(optionValue)}>
+                                                {optionLabel}
+                                              </option>
+                                            )
+                                          })}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          value={newConditionValue}
+                                          onChange={(e) => setNewConditionValue(e.target.value)}
+                                          placeholder="Value that triggers this condition"
+                                          className="config-input-small"
+                                          style={{ flex: 1 }}
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="condition-edit-actions">
+                                      <button
+                                        onClick={() => {
+                                          let parsedValue: string | number | boolean = newConditionValue.trim()
+                                          
+                                          // Check if the source field is a checkbox (boolean type)
+                                          const sourceNodeParser = params?.comfyui_config?.node_parsers?.input_nodes?.[connectTo.nodeId]
+                                          const sourceFieldConfig = sourceNodeParser?.inputs?.[connectTo.inputField]
+                                          const isBooleanField = sourceFieldConfig?.type === 'checkbox'
+                                          
+                                          if (isBooleanField) {
+                                            // For checkbox fields, convert "true"/"false" strings to booleans
+                                            const lowerValue = newConditionValue.trim().toLowerCase()
+                                            if (lowerValue === 'true' || lowerValue === '1') {
+                                              parsedValue = true
+                                            } else if (lowerValue === 'false' || lowerValue === '0') {
+                                              parsedValue = false
+                                            } else {
+                                              parsedValue = newConditionValue.trim()
+                                            }
+                                          } else if (connectTo.conditions.length > 0) {
+                                            const firstCondition = connectTo.conditions[0]
+                                            const firstValue = firstCondition.displayedWhen !== undefined ? firstCondition.displayedWhen : firstCondition.hiddenWhen
+                                            if (typeof firstValue === 'number') {
+                                              parsedValue = Number(newConditionValue.trim())
+                                              if (isNaN(parsedValue as number)) parsedValue = newConditionValue.trim()
+                                            } else if (typeof firstValue === 'boolean') {
+                                              const lowerValue = newConditionValue.trim().toLowerCase()
+                                              parsedValue = lowerValue === 'true' || lowerValue === '1'
+                                            }
+                                          } else {
+                                            // Try to auto-detect boolean strings
+                                            const lowerValue = newConditionValue.trim().toLowerCase()
+                                            if (lowerValue === 'true' || lowerValue === 'false') {
+                                              parsedValue = lowerValue === 'true'
+                                            } else if (!isNaN(Number(newConditionValue.trim()))) {
+                                              parsedValue = Number(newConditionValue.trim())
+                                            }
+                                          }
+
+                                          const updatedCondition: any = {}
+                                          if (newConditionType === 'displayedWhen') {
+                                            updatedCondition.displayedWhen = parsedValue
+                                          } else {
+                                            updatedCondition.hiddenWhen = parsedValue
+                                          }
+
+                                          updateCondition(index, updatedCondition)
+                                          setEditingConditionIndex(null)
+                                        }}
+                                        className="btn btn-secondary btn-small"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingConditionIndex(null)}
+                                        className="btn btn-secondary btn-small"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="config-row">
+                      <label>Add New Condition</label>
+                      <div className="add-condition-controls">
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          <select
+                            value={newConditionType}
+                            onChange={(e) => setNewConditionType(e.target.value as 'displayedWhen' | 'hiddenWhen')}
+                            className="config-input"
+                            style={{ width: '150px' }}
+                          >
+                            <option value="hiddenWhen">Hidden When</option>
+                            <option value="displayedWhen">Displayed When</option>
+                          </select>
+                          {sourceFieldOptions ? (
+                            <select
+                              value={newConditionValue}
+                              onChange={(e) => setNewConditionValue(e.target.value)}
+                              className="config-input"
+                              style={{ flex: 1 }}
+                            >
+                              <option value="">Select a value...</option>
+                              {sourceFieldOptions.map((option: any, idx: number) => {
+                                const optionValue = typeof option === 'object' ? option.value : option
+                                const optionLabel = typeof option === 'object' ? (option.label || String(optionValue)) : String(option)
+                                return (
+                                  <option key={idx} value={String(optionValue)}>
+                                    {optionLabel}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={newConditionValue}
+                              onChange={(e) => setNewConditionValue(e.target.value)}
+                              placeholder="Value that triggers this condition"
+                              className="config-input"
+                              style={{ flex: 1 }}
+                            />
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={addCondition} className="btn btn-secondary" disabled={!newConditionValue.trim()}>
+                            <Plus size={14} /> Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {connectTo.conditions.length > 0 && (
+                      <div className="config-row">
+                        <small style={{ color: 'var(--text-secondary)' }}>
+                          {connectTo.conditions.length} condition{connectTo.conditions.length !== 1 ? 's' : ''} configured. 
+                          This node will be {connectTo.conditions.some(c => c.displayedWhen !== undefined) ? 'shown' : 'hidden'} based on node <code>{connectTo.nodeId}</code>'s field <code>{connectTo.inputField}</code> value.
+                        </small>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
   type ConnectToConfig = { nodeId: string; inputField: string; conditions: Array<{ whenValue: string | number | boolean; value: string | number | boolean }> }
   const ConnectToEditor = ({ 
     connectTo, 
@@ -615,47 +1494,29 @@ export default function NodeParserEditor({
     // Get configured input IDs from params
     const configuredInputIds = params?.comfyui_config?.input_ids || []
 
-    // Determine which nodes are input nodes (including subgraph nodes with parsers and all nodes in declared subgraphs)
-    const inputNodeIds = useMemo(() => {
-      const ids = configuredInputIds.length > 0 ? configuredInputIds : appInfoInputIds
-      const inputNodeIdSet = new Set(ids)
+    // Get available nodes for selection - focus on declared input nodes
+    // Priority: nodes explicitly in input_ids, then nodes with parsers configured
+    const availableNodes = useMemo(() => {
+      const declaredInputIds = new Set<string>()
       
-      // Include subgraph nodes (nodes with ":" in ID) that have parsers configured
+      // First, add explicitly declared input_ids
+      if (configuredInputIds.length > 0) {
+        configuredInputIds.forEach((id: string) => declaredInputIds.add(id))
+      } else if (appInfoInputIds.length > 0) {
+        appInfoInputIds.forEach((id: string) => declaredInputIds.add(id))
+      }
+      
+      // Then add nodes that have parsers configured (these are actively being used)
       const nodeParsers = params?.comfyui_config?.node_parsers?.input_nodes || {}
       Object.keys(nodeParsers).forEach(nodeId => {
-        if (nodeId.includes(':')) {
-          inputNodeIdSet.add(nodeId)
-        }
+        declaredInputIds.add(nodeId)
       })
       
-      // Include ALL nodes inside declared subgraphs (subgraphs that have config in params.comfyui_config.subgraphs)
-      const declaredSubgraphs = params?.comfyui_config?.subgraphs || {}
-      Object.keys(declaredSubgraphs).forEach(subgraphId => {
-        // Find all nodes that belong to this subgraph
-        allNodes.forEach(node => {
-          if (node.id.startsWith(`${subgraphId}:`)) {
-            inputNodeIdSet.add(node.id)
-          }
-        })
-      })
-      
-      // Also include ALL subgraph nodes that exist in the workflow (any node with ":" in ID)
-      // This ensures nodes from undeclared subgraphs are also available for connections
-      allNodes.forEach(node => {
-        if (node.id.includes(':')) {
-          inputNodeIdSet.add(node.id)
-        }
-      })
-      
-      return inputNodeIdSet
-    }, [configuredInputIds, appInfoInputIds, params?.comfyui_config?.node_parsers, params?.comfyui_config?.subgraphs, allNodes])
-
-    // Get available nodes for selection (only input nodes)
-    const availableNodes = useMemo(() => {
+      // Filter to only declared nodes, sorted by ID
       return allNodes
-        .filter(node => inputNodeIds.has(node.id))
+        .filter(node => declaredInputIds.has(node.id))
         .sort((a, b) => a.id.localeCompare(b.id))
-    }, [allNodes, inputNodeIds])
+    }, [allNodes, configuredInputIds, appInfoInputIds, params?.comfyui_config?.node_parsers])
 
     // Get available input fields for the selected source node
     const availableInputFields = useMemo(() => {
@@ -760,20 +1621,13 @@ export default function NodeParserEditor({
           <>
             <div className="config-row">
               <label>Source Node ID</label>
-              <select
+              <SearchableNodeSelect
                 value={connectTo.nodeId}
-                onChange={(e) => onChange({ ...connectTo, nodeId: e.target.value, inputField: '' })}
-                className="config-input"
-              >
-                <option value="">Select a node...</option>
-                {availableNodes
-                  .filter(node => node.id !== currentNodeId)
-                  .map(node => (
-                    <option key={node.id} value={node.id}>
-                      {node.id}: {node.title} ({node.classType})
-                    </option>
-                  ))}
-              </select>
+                onChange={(nodeId) => onChange({ ...connectTo, nodeId, inputField: '' })}
+                availableNodes={availableNodes}
+                currentNodeId={currentNodeId}
+                placeholder="Search and select a node..."
+              />
             </div>
 
             {connectTo.nodeId && (
@@ -1280,8 +2134,22 @@ export default function NodeParserEditor({
                   <label>Default Value</label>
                   <input
                     type="text"
-                    value={config.default ?? ''}
-                    onChange={(e) => updateFieldConfig(fieldName, { default: e.target.value })}
+                    value={config.default !== undefined && config.default !== null ? String(config.default) : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      let value: string | number | undefined = raw === '' ? undefined : raw
+                      if (config.type === 'select' && Array.isArray(config.options) && config.options.length > 0 && raw !== '') {
+                        const optionValue = (opt: any) => (typeof opt === 'object' && opt !== null && 'value' in opt ? opt.value : opt)
+                        const strMatch = config.options.find((opt: any) => optionValue(opt) === raw)
+                        const numMatch = !Number.isNaN(Number(raw)) && config.options.find((opt: any) => optionValue(opt) === Number(raw))
+                        const match = strMatch ?? numMatch
+                        if (match !== undefined) {
+                          const matchedVal = optionValue(match)
+                          if (typeof matchedVal !== 'boolean') value = matchedVal
+                        }
+                      }
+                      updateFieldConfig(fieldName, { default: value })
+                    }}
                     placeholder="Default value (optional)"
                     className="config-input"
                   />
@@ -1329,12 +2197,84 @@ export default function NodeParserEditor({
         </div>
 
         <div className="modal-body parser-editor-body">
+          {/* Node Visibility Control Section */}
+          <div className="node-visibility-section" style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: '4px' }}>Node Visibility Control</h3>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9em' }}>
+                  Control this node's visibility based on another node's field value.
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={copyFullParser}
+                  disabled={
+                    Object.keys(inputConfigs).length === 0 &&
+                    hiddenFields.size === 0 &&
+                    !(nodeConnectTo?.nodeId && nodeConnectTo?.inputField && nodeConnectTo?.conditions?.length)
+                  }
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
+                  title="Copy full parser (inputs + visibility) to reuse on another node"
+                >
+                  <Copy size={14} />
+                  {copiedFeedback ? 'Copied!' : 'Copy parser'}
+                </button>
+                {hasCopiedNodeParser() && (
+                  <button
+                    type="button"
+                    onClick={pasteFullParser}
+                    className="btn btn-secondary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
+                    title="Paste parser (inputs + visibility) from another node"
+                  >
+                    <ClipboardPaste size={14} />
+                    Paste parser
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={copyVisibilityConditions}
+                  disabled={!nodeConnectTo?.nodeId || !nodeConnectTo?.inputField || !nodeConnectTo?.conditions?.length}
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
+                  title="Copy visibility conditions only to reuse on another node"
+                >
+                  <Copy size={14} />
+                  Copy conditions
+                </button>
+                {hasCopiedConnectTo() && (
+                  <button
+                    type="button"
+                    onClick={pasteVisibilityConditions}
+                    className="btn btn-secondary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
+                    title="Paste visibility conditions only from another node"
+                  >
+                    <ClipboardPaste size={14} />
+                    Paste conditions
+                  </button>
+                )}
+              </div>
+            </div>
+            <NodeVisibilityEditor
+              connectTo={nodeConnectTo}
+              currentNodeId={nodeId}
+              workflowJson={workflowJson}
+              params={params}
+              onChange={(connectTo) => setNodeConnectTo(connectTo)}
+            />
+          </div>
+
           {availableFields.length === 0 ? (
             <div className="empty-state">
               <p>No input fields found for this node</p>
             </div>
           ) : (
             <>
+              <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Input Field Configuration</h3>
               {configuredFields.map(fieldName => renderFieldEditor(fieldName, inputConfigs[fieldName]))}
               
               {hiddenFields.size > 0 && (

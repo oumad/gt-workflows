@@ -757,7 +757,8 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
       updatedParams.comfyui_config.node_parsers.input_nodes = {}
     }
     
-    updatedParams.comfyui_config.node_parsers.input_nodes[nodeId] = parserConfig
+    const { hideTitle: _drop, ...parserWithoutHideTitle } = parserConfig
+    updatedParams.comfyui_config.node_parsers.input_nodes[nodeId] = parserWithoutHideTitle
     onUpdateParams(updatedParams)
     setEditingParser(null)
   }
@@ -827,8 +828,9 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
     const isHidden = hiddenNodeIds.includes(node.id)
     const isWrapped = wrappedNodeIds.includes(node.id)
     const isSubgraphNode = node.id.includes(':')
-    const isLabelHidden = isSubgraphNode ? isNodeLabelHidden(node.id) : false
     const nodeParser = getNodeParser(node.id)
+    const isLabelHidden = isSubgraphNode ? isNodeLabelHidden(node.id) : false
+    const hasLabelToToggle = isSubgraphNode && !!(node._meta?.title || node.title)
     const hasParser = !!nodeParser
     const valuePreview = !isExpanded ? getNodeValuePreview(node) : null
     // Only show reorder buttons for actual subgraph nodes (with ":" in ID) within a subgraph group
@@ -884,7 +886,12 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
             </div>
             <div className="node-title-section">
               {(node._meta?.title || node.title) && (
-                <span className="node-title">{node._meta?.title || node.title}</span>
+                <span
+                  className={`node-title ${isLabelHidden ? 'node-title-hidden' : ''}`}
+                  title={isLabelHidden ? 'Label is hidden in workflow UI' : undefined}
+                >
+                  {node._meta?.title || node.title}
+                </span>
               )}
             </div>
             <div className="node-type-section">
@@ -979,7 +986,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                   <Eye size={12} /> Show Node
                 </button>
               )}
-              {isSubgraphNode && (
+              {hasLabelToToggle && (
                 isLabelHidden ? (
                   <button
                     onClick={() => toggleNodeLabelHidden(node.id)}

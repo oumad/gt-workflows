@@ -778,18 +778,74 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                       min="0"
                     />
                   </div>
-                  <div className="info-item">
+                  <div className="info-item info-item-full">
                     <label>Tags</label>
-                    <input
-                      type="text"
-                      value={params.tags ? params.tags.join(', ') : ''}
-                      onChange={(e) => {
-                        const tags = e.target.value.split(',').map(t => t.trim()).filter(t => t);
-                        handleParamsUpdate({ ...params, tags: tags.length > 0 ? tags : undefined });
-                      }}
-                      placeholder="Comma-separated tags"
-                      className="info-input"
-                    />
+                    <div className="tags-input-wrap">
+                      <div className="tags-list tags-input-list">
+                        {(params.tags || []).map((tag: string) => (
+                          <span key={tag} className="tag-badge tag-badge-removable">
+                            {tag}
+                            <button
+                              type="button"
+                              className="tag-remove"
+                              onClick={() => {
+                                const next = (params.tags || []).filter((t: string) => t !== tag);
+                                handleParamsUpdate({ ...params, tags: next.length > 0 ? next : undefined });
+                              }}
+                              aria-label={`Remove tag ${tag}`}
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          className="tags-input"
+                          placeholder={(params.tags || []).length === 0 ? 'Type a tag and press Enter or comma' : 'Add tag…'}
+                          onKeyDown={(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const value = input.value.trim();
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              if (value) {
+                                const current = params.tags || [];
+                                if (!current.includes(value)) {
+                                  handleParamsUpdate({ ...params, tags: [...current, value] });
+                                  input.value = '';
+                                }
+                              }
+                            } else if (e.key === 'Backspace' && !value && (params.tags || []).length > 0) {
+                              e.preventDefault();
+                              const current = params.tags || [];
+                              handleParamsUpdate({ ...params, tags: current.slice(0, -1) });
+                            }
+                          }}
+                          onPaste={(e) => {
+                            const pasted = e.clipboardData.getData('text').trim();
+                            if (!pasted) return;
+                            const newTags = pasted.split(/[\s,]+/).map((t: string) => t.trim()).filter((t: string) => t);
+                            if (newTags.length <= 1) return;
+                            e.preventDefault();
+                            const current = params.tags || [];
+                            const merged = [...current];
+                            newTags.forEach((t: string) => { if (!merged.includes(t)) merged.push(t); });
+                            handleParamsUpdate({ ...params, tags: merged.length > 0 ? merged : undefined });
+                            (e.target as HTMLInputElement).value = '';
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value.trim();
+                            if (value) {
+                              const current = params.tags || [];
+                              if (!current.includes(value)) {
+                                handleParamsUpdate({ ...params, tags: [...current, value] });
+                                e.target.value = '';
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      <small className="tags-hint">Add tags with Enter or comma; remove with × or Backspace</small>
+                    </div>
                   </div>
                   <div className="info-item">
                     <label>Order</label>
