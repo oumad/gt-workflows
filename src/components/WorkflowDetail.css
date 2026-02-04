@@ -90,6 +90,37 @@
   gap: 2rem;
 }
 
+/* Reserve space at bottom when floating Apply bar is visible */
+.workflow-detail.has-floating-apply .detail-content {
+  padding-bottom: 5rem;
+}
+
+.floating-apply-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.floating-apply-bar-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.floating-apply-btn {
+  flex-shrink: 0;
+}
+
 .detail-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border);

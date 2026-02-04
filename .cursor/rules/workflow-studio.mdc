@@ -1,0 +1,978 @@
+---
+description: Workflow Studio documentation - Gear Tracker plugin for creating and managing workflows
+alwaysApply: true
+---
+
+# WORKFLOW STUDIO
+
+The Workflow studio is a Gear Tracker plugin that allows its users to simplify the use of their own workflow and access some data from Gear Tracker.
+
+You will have to add the workflows folder path in the plugin's environment on the plugins settings page of Gear Tracker.
+
+## WORKFLOW CREATION
+
+To setup a workflow you'll have to create a new folder named after your workflow in your workflows folder. You can add your workflow in this new folder and create a params.json file.
+
+The workflow studio support two types of workflows: default and comfyui. You can use parsers field in params.json file to declare the workflow type. If no parsers is declared. The workflow studio will use the default parser.
+
+### DEFAULT workflow:
+
+Here the list of parameters availables for the params.json:
+
+- **label** (optional): a string that will be used as the workflow name
+- **process** (required): a string or an array of strings that represents the process(es) to use, if it is an array the first valid process will be used. a process is valid if it is a simple word (e.g., python, node, etc.) or an existing executable path.
+- **scope** (optional): determines the presence of workflow in workflow-studio contexts (see SCOPE section below)
+- **main** (required): a string that represent the file to execute
+- **timeout** (optional): a number in seconds that define duration after which the workflow will timeout
+- **forceLocal** (optional): a boolean that can force execution of workflow locally even when we are using http mode
+- **executionName** (optional): a string that will replace the name of the execute button on the interface
+- **devMode** (optional): a boolean. If set to true, the user need to be in devMode to see the workflow
+- **processArgs** (optional): a string array that represent arguments for the process
+- **parameters** (required): an object that defines parameters (see PARAMETERS section below)
+- **dashboard** (optional): an object that defined dashboard parameters (see DASHBOARD section below)
+- **ui** (optional): an object that defines the configuration of the UI (see UI section below)
+- **use** (optional): an object that defines selectors to obtain data from GT (see SELECTORS section below)
+- **icon** (optional): icon path to show on the workflow card from the catalogue (should be an absolute path)
+- **iconBadge** (optional): an object that defines the configuration of the icon badge (see ICON BADGE section below)
+- **description** (optional): simple description that displayed on hover of the workflow card from the catalogue
+- **documentation** (optional): a path of .md file for the documentation that will be available on workflow preview from the info icon button (should be an absolute path)
+
+Here an example of a simple params.json:
+
+```json
+{
+  "process": "python",
+  "args": ["-u"],
+  "main": "main.py",
+  "parameters": {},
+  "ui": {},
+  "use": {}
+}
+```
+
+### SCOPE
+
+As said before the scope determines the presence of workflows in workflow-studio contexts.
+
+When it is not declared, workflows are only available in the general detail panel of workflow studio.
+
+When it is set to item workflow will be displayed in item detail section of workflow studio and in general detail panel. If you want to get the item informations, you can use the items selector (see SELECTOR section below).
+
+All workflows (including ones with a scope) will be displayed in the general detail panel of workflow studio.
+
+### PARAMETERS
+
+Parameters are defined in the "parameters" object. Each parameter has these base properties:
+
+```json
+{
+  "parameters": {
+    "myParameter": {
+      "type": "textField",
+      "label": "My Parameter",
+      "required": true,
+      "uiOnly": false,
+      "persistenceType": "global",
+      "persistenceScope": "project",
+      "default": "default value",
+      "style": {
+        "width": "100%",
+        "marginTop": "10px"
+      }
+    }
+  }
+}
+```
+
+**Common properties for all parameter types:**
+
+- **type** (required): the options for this argument are 'textField', 'selectMenu', 'colorPicker', 'slider', 'checkbox', 'fileDropZone', 'numberInput'. It determines the type of the parameter.
+- **label** (optional): a string to display the parameter with a different name.
+- **required** (optional): a boolean, is false by default
+- **uiOnly** (optional): boolean, if set to true the parameter value will only be used to modify the interface and will not be sent in result.json.
+- **style** (optional): CSSProperties, allowing you to adjust the UI of your parameter to your needs.
+- **persistenceType** (required): the options for this argument are 'global', 'local', 'none'. If 'global', the parameter value will be saved in the database; if 'local', it will be saved in localStorage; if 'none', it will not be saved. The value is saved during the execution of the workflow and will return to default for subsequent uses.
+- **persistenceScope** (optional): the options for this argument are 'project', 'app'. You only need to set this argument if your persistenceType is set to 'global'. It determines if the parameter value will be saved for all the app or just the project it was used on.
+- **default** (optional): it can either be a string, a number, or a boolean. It will serve as the default value for the parameter if it is not saved in the database or localStorage.
+
+**Parameter type examples:**
+
+**textField:**
+```json
+{
+  "type": "textField",
+  "subType": "folderPicker", // Optional: "folderPicker" or "filePicker"
+  "default": "Default text"
+}
+```
+
+**selectMenu:**
+The select option can be either an array of string or an array of of object with the following properties:
+- value (required): the value of the item
+- label (optional): a string that will be displayed instead of the value
+- image (optional): an object that defines image properties
+  - name (required): the name of the image
+  - size (optional): a number that will be used as the height and width of the image (if label is omitted, only the image is displayed)
+
+```json
+{
+  "type": "selectMenu",
+  "selectOptions": ["Option 1", "Option 2", "Option 3"],
+  "default": "Option 1"
+}
+```
+
+or
+
+```json
+{
+  "type": "selectMenu",
+  "selectOptions": [
+    {
+      "value": "option1",
+      "label": "Option 1",
+      "image": {
+        "name": "option1.png"
+      }
+    },
+    {
+      "value": "option2",
+      "label": "Option 2",
+      "image": {
+        "name": "option2.png"
+      }
+    }
+  ]
+}
+```
+
+**slider:**
+```json
+{
+  "type": "slider",
+  "min": 0,
+  "max": 100,
+  "step": 1, // Optional
+  "default": 50
+}
+```
+
+**checkbox:**
+```json
+{
+  "type": "checkbox",
+  "default": false
+}
+```
+
+**colorPicker:**
+```json
+{
+  "type": "colorPicker",
+  "default": "#FF0000" // Only hex color is supported
+}
+```
+
+**fileDropZone:**
+```json
+{
+  "type": "fileDropZone"
+}
+```
+
+**numberInput:**
+```json
+{
+  "type": "numberInput",
+  "default": 0
+}
+```
+
+### CONDITIONS IN PARAMETER
+
+You can create conditions between parameters by adding arguments to a parameter config. There are four types of conditions: 'hidden', 'visible', 'disabled', and 'active'.
+
+In those elements, you can either create your conditions directly or create an 'and' or 'or' operator in which you'll put your conditions.
+
+There are 7 types of operators:
+
+- **eq** (equal): it can be a string, a boolean, a number, an array of strings, or an array of numbers.
+- **gte** (greater than or equal): it is a number
+- **gt** (greater than): it is a number
+- **lte** (lower than or equal): it is a number
+- **lt** (lower than): it is a number
+- **in** (includes): it can be a string, a number, an array of strings, or an array of numbers.
+- **nin** (not include): it can be a string, a number, an array of strings, or an array of numbers.
+
+In the hidden or visible properties you also have the possibility to add a "_context" that will determines in which context 'item' or 'project' the element will be visible
+
+Example:
+
+```json
+"parameter1": {
+    "type": "textField",
+    "label": "The parameter name",
+    "required": true,
+    "persistenceType": "global",
+    "persistenceScope": "all",
+    "default": "default value",
+    "hidden": {
+        "and": {
+            "_context": "item",
+            "parameter2": {
+                "eq": "value"
+            },
+            "parameter3": {
+                "gte": 10
+            }
+        }
+    }
+}
+```
+
+In this example, parameter1 will be hidden if parameter2 is equal to "value" and parameter3 has a value greater than or equal to 10.
+
+### DASHBOARD
+
+You can customize the display of the dashboard in the workflow by adding a dashboard section in your params.json file.
+
+- **disable** (optional): a boolean that determines if the dashboard should be displayed in the workflow
+- **breakSize** (optional): a number that determines the size of the panel at which the dashboard should appear
+
+### UI
+
+You have the possibility to customize the display of the parameters by setting up categories and rows. For this you need to add a ui section in your params.json
+
+In this ui section, you will have to create one or multiple categories whose key will be its name. Here are the arguments a category can take:
+
+- **collapsible** (optional): a boolean that determines if the category will be displayed as an accordion.
+- **hideLabel** (optional): a boolean that determines if the name of the category is displayed (only works if collapsible is not set or set to false).
+- **rows** (required): an array of rows; rows are described under there.
+- **visible** (optional): (works the same way as in parameter elements).
+- **hidden** (optional): (works the same way as in parameter elements).
+
+A row can either have a parameters or an info field. You can also use both of them to display some text under certain conditions. parameters is an array of the parameter names and info is an object containing the following fields:
+
+- **text** (required): a string representing the text displayed
+- **colorvariant** (optional): the color of the text; the following options can be used to match the GT color theme, otherwise, it is any color in a hex string: "warn", "error", "success", "info", "debug".
+- **fontWeight** (optional): a string to set text boldness
+- **fontSize** (optional): a string to set text size
+- **visible** (optional): (works the same way as in parameter elements).
+- **hidden** (optional): (works the same way as in parameter elements).
+
+Example:
+
+```json
+"ui": {
+    "categoryName": {
+        "collapsible": false,
+        "hideLabel": "false",
+        "hidden": {
+            "parameter4": {
+                "gte": 7
+            }
+        },
+        "rows": [
+            {
+                "parameters": ["parameter1", "parameter2"]
+            },
+            {
+                "parameters": ["parameter3", "parameter4"],
+                "info": {
+                    "text": "parameter1 is required",
+                    "colorVariant": "warn",
+                    "visible": {
+                        "parameter3": {
+                            "eq": 3
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+### SELECTORS
+
+You'll have the possibility to access additional data from GT (items, current project, and app config data) on top of your parameter values. To do this, you have to add a use section. In this use section, you can create a currentProject, appConfig, items or selectedImages than can either be an object to add some specifications or a boolean to request all the data. In case you choose it to be an object, here are the additional specifications you can set (all of them are optional):
+
+- **fields**: it is an array of the field names you want to request to only have the minimum needed data. By default if you don't specify this, you get everything in the selector.
+- **objectTypeFields**: it is an object that allows you to select specific elements in the same way as fields but at a more deep level by specifying the fragment in which you want to select.
+
+There are more specifications if you use items:
+
+- **scope**: it is a string or an array of strings. There are two possibilities: all and selected. If you want the data of the items you selected before executing your workflow you'll need to add the selected option as scope value. It is all by default if scope is not specified. Note: when workflow scope is set to item, scope all from items selector is not valid and selected scope is only based on the item opened in item detail panel and not on the selection
+- **includesScenes**: it can be a boolean or an array of strings. It adds the scenes of each item in its result. If you want only scenes with a specific extension, you'll have to write the list of extensions as an array: [".mb", ".ma"].
+
+Example:
+
+```json
+"use": {
+    "items": {
+        "scope": ["all", "selected"]
+    },
+    "fields": [
+        "name"
+    ],
+    "objectTypeFields": {
+        "Image": [
+            "name",
+            "fullPath"
+        ]
+    },
+    "includesScenes": [
+        ".ma",
+        ".mb"
+    ]
+}
+```
+
+### ICON BADGE
+
+You can add an icon badge to your workflow card by adding an iconBadge field in your params.json file.
+
+Here is the list of arguments an icon badge can take:
+
+- **content** (required): a string that represents content of the badge.
+- **colorVariant** (optional): the color variant of the icon badge. The options are: primary, secondary, error, warning, info, success
+
+Additionally, the icon badge can accept any CSS properties that a HTML div element can take, using JavaScript style format. For example:
+
+```json
+{
+  "iconBadge": {
+    "content": "NEW",
+    "backgroundColor": "#ff0000",
+    "color": "#ffffff",
+    "padding": "4px 8px",
+    "borderRadius": "4px",
+    "fontSize": "12px",
+    "fontWeight": "bold"
+  }
+}
+```
+
+### EXECUTION RESULT
+
+When your workflow is executed, the results of your parameters and selectors are stored in a result.json file. The path of this file is passed as an argument to your script.
+
+Here is an example of how to get the result in a Python script:
+
+```python
+import json
+import sys
+
+args = sys.argv[1:]
+
+with open(args[0], 'r') as file:
+    json_content = file.read()
+    parsed_json_content = json.loads(json_content)
+    print('Here is the list of parameters written from a python script:', parsed_json_content['parameters'])
+```
+
+Note: The result file path position can change depending on the processArgs length. Make sure to check your args before.
+
+## COMFYUI WORKFLOW:
+
+Here the list of parameters availables for the params.json:
+
+- **label** (optional): a string that will be used as the workflow name
+- **timeout** (optional): a number in seconds that defines the duration after which the workflow will timeout
+- **dashboard** (optional): an object that defined dashboard parameters (see DASHBOARD section above)
+- **placeholders** (optional): an object containing some configurations for placeholders
+- **ACCEPTED_FILE_FORMATS** (optional): an array of strings representing the allowed file extensions for file inputs (e.g., ["txt", "json"])
+- **ACCEPTED_IMG_FORMATS** (optional): an array of strings representing the allowed image file extensions (e.g., ["png", "jpg", "jpeg"])
+- **ACCEPTED_VIDEO_FORMATS** (optional): an array of strings representing the allowed video file extensions (e.g., ["mp4", "mov"])
+- **SAVE_INPUT_PATH** (optional/required): a string specifying the path where input files should be saved before being processed by ComfyUI. This is particularly useful when handling file uploads. Note: This field becomes required when using certain node parser templates (e.g., uploadImage, uploadVideo).
+- **comfyui_config** (required): object used by the parser for ui and execution
+  - **serverUrl** (required): a string that represent your comfyui server url
+  - **workflow** (required): the path of your comfyui workflow api file. Note: the file should be on the workflow folder
+  - **input_ids** (optional): a string array that contain ids of node you want to show and interact on the ui. You can also use AppInfo node from mixlab comfyui plugin to expose ids for the ui without declaring this field
+  - **output_ids** (optional): same as input_ids but for output nodes
+  - **nonPersistentNodeIds** (optional): a string array that contain ids of node for which the persistence should be ignored.
+  - **hiddenNodeIds** (optional): an array of string that determines a list of the nodes that will not be displayed.
+  - **wrappedNodeIds** (optional): an array of string that determines a list of the nodes that will be wrapped by default.
+  - **saveOutputPath** (optional): A string specifying the path where the output results should be saved. Output files will be automatically organized into a folder named after the current date. You can use placeholders for dynamic folder names:
+    - `[userName]`: The user's display name in the system (e.g., GT).
+    - `[last-ad-id]`: The last Active Directory ID used for login.
+    - Example: If you set saveOutputPath to "/reports/[userName]/[last-ad-id]", and the user's display name is "JohnDoe" with a last AD ID of "12345", the output files will be stored in a directory structure like "/reports/JohnDoe/12345/YYYY-MM-DD".
+  - **node_parsers** (optional): configuration for node parsers (see NODE PARSERS section below). Can be either:
+    - An object containing direct node parser configurations
+    - A string representing the path to a JSON configuration file (can be absolute path or relative to the workflow folder)
+  - **subgraphs** (optional): an object that allows you to configure subgraph nodes into collapsible accordion sections in the UI. The keys are node IDs (subgraph identifiers), and the values are configuration objects with the following properties:
+    - **label** (optional): a string representing the display label for the subgraph accordion header
+    - **hiddenNodes** (optional): an array of node IDs (strings) that should be hidden within this subgraph
+    - **hideNodeLabels** (optional): controls the visibility of node labels within the subgraph. This can be either:
+      - A boolean: if true, hides all node labels within the subgraph
+      - An array of strings: hides labels only for the specified node IDs
+    - **showNodeLabels** (optional): controls the visibility of node labels within the subgraph. Takes precedence over hideNodeLabels. This can be either:
+      - A boolean: if true, shows all node labels within the subgraph
+      - An array of strings: shows labels only for the specified node IDs
+    - **nodesOrder** (optional): an array of child node IDs (strings) that determines the display order of nodes within the subgraph. Only specify the child node ID (the part after the : in the full node ID). Nodes listed in this array will appear in the specified order, while nodes not included will be placed at the end.
+  - **outputComparator** (optional): enables a wipe comparison feature that allows users to visually compare output images or videos with a reference element from an input node. The configuration object contains:
+    - **defaultEnabled** (optional): a boolean that determines whether the comparator should be enabled on outputs. If true, the comparator will be active immediately; if false or omitted, users must manually enable it using the compare icon button. Defaults to false.
+    - **inputNodeId** (required): a string representing the node ID that will serve as the reference element for comparison. This node must be an input node that displays an image or video (e.g., an image picker or video picker node). The element from this node will appear on the left side of the wipe comparison, while output elements (images or videos) will appear on the right side.
+- **scope** (optional): determines the presence of workflows in workflow-studio contexts (see SCOPE part on Default script section above)
+- **executionName** (optional): a string that will replace the name of the execute button on the interface
+- **devMode** (optional): a boolean. If set to true, the user need to be in devMode to see the workflow
+- **icon** (optional): icon path to show on the workflow card from the catalogue (should be an absolute path)
+- **iconBadge** (optional): an object that defines the configuration of the icon badge (see ICON BADGE section above)
+- **description** (optional): simple description that displayed on hover of the workflow card from the catalogue
+- **documentation** (optional): a path of .md file for the documentation that will be available on workflow preview from the info icon button (should be an absolute path)
+
+### WORKFLOW REQUIREMENTS
+
+If you want to expose input or output nodes directly from your workflow, we recommend using the App Info node from the Mixlab plugin in ComfyUI.
+
+Supported output nodes: native SaveImageWebSocket (images), VHS_VideoCombine (videos), SaveVideo (videos), and Display Any (rgthree) (text content or arbitrary file downloads).
+
+To use Display Any (rgthree) for downloading files, add the file: prefix to the output file path (e.g., file:3D/12_Hy21_Mesh_00001_.glb).
+
+Supported input nodes: any nodes can be supported as long as you use node parsers to configure them. By default, all node inputs will be visible and represented by their type (checkbox for boolean, text field for string, and number input for numbers).
+
+We recommend using TextInput from the Mixlab plugin in ComfyUI for a better text‑input experience in the GT UI.
+
+### NODE PARSERS
+
+Node parsers allow you to define custom configurations for handling specific node types in your ComfyUI workflow. You can configure them either directly in the params.json file or in a separate JSON configuration file.
+
+Example of direct configuration in params.json:
+
+```json
+{
+  "comfyui_config": {
+    "node_parsers": {
+      "input_nodes": {
+        "TextInput_": {
+          "inputs": {
+            "text": {
+              "type": "textArea"
+            }
+          }
+        },
+        "4": {
+          "inputs": {
+            "image": {
+              "type": "uploadImage",
+              "accept": "<ACCEPTED_IMG_FORMATS>"
+            },
+            "upload": false
+          }
+        },
+        "IntNumber": {
+          "inputs": {
+            "number": {
+              "type": "slider",
+              "min": "min_value",
+              "max": "max_value",
+              "step": "step"
+            },
+            "min_value": false,
+            "max_value": false,
+            "step": false
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Example using a separate configuration file (node-parsers.json):
+
+```json
+{
+  "comfyui_config": {
+    "node_parsers": "./node-parsers.json"
+  }
+}
+```
+
+Each node parser configuration includes:
+
+- **input_nodes**: Object containing node type configurations
+  - Keys can be either:
+    - A node class type (e.g., "TextInput_", "LoadImage") which will apply to all nodes of that type
+    - A specific node ID from your workflow (e.g., "4", "12") to customize a single node instance
+  - Each node configuration can define:
+    - **connectTo** (optional): An object that controls the visibility of the entire node based on another node's input field value. This allows you to show or hide nodes dynamically based on conditions. See the CONNECTTO - NODE VISIBILITY section for detailed information and examples.
+    - **inputs**: Object defining the input fields and their behaviors
+      - Field configurations can include:
+        - **type**: Can be:
+          - `false`: Field will not appear in the UI
+          - `true`: Field will be auto-computed (default value)
+          - An input field template (see below): Applies specific UI features for this field
+
+**Currently supported input field templates:**
+
+- **textField**: For single-line text input
+  - label (optional): Custom label for the input
+- **textArea**: For multi-line text input
+  - No additional configuration needed
+- **checkbox**: For boolean inputs
+  - label (optional): Custom label for the checkbox
+- **select**: For dropdown selection
+  - options (required): Array of strings or numbers or option objects
+    - Option object shape:
+      - value (required): the value of the item (string or number or string url)
+      - label (optional): a string that will be displayed instead of the value
+      - image (optional): an object that defines image properties
+        - name (required): the name of the image
+        - size (optional): a number that will be used as the height and width of the image (if label is omitted, only the image is displayed)
+      - fetchUrl (optional): In case option value is a string URL it should be either an http or https but you can also use a relative url that starts with /services/plugins-backend/api and will fetch on backend service api (to know more about custom endpoints check the backend service documentation)
+  - label (optional): Custom label for the select
+- **slider**: For numeric range input
+  - acceptFloat (optional): Boolean to allow floating point values
+  - min (optional): Minimum value (number or reference string)
+  - max (optional): Maximum value (number or reference string)
+  - step (optional): Step increment (number or reference string)
+  - label (optional): String or Boolean to display a custom label for the input. Hide label by setting to false
+- **number**: For direct numeric input
+  - acceptFloat (optional): Boolean to allow floating point values
+  - min (optional): Minimum value (number or reference string)
+  - max (optional): Maximum value (number or reference string)
+  - step (optional): Step increment (number or reference string)
+  - label (optional): String to display a custom label for the input.
+- **uploadImage**: For image file uploads
+  - base64 (optional): Boolean to enable base64 encoding
+  - drawMaskEnable (optional): Boolean to enable mask drawing (should be used with maskNode to work)
+  - imageSize (optional): String corresponding to the size of the image in the image picker in pixels (ex: "200px")
+  - instructions (optional): String that will be displayed at the bottom of the mask drawing dialog
+  - maskNode (optional): an object that defined mask node properties (should be used with drawMaskEnable to work)
+    - nodeId (required): the id of the mask node
+  - accept (optional): Array of extensions or <ACCEPTED_IMG_FORMATS> placeholder
+- **uploadVideo**: For video file uploads
+  - path (optional): Save path or <SAVE_INPUT_PATH> placeholder (Note: SAVE_INPUT_PATH is required when using this parser)
+  - accept (optional): Array of extensions or <ACCEPTED_VIDEO_FORMATS> placeholder
+- **uploadAudio**: For audio file uploads
+  - path (optional): Save path or <SAVE_INPUT_PATH> placeholder (Note: SAVE_INPUT_PATH is required when using this parser)
+  - accept (optional): Array of extensions or <ACCEPTED_AUDIO_FORMATS> placeholder
+- **file**: For general file uploads
+  - label (optional): Custom label for the input
+  - accept (optional): Array of extensions or <ACCEPTED_FILE_FORMATS> placeholder
+- **folder**: For folder path selection
+  - label (optional): Custom label for the input
+
+Each template has the following common properties:
+
+- **required** (optional): A boolean to ensure a defined value for the field. If a template has the required property set to true and the field is not defined by the user, the Execute button will be disabled on the interface. The required field only prevents empty string or empty array values.
+- **connectTo** (optional): An object that allows you to create automatic connections between nodes. When a source node's input field is updated, it can automatically update the current node's field based on configured conditions. See the CONNECTTO - NODE CONNECTIONS section for detailed information and examples.
+
+Note: The default node parsers will always be merged with your custom configuration, allowing you to only override the nodes you need to customize.
+
+**Default node parsers:**
+
+```json
+{
+  "input_nodes": {
+    "TextInput_": {
+      "inputs": {
+        "text": {
+          "type": "textArea"
+        }
+      }
+    },
+    "CLIPTextEncode": {
+      "inputs": {
+        "text": {
+          "type": "textArea"
+        }
+      }
+    },
+    "LoadImage": {
+      "inputs": {
+        "image": {
+          "type": "uploadImage",
+          "accept": "<ACCEPTED_IMG_FORMATS>",
+          "required": true
+        },
+        "upload": false
+      }
+    },
+    "LoadVideo": {
+      "inputs": {
+        "file": {
+          "type": "uploadVideo",
+          "accept": "<ACCEPTED_VIDEO_FORMATS>",
+          "required": true
+        }
+      }
+    },
+    "ETN_LoadImageBase64": {
+      "inputs": {
+        "image": {
+          "type": "uploadImage",
+          "base64": true,
+          "accept": "<ACCEPTED_IMG_FORMATS>",
+          "required": true
+        }
+      }
+    },
+    "IntNumber": {
+      "inputs": {
+        "number": {
+          "type": "slider",
+          "min": "min_value",
+          "max": "max_value",
+          "step": "step"
+        },
+        "min_value": false,
+        "max_value": false,
+        "step": false
+      }
+    },
+    "FloatSlider": {
+      "inputs": {
+        "number": {
+          "type": "slider",
+          "min": "min_value",
+          "max": "max_value",
+          "step": "step",
+          "acceptFloat": true
+        },
+        "min_value": false,
+        "max_value": false,
+        "step": false
+      }
+    },
+    "Switch any [Crystools]": {
+      "inputs": {
+        "boolean": {
+          "type": "checkbox"
+        }
+      }
+    },
+    "VHS_LoadVideoPath": {
+      "inputs": {
+        "video": {
+          "type": "uploadVideo",
+          "path": "<SAVE_INPUT_PATH>",
+          "accept": "<ACCEPTED_VIDEO_FORMATS>",
+          "required": true
+        },
+        "force_rate": false,
+        "force_size": false,
+        "custom_width": false,
+        "custom_height": false,
+        "frame_load_cap": false,
+        "skip_first_frames": false,
+        "select_every_nth": false
+      }
+    },
+    "VHS_LoadVideo": {
+      "inputs": {
+        "video": {
+          "type": "uploadVideo",
+          "accept": "<ACCEPTED_VIDEO_FORMATS>",
+          "required": true
+        },
+        "force_rate": false,
+        "force_size": false,
+        "custom_width": false,
+        "custom_height": false,
+        "frame_load_cap": false,
+        "skip_first_frames": false,
+        "select_every_nth": false
+      }
+    },
+    "LoadAudio": {
+      "inputs": {
+        "audio": {
+          "type": "uploadAudio",
+          "accept": "<ACCEPTED_AUDIO_FORMATS>",
+          "required": true
+        },
+        "audioUI": false
+      }
+    }
+  }
+}
+```
+
+### CONNECTTO - NODE VISIBILITY
+
+The connectTo property at the node level allows you to control the visibility of an entire node based on another node's input field value. This enables dynamic UI behavior where nodes can be shown or hidden based on conditions.
+
+**Configuration:**
+
+```json
+{
+  "input_nodes": {
+    "5": {
+      "connectTo": {
+        "nodeId": "10",
+        "inputField": "mode",
+        "conditions": [
+          {
+            "displayedWhen": "advanced"
+          },
+          {
+            "hiddenWhen": "simple"
+          }
+        ]
+      },
+      "inputs": {
+        "enabled": {
+          "type": "checkbox"
+        }
+      }
+    }
+  }
+}
+```
+
+**Properties:**
+
+- **nodeId** (required): The ID of the source node to watch for changes
+- **inputField** (required): The name of the input field on the source node to watch
+- **conditions** (required): An array of condition objects that define when the node should be displayed or hidden:
+  - **displayedWhen** (optional): The value of the source node's field that will make this node visible (can be string, number, or boolean). This is particularly useful when the node is declared in hiddenNodeIds (hidden by default).
+  - **hiddenWhen** (optional): The value of the source node's field that will hide this node (can be string, number, or boolean)
+
+**How it works:**
+
+By default, nodes are always displayed. The connectTo property at the node level provides two declaration modes:
+
+1. "Hidden when some condition": Use hiddenWhen to hide the node when the source node's field matches the specified value. The node remains visible for all other values.
+2. "Hidden by default and display when some conditions": Use displayedWhen to show the node only when the source node's field matches the specified value. This is especially useful when the node is declared in hiddenNodeIds, as it allows you to show the node conditionally even though it's hidden by default.
+
+**Example Use Cases:**
+
+Hide a node when a specific mode is selected:
+```json
+{
+  "input_nodes": {
+    "5": {
+      "connectTo": {
+        "nodeId": "10",
+        "inputField": "mode",
+        "conditions": [
+          {
+            "hiddenWhen": "simple"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Show a node only in advanced mode (when node is in hiddenNodeIds):
+```json
+{
+  "comfyui_config": {
+    "hiddenNodeIds": ["5"],
+    "node_parsers": {
+      "input_nodes": {
+        "5": {
+          "connectTo": {
+            "nodeId": "10",
+            "inputField": "mode",
+            "conditions": [
+              {
+                "displayedWhen": "advanced"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Multiple conditions of the same type:
+You can specify multiple conditions of the same type to handle multiple values. For example, you can hide a node when the source field matches any of several values:
+
+```json
+{
+  "input_nodes": {
+    "7": {
+      "inputs": {
+        "text": {
+          "type": "select",
+          "options": [
+            {
+              "value": "option1",
+              "label": "Option 1"
+            },
+            {
+              "value": "option2",
+              "label": "Option 2"
+            },
+            {
+              "value": "option3",
+              "label": "Option 3"
+            }
+          ]
+        }
+      }
+    },
+    "10": {
+      "connectTo": {
+        "nodeId": "7",
+        "inputField": "text",
+        "conditions": [
+          {
+            "hiddenWhen": "option1"
+          },
+          {
+            "hiddenWhen": "option2"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Similarly, you can use multiple displayedWhen conditions to show a node when the source field matches any of several values.
+
+### CONNECTTO - NODE CONNECTIONS
+
+The connectTo property at the input field level allows you to create automatic connections between nodes. When a source node's input field is updated, it can automatically update connected target nodes' input fields based on configured conditions.
+
+**Configuration:**
+
+```json
+{
+  "inputs": {
+    "myField": {
+      "type": "select",
+      "options": ["option1", "option2", "option3"],
+      "connectTo": {
+        "nodeId": "5",
+        "inputField": "enabled",
+        "conditions": [
+          {
+            "value": "option1",
+            "whenValue": true
+          },
+          {
+            "value": "option2",
+            "whenValue": false
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**Properties:**
+
+- **nodeId** (required): The ID of the source node to watch for changes
+- **inputField** (required): The name of the input field on the source node to watch
+- **conditions** (required): An array of condition objects that define when and what value to apply:
+  - **whenValue** (required): The value of the source node's field that triggers this condition (can be string, number, or boolean)
+  - **value** (required): The value to set on the current node's field (where connectTo is declared) when the condition matches (can be string, number, or boolean)
+
+**How it works:**
+
+When a source node's input field is updated, the system searches for all nodes that have connectTo pointing to that source node and field. For each matching connection, it checks if the source node's new value matches any whenValue in the conditions. If a match is found, it validates that the condition's value type matches the target field's current type (string, number, boolean, or array). If types are compatible, the target field (the one where connectTo is declared) is automatically updated with the condition's value. If types don't match, a warning is logged and the update is skipped.
+
+**Type Safety:**
+
+The system ensures type compatibility before applying values. For example:
+- You cannot set a string value to a boolean field
+- You cannot set a number value to a string field
+- Array types must match exactly
+
+**Example Use Cases:**
+
+Enable/Disable a node based on another node's selection:
+```json
+{
+  "input_nodes": {
+    "5": {
+      "inputs": {
+        "enabled": {
+          "type": "checkbox",
+          "connectTo": {
+            "nodeId": "10",
+            "inputField": "mode",
+            "conditions": [
+              { "whenValue": "advanced", "value": true },
+              { "whenValue": "simple", "value": false }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Set quality value based on another node's preset selection:
+```json
+{
+  "input_nodes": {
+    "20": {
+      "inputs": {
+        "quality": {
+          "type": "number",
+          "connectTo": {
+            "nodeId": "15",
+            "inputField": "preset",
+            "conditions": [
+              { "whenValue": "low", "value": 1 },
+              { "whenValue": "medium", "value": 5 },
+              { "whenValue": "high", "value": 10 }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### DATA SELECTORS
+
+Data selectors are used to get data from GT directly in your exposed comfyui input nodes.
+
+Data selector use the syntax `<context.selectorPath.selectorPath>` to get data from GT.
+
+Example of a node in a comfyui workflow file:
+
+```json
+{
+  "40": {
+    "inputs": {
+      "text": "<project.path>",
+      "clip": ["4", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  }
+}
+```
+
+You can put multiple data selectors in same input value:
+
+Example:
+
+```json
+{
+  "40": {
+    "inputs": {
+      "text": "localSourceDir: <electronConfig.localSourceDir> scenesDir:<appConfig.scenesDir> selected item image: <item.selected.image.fullPath>  project path : <project.path>"
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  }
+}
+```
+
+Here is the list of selectors available:
+
+- **electronConfig**: get data from electron config. See LocalConfig to get all available data
+- **appConfig**: get data from app config. See AppConfigFragmentFragment to get all available data
+- **project**: get data from project. See ProjectFragmentFragment to get all available data
+- **item**: get data from item. See ItemFragmentFragment to get all available data
+- **selectedItemImages**: get data from selected images on an item. See ImageFragmentFragment to get all available data

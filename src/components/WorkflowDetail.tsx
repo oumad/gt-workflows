@@ -625,7 +625,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   }
 
   return (
-    <div className="workflow-detail">
+    <div className={`workflow-detail ${hasUnsavedChanges ? 'has-floating-apply' : ''}`}>
       <div className="detail-header">
         <Link to="/" className="btn btn-secondary">
           <ArrowLeft size={16} /> Back
@@ -1764,6 +1764,21 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           }}
           onClose={() => setShowDownloadModal(false)}
         />
+      )}
+
+      {/* Floating Apply bar – visible when there are unsaved changes so user can apply without scrolling up */}
+      {hasUnsavedChanges && (
+        <div className="floating-apply-bar">
+          <span className="floating-apply-bar-label">You have unsaved changes</span>
+          <button
+            onClick={handleSaveClick}
+            disabled={saving}
+            className="btn btn-primary floating-apply-btn"
+            title="Apply changes"
+          >
+            <Save size={16} /> {saving ? 'Applying...' : 'Apply'}
+          </button>
+        </div>
       )}
     </div>
   )
