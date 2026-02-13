@@ -1,4 +1,5 @@
 import { Workflow, WorkflowParams } from '../types';
+import { fetchWithAuth } from '../utils/auth';
 
 // Request deduplication cache
 const pendingRequests = new Map<string, Promise<any>>();
@@ -16,7 +17,7 @@ export async function listWorkflows(): Promise<Workflow[]> {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-      const response = await fetch('/api/workflows/list', {
+      const response = await fetchWithAuth('/api/workflows/list', {
         signal: controller.signal,
         // Prevent browser from retrying automatically
         cache: 'no-store',
@@ -63,7 +64,7 @@ export async function listWorkflows(): Promise<Workflow[]> {
 
 export async function getWorkflowParams(workflowName: string): Promise<WorkflowParams> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/params`);
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/params`);
     if (!response.ok) {
       throw new Error('Failed to fetch workflow params');
     }
@@ -76,7 +77,7 @@ export async function getWorkflowParams(workflowName: string): Promise<WorkflowP
 
 export async function getWorkflowJson(workflowName: string): Promise<any> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/workflow`);
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/workflow`);
     if (!response.ok) {
       throw new Error('Failed to fetch workflow JSON');
     }
@@ -89,7 +90,7 @@ export async function getWorkflowJson(workflowName: string): Promise<any> {
 
 export async function saveWorkflowParams(workflowName: string, params: WorkflowParams): Promise<void> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/params`, {
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/params`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -107,7 +108,7 @@ export async function saveWorkflowParams(workflowName: string, params: WorkflowP
 
 export async function createWorkflow(workflowName: string, params: WorkflowParams): Promise<void> {
   try {
-    const response = await fetch('/api/workflows/create', {
+    const response = await fetchWithAuth('/api/workflows/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -125,7 +126,7 @@ export async function createWorkflow(workflowName: string, params: WorkflowParam
 
 export async function deleteWorkflow(workflowName: string): Promise<void> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}`, {
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}`, {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -139,7 +140,7 @@ export async function deleteWorkflow(workflowName: string): Promise<void> {
 
 export async function duplicateWorkflow(workflowName: string, newName: string): Promise<void> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/duplicate`, {
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/duplicate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -161,7 +162,7 @@ export async function uploadFile(workflowName: string, file: File): Promise<{ fi
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/upload`, {
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -179,7 +180,7 @@ export async function uploadFile(workflowName: string, file: File): Promise<{ fi
 
 export async function deleteWorkflowFile(workflowName: string, filename: string): Promise<void> {
   try {
-    const response = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}/file/${encodeURIComponent(filename)}`, {
+    const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/file/${encodeURIComponent(filename)}`, {
       method: 'DELETE',
     });
     
@@ -197,7 +198,7 @@ export async function downloadWorkflow(workflowName: string): Promise<void> {
     const downloadUrl = `/api/workflows/${encodeURIComponent(workflowName)}/download`;
     console.log('Downloading workflow from:', downloadUrl);
     
-    const response = await fetch(downloadUrl);
+    const response = await fetchWithAuth(downloadUrl);
     console.log('Response status:', response.status, response.statusText);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     

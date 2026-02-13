@@ -4,10 +4,12 @@ A modern web UI for visualizing and managing ComfyUI workflows and default workf
 
 ## Features
 
+- 🔐 **Login & session**: Optional HTTP Basic Auth (login screen first); configurable session timeout and disconnect
 - 📋 **Workflow List View**: See all workflows at a glance with key information (name, description, parser type, icon, tags)
 - ✏️ **Edit Workflows**: View and edit `params.json` files with a JSON editor
 - 👁️ **Workflow JSON Viewer**: View ComfyUI workflow JSON files
 - ➕ **Create Workflows**: Create new workflows with a simple form
+- 📊 **Job stats**: Optional dashboard for Bull queue usage (workflow runs, servers, users)
 - 🎨 **Modern UI**: Clean, dark-themed interface with responsive design
 
 ## Getting Started
@@ -36,6 +38,8 @@ This will start:
 - Backend API server on `http://localhost:3011` (accessible from network at `http://<your-ip>:3011`)
 - Frontend dev server on `http://localhost:3010` (accessible from network at `http://<your-ip>:3010`, opens automatically)
 
+When auth is enabled (see [Authentication](#authentication)), opening the app shows the login screen first (`/login`). After login you use the main app at `/main` (workflows, job stats, create, settings). You can disconnect via the logout icon in the header.
+
 #### Run Separately
 
 **Backend only:**
@@ -50,77 +54,59 @@ npm run dev
 
 ### Configuration
 
-#### Setting Custom Workflow Location
+Use a `.env` file in the project root (copy from `.env.template`). The server loads it automatically when started.
 
-By default, workflows are stored in `data/gt-workflows/` relative to the project root. To use a different location on a different computer, you can configure it using a `.env` file or environment variable.
-
-**Using .env file (Recommended):**
-
-1. Copy the example file:
 ```bash
-cp .env.example .env
+cp .env.template .env
+# Edit .env with your values
 ```
 
-2. Edit `.env` and set your workflows path:
+#### Workflows path
+
+By default, workflows are stored in `data/gt-workflows/` relative to the project root. Set `GT_WORKFLOWS_PATH` to use another location:
+
 ```env
+# Absolute path (Windows)
 GT_WORKFLOWS_PATH=C:\path\to\your\workflows
-```
 
-Or on Linux/macOS:
-```env
+# Absolute path (Linux/macOS)
 GT_WORKFLOWS_PATH=/path/to/your/workflows
 ```
 
-The `.env` file is automatically loaded when the server starts.
+The path can be absolute or relative. If not set, it defaults to `../data/gt-workflows` relative to the server file.
 
-**Using Environment Variable:**
+#### Authentication
 
-**Windows (PowerShell):**
-```powershell
-$env:GT_WORKFLOWS_PATH="C:\path\to\your\workflows"
-npm run dev:server
+To protect the app with a login screen and HTTP Basic Auth, set both:
+
+```env
+GT_WF_AUTH_USER=admin
+GT_WF_AUTH_PASSWORD=your-secure-password
 ```
 
-**Windows (Command Prompt):**
-```cmd
-set GT_WORKFLOWS_PATH=C:\path\to\your\workflows
-npm run dev:server
+- The app shows the login page first (`/` redirects to `/login`). After login, the main UI is at `/main`.
+- All `/api` and `/data` requests require this username and password.
+- Optional: `SESSION_MAX_TIME` (seconds) logs out the user after that much inactivity (default: 86400 = 24 hours). Only applies when auth is enabled.
+
+#### Job stats (optional)
+
+To enable the “Job stats” dashboard (Bull queue usage), set:
+
+```env
+REDIS_URL=redis://localhost:6379
+BULL_QUEUE_NAME=workflow-studio-comfyui-process-queue
 ```
 
-**Linux/macOS:**
-```bash
-export GT_WORKFLOWS_PATH="/path/to/your/workflows"
-npm run dev:server
-```
+Use the same Redis URL and queue name as the Workflow Studio plugin. If not set, the dashboard shows a “not configured” message.
 
-**Or set it inline:**
-```bash
-# Windows PowerShell
-$env:GT_WORKFLOWS_PATH="C:\path\to\your\workflows"; npm run dev:server
+#### Network access
 
-# Linux/macOS
-GT_WORKFLOWS_PATH="/path/to/your/workflows" npm run dev:server
-```
-
-The path can be absolute or relative. If not set, it defaults to `../data/gt-workflows` relative to the server file location.
-
-#### Network Access
-
-By default, both the backend and frontend servers are configured to accept connections from other machines on your network. You can access the application from other devices using your machine's IP address:
+By default, both servers accept connections from other machines. Access from another device using your machine’s IP:
 
 - Frontend: `http://<your-ip>:3010`
 - Backend API: `http://<your-ip>:3011`
 
-To restrict access to localhost only, you can set the `HOST` environment variable:
-```bash
-# Windows PowerShell
-$env:HOST="localhost"; npm run dev:server
-
-# Linux/macOS
-HOST=localhost npm run dev:server
-```
-
-**Note:** Make sure your firewall allows incoming connections on ports 3010 and 3011 if you want to access the app from other machines.
+To bind the backend to localhost only, set `HOST=localhost` in `.env` or when starting the server. Ensure your firewall allows ports 3010 and 3011 if you need network access.
 
 ### Building for Production
 
@@ -130,40 +116,63 @@ npm run build
 
 The built files will be in the `dist` directory.
 
-## Project Structure
+## Project structure
 
 ```
 gt-workflows/
+├── .env                       # Your config (copy from .env.template)
+├── .env.template              # Template env vars (workflows path, auth, Redis, etc.)
 ├── data/
-│   └── gt-workflows/          # Your workflows directory
-│       ├── Workflow Name/
-│       │   ├── params.json     # Workflow configuration
-│       │   └── workflow.json   # ComfyUI workflow file
+│   └── gt-workflows/          # Default workflows directory (overridable via GT_WORKFLOWS_PATH)
+│       └── Workflow Name/
+│           ├── params.json   # Workflow configuration
+│           └── workflow.json # ComfyUI workflow file
 ├── server/
-│   └── index.js               # Express API server
+│   └── index.js              # Express API server (auth, workflows, stats, static)
 ├── src/
 │   ├── api/
-│   │   └── workflows.ts       # API client functions
+│   │   ├── workflows.ts      # Workflow API client
+│   │   ├── stats.ts          # Job stats API
+│   │   └── servers.ts        # ComfyUI server logs API
 │   ├── components/
-│   │   ├── WorkflowList.tsx   # Workflow list view
-│   │   ├── WorkflowDetail.tsx # Workflow detail/edit view
-│   │   └── WorkflowCreate.tsx # Create workflow form
-│   ├── types.ts               # TypeScript type definitions
-│   ├── App.tsx                # Main app component
-│   └── main.tsx               # Entry point
+│   │   ├── Login.tsx         # Login screen
+│   │   ├── AuthGuard.tsx     # Legacy auth wrapper
+│   │   ├── WorkflowList.tsx  # Workflow list view
+│   │   ├── WorkflowDetail.tsx# Workflow detail/edit view
+│   │   ├── WorkflowCreate.tsx# Create workflow form
+│   │   ├── Dashboard.tsx     # Job stats dashboard
+│   │   └── Settings.tsx      # Settings
+│   ├── contexts/
+│   │   └── AuthContext.tsx   # Auth state (login, session timeout)
+│   ├── hooks/
+│   │   └── useServerHealthCheck.ts
+│   ├── utils/
+│   │   └── auth.ts           # Auth storage, fetchWithAuth, session expiry
+│   ├── types.ts
+│   ├── App.tsx               # Routes: / → /login, /main (workflows, dashboard, create, settings)
+│   └── main.tsx
 └── package.json
 ```
 
-## API Endpoints
+## API endpoints
 
-The backend server provides the following endpoints:
+All `/api` (and `/data`) routes require HTTP Basic Auth when `GT_WF_AUTH_USER` and `GT_WF_AUTH_PASSWORD` are set.
 
-- `GET /api/workflows/list` - List all workflows
-- `GET /api/workflows/:name/params` - Get workflow params.json
-- `GET /api/workflows/:name/workflow` - Get workflow JSON file
-- `PUT /api/workflows/:name/params` - Save workflow params.json
-- `POST /api/workflows/create` - Create a new workflow
-- `DELETE /api/workflows/:name` - Delete a workflow
+- `GET /api/ping` – Auth check; returns `sessionMaxTime` when auth is enabled
+- `GET /api/workflows/list` – List all workflows
+- `GET /api/workflows/:name/params` – Get workflow params.json
+- `GET /api/workflows/:name/workflow` – Get workflow JSON file
+- `PUT /api/workflows/:name/params` – Save workflow params.json
+- `POST /api/workflows/create` – Create a new workflow
+- `POST /api/workflows/:name/duplicate` – Duplicate a workflow
+- `DELETE /api/workflows/:name` – Delete a workflow
+- `POST /api/workflows/:name/upload` – Upload file (e.g. icon, workflow JSON)
+- `DELETE /api/workflows/:name/file/:filename` – Delete a file in a workflow
+- `GET /api/workflows/:name/download` – Download workflow as zip
+- `GET /api/stats/queue` – Bull queue counts (requires REDIS_URL)
+- `GET /api/stats/usage` – Workflow/server/user usage (requires REDIS_URL)
+- `POST /api/servers/health-check` – ComfyUI server health check
+- `GET /api/servers/logs` – Proxy ComfyUI server logs
 
 ## Workflow Structure
 
@@ -205,18 +214,17 @@ See the Workflow Studio documentation for complete parameter specifications.
 
 ## Development
 
-### Adding New Features
+The UI is built with React and TypeScript. Key areas:
 
-The UI is built with React and TypeScript. Key files:
+- `src/App.tsx` – Routes (`/`, `/login`, `/main`, `/main/*`), auth wrappers, main layout and logout
+- `src/contexts/AuthContext.tsx` – Auth state and session timeout
+- `src/utils/auth.ts` – Stored auth, `fetchWithAuth`, session expiry
+- `src/components/WorkflowList.tsx`, `WorkflowDetail.tsx`, `WorkflowCreate.tsx` – Workflow CRUD
+- `src/components/Dashboard.tsx` – Job stats
+- `src/components/Login.tsx` – Login form
+- `server/index.js` – Express server (auth middleware, workflows, stats, uploads, static)
 
-- `src/components/WorkflowList.tsx` - Main list view
-- `src/components/WorkflowDetail.tsx` - Detail/edit view
-- `src/components/WorkflowCreate.tsx` - Create form
-- `server/index.js` - Backend API server
-
-### Styling
-
-Styles use CSS variables defined in `src/index.css`. The app uses a dark theme by default.
+Styles use CSS variables in `src/index.css` (dark theme by default).
 
 ## License
 

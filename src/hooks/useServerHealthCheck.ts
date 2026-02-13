@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { fetchWithAuth } from '../utils/auth';
 
 export interface ServerHealthStatus {
   serverUrl: string;
@@ -24,7 +25,7 @@ export function useServerHealthCheck(
   // Check health of a single server
   const checkServerHealth = useCallback(async (serverUrl: string): Promise<ServerHealthStatus> => {
     try {
-      const response = await fetch('/api/servers/health-check', {
+      const response = await fetchWithAuth('/api/servers/health-check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

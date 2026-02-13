@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Workflow } from '../types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -19,9 +19,11 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import AuthImage from './AuthImage'
 import QuickEditModal from './QuickEditModal'
 import BulkEditModal from './BulkEditModal'
 import HealthCheckModal from './HealthCheckModal'
+import ServerLogsModal from './ServerLogsModal'
 import DuplicateModal from './DuplicateModal'
 import DownloadModal from './DownloadModal'
 import { useServerHealthCheck } from '../hooks/useServerHealthCheck'
@@ -49,6 +51,7 @@ interface SortableWorkflowCardProps {
   onToggleSelection: (name: string) => void
   onDownload: (name: string, e: React.MouseEvent) => void
   onDuplicate: (name: string, e: React.MouseEvent) => void
+  onViewLogs?: (serverUrl: string) => void
   onFieldChange: (workflowName: string, field: string, value: any) => void
 }
 
@@ -64,8 +67,10 @@ function SortableWorkflowCard({
   onToggleSelection,
   onDownload,
   onDuplicate,
+  onViewLogs,
   onFieldChange,
 }: SortableWorkflowCardProps) {
+  const comfyServerUrl = workflow.params?.parser === 'comfyui' ? workflow.params?.comfyui_config?.serverUrl : undefined
   const {
     attributes,
     listeners,
@@ -105,7 +110,7 @@ function SortableWorkflowCard({
         </div>
       )}
       <Link
-        to={`/workflow/${encodeURIComponent(workflow.name)}`}
+        to={`/main/workflow/${encodeURIComponent(workflow.name)}`}
         className="workflow-card"
         onClick={(e) => {
           if (selectionMode || editMode) {
@@ -119,12 +124,10 @@ function SortableWorkflowCard({
         <div className="workflow-card-header">
           {workflow.params.icon && (
             <div className="workflow-icon">
-              <img
-                src={`${workflow.folderPath}/${workflow.params.icon}`}
+              <AuthImage
+                workflowName={workflow.name}
+                iconPath={workflow.params.icon}
                 alt={workflow.name}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                }}
               />
             </div>
           )}
@@ -316,6 +319,24 @@ function SortableWorkflowCard({
           >
             <Copy size={16} />
           </button>
+          {comfyServerUrl && onViewLogs && (
+            <button
+              className="quick-logs-btn"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onViewLogs(comfyServerUrl)
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              title="View ComfyUI server logs"
+              type="button"
+            >
+              <FileText size={16} />
+            </button>
+          )}
           <button
             className="quick-download-btn"
             onClick={(e) => onDownload(workflow.name, e)}
@@ -340,6 +361,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
   const [downloadingWorkflow, setDownloadingWorkflow] = useState<Workflow | null>(null)
+  const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [localWorkflows, setLocalWorkflows] = useState<Workflow[]>(workflows)
   const [isReordering] = useState(false) // Reserved for future drag-and-drop reordering
@@ -805,7 +827,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
       {workflows.length === 0 ? (
         <div className="empty-state">
           <p>No workflows found</p>
-          <Link to="/create" className="btn btn-primary">
+          <Link to="/main/create" className="btn btn-primary">
             Create Your First Workflow
           </Link>
         </div>
@@ -872,6 +894,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                     onToggleSelection={toggleSelection}
                                     onDownload={handleDownload}
                                     onDuplicate={handleDuplicate}
+                                    onViewLogs={setLogsServerUrl}
                                     onFieldChange={handleFieldChange}
                                   />
                                 )
@@ -897,6 +920,7 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
                                 onToggleSelection={toggleSelection}
                                 onDownload={handleDownload}
                                 onDuplicate={handleDuplicate}
+                                onViewLogs={setLogsServerUrl}
                                 onFieldChange={handleFieldChange}
                               />
                             )
@@ -959,6 +983,12 @@ export default function WorkflowList({ workflows, loading, error, onRefresh }: W
             <DownloadModal
               workflow={downloadingWorkflow}
               onClose={() => setDownloadingWorkflow(null)}
+            />
+          )}
+          {logsServerUrl && (
+            <ServerLogsModal
+              serverUrl={logsServerUrl}
+              onClose={() => setLogsServerUrl(null)}
             />
           )}
         </>

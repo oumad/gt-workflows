@@ -322,6 +322,82 @@
   color: var(--error);
 }
 
+.server-logs-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.server-logs-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.server-add-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.add-server-btn-bulk {
+  background: var(--bg-tertiary);
+}
+
+.server-bulk-wrap {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.server-bulk-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.server-bulk-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.server-bulk-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.server-bulk-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
 .add-server-btn {
   display: inline-flex;
   align-items: center;

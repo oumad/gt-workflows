@@ -4,6 +4,7 @@ import { X, Copy, Upload, Image as ImageIcon } from 'lucide-react'
 import { Workflow } from '../types'
 import { duplicateWorkflow, uploadFile, getWorkflowParams, saveWorkflowParams } from '../api/workflows'
 import { compressImage } from '../utils/imageCompression'
+import AuthImage from './AuthImage'
 import './DuplicateModal.css'
 
 interface DuplicateModalProps {
@@ -97,7 +98,7 @@ export default function DuplicateModal({
       
       // Navigate to the new workflow if requested
       if (navigateToNew) {
-        navigate(`/workflow/${encodeURIComponent(newWorkflowName)}`)
+        navigate(`/main/workflow/${encodeURIComponent(newWorkflowName)}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate workflow')
@@ -106,9 +107,7 @@ export default function DuplicateModal({
     }
   }
 
-  const currentIconUrl = workflow.params.icon
-    ? `${workflow.folderPath}/${workflow.params.icon}`
-    : null
+  const hasCurrentIcon = !!workflow.params.icon
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -164,9 +163,13 @@ export default function DuplicateModal({
                       <X size={16} />
                     </button>
                   </div>
-                ) : currentIconUrl ? (
+                ) : hasCurrentIcon ? (
                   <div className="icon-preview">
-                    <img src={currentIconUrl} alt="Current icon" />
+                    <AuthImage
+                      workflowName={workflow.name}
+                      iconPath={workflow.params.icon!}
+                      alt="Current icon"
+                    />
                     <span className="icon-label">Current icon (will be copied)</span>
                   </div>
                 ) : (

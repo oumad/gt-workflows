@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, FileJson, Image as ImageIcon, Archive } from 'lucide-react'
 import { Workflow } from '../types'
 import { downloadWorkflow, getWorkflowJson, getWorkflowParams } from '../api/workflows'
+import { fetchWithAuth } from '../utils/auth'
 import './DownloadModal.css'
 
 interface DownloadModalProps {
@@ -71,7 +72,7 @@ export default function DownloadModal({
           const iconUrl = `${workflow.folderPath}/${iconPath}`
           
           // Fetch the icon as a blob to handle cross-origin properly
-          const iconResponse = await fetch(iconUrl)
+          const iconResponse = await fetchWithAuth(iconUrl)
           if (!iconResponse.ok) {
             throw new Error('Failed to fetch icon')
           }

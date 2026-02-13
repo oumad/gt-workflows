@@ -228,6 +228,11 @@
   flex-shrink: 0;
 }
 
+.workflow-icon-large .auth-image-wrap {
+  width: 120px;
+  height: 120px;
+}
+
 .workflow-icon-image {
   width: 120px;
   height: 120px;
@@ -303,6 +308,38 @@
 .info-input.field-changed:focus {
   border-color: var(--warning);
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+}
+
+.info-input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.info-input-with-action .info-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.workflow-detail-logs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.workflow-detail-logs-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 .btn.has-changes {

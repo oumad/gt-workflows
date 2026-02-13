@@ -1,5 +1,7 @@
-import { X, CheckCircle, XCircle, Clock, Activity, Server } from 'lucide-react'
+import { useState } from 'react'
+import { X, CheckCircle, XCircle, Clock, Activity, Server, FileText } from 'lucide-react'
 import { ServerHealthStatus } from '../hooks/useServerHealthCheck'
+import ServerLogsModal from './ServerLogsModal'
 import './HealthCheckModal.css'
 
 interface HealthCheckModalProps {
@@ -10,6 +12,7 @@ interface HealthCheckModalProps {
 }
 
 export default function HealthCheckModal({ healthStatuses, isChecking, monitoredServers, onClose }: HealthCheckModalProps) {
+  const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const healthyCount = healthStatuses.filter(s => s.healthy === true).length
   const unhealthyCount = healthStatuses.filter(s => s.healthy === false).length
   const checkingCount = healthStatuses.filter(s => s.healthy === null).length
@@ -105,6 +108,15 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
                               <div className="health-check-item-server">
                                 <Server size={14} />
                                 <span className="health-check-item-url">{status.serverUrl}</span>
+                                <button
+                                  type="button"
+                                  className="health-check-logs-btn"
+                                  onClick={() => setLogsServerUrl(status.serverUrl)}
+                                  title="View server logs"
+                                >
+                                  <FileText size={14} />
+                                  <span>Logs</span>
+                                </button>
                               </div>
                               {status.lastChecked && (
                                 <div className="health-check-item-time">
@@ -162,6 +174,9 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
           )}
         </div>
       </div>
+      {logsServerUrl && (
+        <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />
+      )}
     </div>
   )
 }

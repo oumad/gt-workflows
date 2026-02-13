@@ -9,12 +9,13 @@ export default defineConfig({
     port: 3010,
     strictPort: true, // Fail if port is in use instead of falling back
     open: true,
+    allowedHosts: true, // Allow all hosts (e.g. when accessing via IP or custom hostname)
     proxy: {
       '/api': {
         target: 'http://localhost:3011',
         changeOrigin: true,
         secure: false,
-        timeout: 60000, // 60 second timeout for large file downloads
+        timeout: 300000, // 5 min for stats (loading many jobs from Redis can be slow under load)
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, res) => {
             // Suppress ENOBUFS and connection errors to prevent log spam

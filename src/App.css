@@ -22,6 +22,12 @@
   align-items: center;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .app-header h1 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -31,6 +37,25 @@
 nav {
   display: flex;
   gap: 1rem;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.logout-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent);
 }
 
 .nav-link {
@@ -45,6 +70,16 @@ nav {
 .nav-link:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.nav-link--active {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-link--active:hover {
+  color: var(--accent);
 }
 
 .app-main {
@@ -65,5 +100,32 @@ nav {
     gap: 1rem;
     align-items: flex-start;
   }
+
+  .header-left {
+    flex-wrap: wrap;
+  }
+}
+
+.auth-guard-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.auth-guard-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: auth-spin 0.7s linear infinite;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
 }
 

@@ -8,15 +8,17 @@ import {
   uploadFile,
   deleteWorkflowFile,
 } from '../api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy, FileText } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
+import AuthImage from './AuthImage'
 import NodeManager from './NodeManager'
 import SaveConfirmationModal from './SaveConfirmationModal'
 import ResetConfirmationModal from './ResetConfirmationModal'
 import DuplicateModal from './DuplicateModal'
 import DownloadModal from './DownloadModal'
+import ServerLogsModal from './ServerLogsModal'
 import { compressImage } from '../utils/imageCompression'
 import './WorkflowDetail.css'
 
@@ -299,6 +301,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -617,7 +620,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     return (
       <div className="error-container">
         <p className="error-message">{error}</p>
-        <Link to="/" className="btn btn-primary">
+        <Link to="/main" className="btn btn-primary">
           <ArrowLeft size={16} /> Back to List
         </Link>
       </div>
@@ -627,7 +630,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   return (
     <div className={`workflow-detail ${hasUnsavedChanges ? 'has-floating-apply' : ''}`}>
       <div className="detail-header">
-        <Link to="/" className="btn btn-secondary">
+        <Link to="/main" className="btn btn-secondary">
           <ArrowLeft size={16} /> Back
         </Link>
         <div className="workflow-title-section">
@@ -695,13 +698,13 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                 {(params.icon || !iconError) && (
                   <div className="workflow-icon-large">
                     {params.icon && !iconError ? (
-                      <img 
-                        src={`/data/gt-workflows/${encodeURIComponent(name || '')}/${params.icon.replace(/^\.\//, '')}?v=${iconVersion}`}
+                      <AuthImage
+                        workflowName={name || ''}
+                        iconPath={params.icon}
                         alt={`${name} icon`}
                         className="workflow-icon-image"
-                        onError={() => {
-                          setIconError(true)
-                        }}
+                        version={iconVersion}
+                        onError={() => setIconError(true)}
                       />
                     ) : (
                       <div className="workflow-icon-placeholder-large">
@@ -1232,19 +1235,32 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                 <div className="info-grid">
                   <div className="info-item">
                     <label>Server URL</label>
-                    <input
-                      type="text"
-                      value={params.comfyui_config?.serverUrl || ''}
-                      onChange={(e) => handleParamsUpdate({
-                        ...params,
-                        comfyui_config: {
-                          ...(params.comfyui_config || {}),
-                          serverUrl: e.target.value || undefined
-                        }
-                      })}
-                      placeholder="http://127.0.0.1:8188"
-                      className={`info-input ${isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}`}
-                    />
+                    <div className="info-input-with-action">
+                      <input
+                        type="text"
+                        value={params.comfyui_config?.serverUrl || ''}
+                        onChange={(e) => handleParamsUpdate({
+                          ...params,
+                          comfyui_config: {
+                            ...(params.comfyui_config || {}),
+                            serverUrl: e.target.value || undefined
+                          }
+                        })}
+                        placeholder="http://127.0.0.1:8188"
+                        className={`info-input ${isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}`}
+                      />
+                      {params.comfyui_config?.serverUrl && (
+                        <button
+                          type="button"
+                          className="workflow-detail-logs-btn"
+                          onClick={() => setLogsServerUrl(params.comfyui_config!.serverUrl!)}
+                          title="View server logs"
+                        >
+                          <FileText size={16} />
+                          Logs
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="info-item info-item-full">
                     <label>Workflow File</label>
@@ -1747,7 +1763,7 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             onUpdate()
             if (newWorkflowName) {
               // Navigate to the duplicated workflow
-              window.location.href = `/workflow/${encodeURIComponent(newWorkflowName)}`
+              window.location.href = `/main/workflow/${encodeURIComponent(newWorkflowName)}`
             }
           }}
           navigateToNew={false}
@@ -1764,6 +1780,10 @@ export default function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           }}
           onClose={() => setShowDownloadModal(false)}
         />
+      )}
+
+      {logsServerUrl && (
+        <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />
       )}
 
       {/* Floating Apply bar – visible when there are unsaved changes so user can apply without scrolling up */}

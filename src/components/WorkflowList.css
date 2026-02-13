@@ -365,7 +365,8 @@
 
 .quick-edit-btn,
 .quick-download-btn,
-.quick-duplicate-btn {
+.quick-duplicate-btn,
+.quick-logs-btn {
   position: absolute;
   top: 0.75rem;
   background: var(--bg-tertiary);
@@ -385,7 +386,11 @@
 }
 
 .quick-duplicate-btn {
-  right: 3.5rem; /* Position to the left of download button */
+  right: 5.75rem; /* to the left of logs + download */
+}
+
+.quick-logs-btn {
+  right: 3.5rem; /* next to download button */
 }
 
 .quick-download-btn {
@@ -393,13 +398,15 @@
 }
 
 .workflow-card-wrapper:not(.selection-mode):hover .quick-download-btn,
-.workflow-card-wrapper:not(.selection-mode):hover .quick-duplicate-btn {
+.workflow-card-wrapper:not(.selection-mode):hover .quick-duplicate-btn,
+.workflow-card-wrapper:not(.selection-mode):hover .quick-logs-btn {
   opacity: 1;
 }
 
 .quick-edit-btn:hover,
 .quick-download-btn:hover,
-.quick-duplicate-btn:hover {
+.quick-duplicate-btn:hover,
+.quick-logs-btn:hover {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
@@ -421,7 +428,8 @@
 /* When selection indicator is present, hide quick action buttons */
 .workflow-card-wrapper.selection-mode .quick-edit-btn,
 .workflow-card-wrapper.selection-mode .quick-download-btn,
-.workflow-card-wrapper.selection-mode .quick-duplicate-btn {
+.workflow-card-wrapper.selection-mode .quick-duplicate-btn,
+.workflow-card-wrapper.selection-mode .quick-logs-btn {
   display: none;
 }
 

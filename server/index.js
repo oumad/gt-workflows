@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs/promises';
@@ -7,12 +7,28 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
+import Queue from 'bull';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Load .env from project root so auth env vars are found when running via npm run dev:all
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
 const app = express();
 const PORT = 3011;
+
+// Optional Bull queue for workflow job stats (read-only). Same Redis + queue name as Workflow Studio.
+const REDIS_URL = process.env.REDIS_URL || process.env.REDIS_HOST;
+const BULL_QUEUE_NAME = process.env.BULL_QUEUE_NAME || 'workflow-studio-comfyui-process-queue';
+let statsQueue = null;
+if (REDIS_URL) {
+  try {
+    statsQueue = new Queue(BULL_QUEUE_NAME, REDIS_URL);
+  } catch (err) {
+    console.warn('[Stats] Bull queue init failed:', err.message);
+  }
+}
 // Allow custom workflows path via environment variable, fallback to default location
 const WORKFLOWS_PATH = process.env.GT_WORKFLOWS_PATH 
   ? path.resolve(process.env.GT_WORKFLOWS_PATH)
@@ -20,6 +36,88 @@ const WORKFLOWS_PATH = process.env.GT_WORKFLOWS_PATH
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// Optional HTTP Basic Auth (set GT_WF_AUTH_USER and GT_WF_AUTH_PASSWORD in env)
+const AUTH_USER = process.env.GT_WF_AUTH_USER;
+const AUTH_PASS = process.env.GT_WF_AUTH_PASSWORD;
+const AUTH_ENABLED = typeof AUTH_USER === 'string' && AUTH_USER.length > 0 && typeof AUTH_PASS === 'string';
+// Session timeout in seconds (default 24h). Only sent to client when auth is enabled.
+const SESSION_MAX_TIME = Math.max(60, parseInt(process.env.SESSION_MAX_TIME, 10) || 86400);
+
+// Do not send WWW-Authenticate so the browser never shows a native Basic Auth popup; the app uses its own login page.
+function basicAuthMiddleware(req, res, next) {
+  if (!AUTH_ENABLED) return next();
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  try {
+    const b64 = authHeader.slice(6);
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
+    const colon = decoded.indexOf(':');
+    const user = colon >= 0 ? decoded.slice(0, colon) : decoded;
+    const pass = colon >= 0 ? decoded.slice(colon + 1) : '';
+    if (user !== AUTH_USER || pass !== AUTH_PASS) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+  } catch {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  next();
+}
+
+app.use('/api', basicAuthMiddleware);
+app.use('/data', basicAuthMiddleware);
+
+// Lightweight ping for auth check (no Redis/workflows needed). When auth is enabled, returns sessionMaxTime for client-side session expiry.
+app.get('/api/ping', (req, res) => {
+  const payload = { ok: true };
+  if (AUTH_ENABLED) payload.sessionMaxTime = SESSION_MAX_TIME;
+  res.json(payload);
+});
+
+// Proxy ComfyUI server logs (must be before /api/workflows/:name to avoid route conflict)
+app.get('/api/servers/logs', async (req, res) => {
+  try {
+    const rawUrl = req.query.url;
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return res.status(400).json({ error: 'Server URL (url) is required' });
+    }
+    const base = rawUrl.trim().replace(/\/$/, '');
+    if (!base.startsWith('http://') && !base.startsWith('https://')) {
+      return res.status(400).json({ error: 'Invalid server URL' });
+    }
+    const urlsToTry = [`${base}/internal/logs/raw`, `${base}/internal/logs`];
+    let lastError = null;
+    for (const logUrl of urlsToTry) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(logUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { Accept: 'text/plain, text/html, */*' },
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          lastError = `Logs endpoint returned ${response.status}`;
+          continue;
+        }
+        const contentType = response.headers.get('content-type') || '';
+        const text = await response.text();
+        const isHtml = contentType.includes('text/html');
+        return res.json({ content: text, contentType: isHtml ? 'text/html' : 'text/plain' });
+      } catch (err) {
+        lastError = err.message || 'Failed to fetch logs';
+        continue;
+      }
+    }
+    res.status(502).json({ error: lastError || 'Could not load logs' });
+  } catch (error) {
+    console.error('Error fetching server logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -432,6 +530,34 @@ app.post('/api/workflows/:name/upload', upload.single('file'), async (req, res) 
   }
 });
 
+// Get file from workflow directory (for authenticated image display; <img> cannot send auth headers)
+app.get('/api/workflows/:name/file/:filename', async (req, res) => {
+  try {
+    const workflowName = decodeURIComponent(req.params.name);
+    const filename = decodeURIComponent(req.params.filename);
+    if (!filename || filename.includes('..') || path.isAbsolute(filename)) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const workflowPath = path.join(WORKFLOWS_PATH, workflowName);
+    const filePath = path.join(workflowPath, filename);
+    const resolvedPath = path.resolve(filePath);
+    const resolvedWorkflowPath = path.resolve(workflowPath);
+    if (!resolvedPath.startsWith(resolvedWorkflowPath)) {
+      return res.status(403).json({ error: 'Invalid file path' });
+    }
+    try {
+      await fs.access(filePath);
+    } catch (err) {
+      if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+      throw err;
+    }
+    res.sendFile(resolvedPath);
+  } catch (error) {
+    console.error('Error serving workflow file:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete file from workflow directory
 app.delete('/api/workflows/:name/file/:filename', async (req, res) => {
   try {
@@ -466,6 +592,253 @@ app.delete('/api/workflows/:name/file/:filename', async (req, res) => {
   } catch (error) {
     console.error('Error deleting file:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Helper: map Bull job to activity job (id, name, user, server, processedOn). Used for queue?list=1 and activity. ---
+function toActivityJob(job) {
+  if (!job) return null;
+  const data = job.data || {};
+  const workflow = data.workflow || {};
+  const wfName = workflow.name;
+  const serverUrl = workflow.config?.comfyui_config?.serverUrl;
+  const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : '';
+  const userObj = data.executionContext?.context?.user;
+  const processedOn = job.processedOn != null ? job.processedOn : undefined;
+  let user = '';
+  if (userObj) {
+    user = userObj.name || userObj.email || userObj.id || '';
+  }
+  return {
+    id: String(job.id),
+    name: typeof wfName === 'string' ? wfName : (job.name || ''),
+    user: String(user || '—'),
+    server: server || '—',
+    processedOn: processedOn
+  };
+}
+
+// --- Queue stats (read-only). Same endpoint as job stats; ?list=1 adds active/waiting job lists for Activity tab. ---
+app.get('/api/stats/queue', async (req, res) => {
+  const queue = statsQueue;
+  if (!queue) {
+    return res.json({
+      configured: false,
+      message: 'Set REDIS_URL (and optionally BULL_QUEUE_NAME) to see queue stats.',
+      counts: null,
+      ...(req.query.list ? { active: [], waiting: [] } : {}),
+    });
+  }
+  try {
+    const counts = await queue.getJobCounts();
+    const payload = {
+      configured: true,
+      counts: {
+        waiting: counts.waiting ?? counts.wait ?? 0,
+        active: counts.active ?? 0,
+        completed: counts.completed ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+      },
+    };
+    if (req.query.list) {
+      const [activeRaw, waitingRaw] = await Promise.all([
+        queue.getJobs(['active'], 0, 9999),
+        queue.getJobs(['waiting'], 0, 9999),
+      ]);
+      payload.active = (activeRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+      payload.waiting = (waitingRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+    }
+    res.json(payload);
+  } catch (err) {
+    console.error('Error fetching queue counts:', err);
+    res.status(500).json({
+      configured: true,
+      error: err.message,
+      counts: null,
+      ...(req.query.list ? { active: [], waiting: [] } : {}),
+    });
+  }
+});
+
+// --- Job logs for Activity tab (Bull job logs by job id). ---
+app.get('/api/stats/job/:jobId/logs', async (req, res) => {
+  const queue = statsQueue;
+  if (!queue) {
+    return res.status(503).json({ error: 'Queue not configured (REDIS_URL).' });
+  }
+  const jobId = req.params.jobId;
+  if (!jobId) {
+    return res.status(400).json({ error: 'Job ID required.' });
+  }
+  try {
+    const result = await queue.getJobLogs(jobId, 0, -1, true);
+    res.json({ logs: result.logs || [], count: result.count || 0 });
+  } catch (err) {
+    console.error('Error fetching job logs:', err);
+    res.status(500).json({ error: err.message || 'Failed to load job logs' });
+  }
+});
+
+// --- Activity tab: active and waiting job lists (same queue as job stats). ---
+app.get('/api/stats/activity', async (req, res) => {
+  if (!statsQueue) {
+    return res.json({
+      configured: false,
+      active: [],
+      waiting: [],
+      message: 'Set REDIS_URL (and optionally BULL_QUEUE_NAME) to see activity.',
+    });
+  }
+  try {
+    const [activeRaw, waitingRaw] = await Promise.all([
+      statsQueue.getJobs(['active']),
+      statsQueue.getJobs(['waiting']),
+    ]);
+    const active = (activeRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+    const waiting = (waitingRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+    res.json({
+      configured: true,
+      active,
+      waiting,
+    });
+  } catch (err) {
+    console.error('Error fetching activity jobs:', err);
+    res.status(500).json({
+      configured: true,
+      active: [],
+      waiting: [],
+      error: err.message,
+    });
+  }
+});
+
+function jobMatchesUser(job, userFilter) {
+  if (!userFilter) return true;
+  const user = job?.data?.executionContext?.context?.user;
+  if (!user) return false;
+  const label = user.name || user.email || user.id;
+  return label && String(label) === String(userFilter);
+}
+
+app.get('/api/stats/usage', async (req, res) => {
+  const queue = statsQueue;
+  if (!queue) {
+    return res.json({
+      configured: false,
+      message: 'Set REDIS_URL (and optionally BULL_QUEUE_NAME) to see workflow usage.',
+      workflowUsage: [],
+      serverUsage: [],
+      userActivity: [],
+    });
+  }
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 100), 2000);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const from = req.query.from ? new Date(req.query.from).getTime() : null;
+    const to = req.query.to ? new Date(req.query.to).getTime() : null;
+    const userFilter = typeof req.query.user === 'string' && req.query.user.trim() ? req.query.user.trim() : null;
+    const scanLimit = Math.min(Math.max(parseInt(req.query.scanLimit, 10) || 10000, 1000), 20000);
+    const includeJobs = req.query.includeJobs === '1' || req.query.includeJobs === 'true';
+
+    let jobs;
+    let totalScanned = null;
+    const timeRange = from != null && to != null && !Number.isNaN(from) && !Number.isNaN(to);
+
+    if (timeRange) {
+      const chunkSize = Math.min(limit, 2000);
+      const raw = await queue.getJobs(['completed'], offset, offset + chunkSize - 1);
+      const rawFiltered = (raw || []).filter((j) => j != null);
+      totalScanned = offset + rawFiltered.length;
+      jobs = rawFiltered.filter((job) => {
+        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        if (ts == null) return false;
+        if (ts < from || ts > to) return false;
+        return jobMatchesUser(job, userFilter);
+      });
+    } else {
+      const raw = await queue.getJobs(['completed'], offset, offset + limit - 1);
+      jobs = (raw || []).filter((j) => j != null);
+      if (userFilter) {
+        jobs = jobs.filter((job) => jobMatchesUser(job, userFilter));
+      }
+    }
+
+    const byWorkflowName = {};
+    const byServer = {};
+    const byUser = {};
+    for (const job of jobs) {
+      if (!job) continue;
+      const data = job.data || {};
+      const workflow = data.workflow;
+      const wfName = workflow?.name;
+      const user = data.executionContext?.context?.user;
+      let userLabel = null;
+      if (user) {
+        userLabel = user.name || user.email || user.id || 'Unknown';
+        if (typeof userLabel === 'string' && userLabel !== 'Unknown') {
+          byUser[userLabel] = (byUser[userLabel] || 0) + 1;
+        } else if (user.id) {
+          userLabel = user.id;
+          byUser[user.id] = (byUser[user.id] || 0) + 1;
+        }
+      }
+      if (wfName && typeof wfName === 'string') {
+        if (!byWorkflowName[wfName]) {
+          byWorkflowName[wfName] = { count: 0, users: new Set() };
+        }
+        byWorkflowName[wfName].count += 1;
+        if (userLabel) byWorkflowName[wfName].users.add(String(userLabel));
+      }
+      const serverUrl = workflow?.config?.comfyui_config?.serverUrl;
+      if (serverUrl && typeof serverUrl === 'string') {
+        const normalized = serverUrl.replace(/\/$/, '');
+        byServer[normalized] = (byServer[normalized] || 0) + 1;
+      }
+    }
+    const workflowUsage = Object.entries(byWorkflowName)
+      .map(([name, { count, users }]) => ({
+        name,
+        count,
+        users: Array.from(users),
+      }))
+      .sort((a, b) => b.count - a.count);
+    const serverUsage = Object.entries(byServer)
+      .map(([server, count]) => ({ server, count }))
+      .sort((a, b) => b.count - a.count);
+    const userActivity = Object.entries(byUser)
+      .map(([user, count]) => ({ user, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const payload = {
+      configured: true,
+      workflowUsage,
+      serverUsage,
+      userActivity,
+      jobsSampled: jobs.length,
+    };
+    if (timeRange) {
+      payload.from = req.query.from;
+      payload.to = req.query.to;
+      payload.totalScanned = totalScanned;
+    } else {
+      payload.offset = offset;
+      payload.limit = limit;
+    }
+    if (userFilter) payload.userFilter = userFilter;
+    if (includeJobs) {
+      payload.jobs = jobs.map((j) => toActivityJob(j)).filter(Boolean);
+    }
+    res.json(payload);
+  } catch (err) {
+    console.error('Error fetching workflow usage:', err);
+    res.status(500).json({
+      configured: true,
+      error: err.message,
+      workflowUsage: [],
+      serverUsage: [],
+      userActivity: [],
+    });
   }
 });
 
