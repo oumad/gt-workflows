@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server } from 'lucide-react'
-import { getQueueStats, getUsageStatsChunked, getUsageStatsTimeRangeChunked } from '../api/stats'
-import type { QueueCounts, WorkflowUsageItem, ServerUsageItem, UserActivityItem } from '../api/stats'
+import { ArrowLeft, BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List } from 'lucide-react'
+import { getQueueStats, getUsageStatsChunked, getUsageStatsTimeRangeChunked, getUsageStatsChunk } from '../api/stats'
+import type { QueueCounts, WorkflowUsageItem, ServerUsageItem, UserActivityItem, ActivityJob } from '../api/stats'
 import './Dashboard.css'
 
 const JOBS_LIMIT_OPTIONS = [500, 1000, 2000, 3000, 5000] as const
 const CHUNK_SIZE = 500
+const TIME_RANGE_SCAN_LIMIT = 15000
+const TIME_RANGE_CHUNK_SIZE = 2000
 const TIME_RANGES = [
   { id: '24h', label: 'Last 24 hours' },
   { id: '7d', label: 'Last 7 days' },
@@ -25,6 +27,23 @@ function getTimeRangeBounds(rangeId: TimeRangeId): { from: string; to: string } 
   return { from: from.toISOString(), to: to.toISOString() }
 }
 
+function formatJobTime(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return '—'
+  return new Date(ms).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })
+}
+
+function formatDuration(processedOn: number | undefined, finishedOn: number | undefined): string {
+  if (processedOn == null || finishedOn == null || !Number.isFinite(processedOn) || !Number.isFinite(finishedOn)) return '—'
+  const sec = Math.round((finishedOn - processedOn) / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  const s = sec % 60
+  if (min < 60) return `${min}m ${s}s`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${h}h ${m}m ${s}s`
+}
+
 export default function Dashboard() {
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
   const [workflowUsage, setWorkflowUsage] = useState<WorkflowUsageItem[]>([])
@@ -36,6 +55,10 @@ export default function Dashboard() {
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
   const [timeRangeId, setTimeRangeId] = useState<TimeRangeId>('7d')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const [userJobs, setUserJobs] = useState<ActivityJob[]>([])
+  const [userJobsLoading, setUserJobsLoading] = useState(false)
+  const [userDetailsOpen, setUserDetailsOpen] = useState(false)
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
   const [serversOpen, setServersOpen] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [configured, setConfigured] = useState<boolean | null>(null)
@@ -57,6 +80,8 @@ export default function Dashboard() {
       }
 
       const userOpt = selectedUser ? { user: selectedUser } : {}
+      setUserJobs([])
+      setExpandedJobId(null)
 
       if (rangeMode === 'time') {
         const { from, to } = getTimeRangeBounds(timeRangeId)
@@ -73,6 +98,31 @@ export default function Dashboard() {
         if (!selectedUser && usageRes.userActivity) setUserActivity(usageRes.userActivity)
         if (usageRes.jobsSampled != null) setJobsSampled(usageRes.jobsSampled)
         setTimeRangeLabel(usageRes.from && usageRes.to ? `${new Date(usageRes.from).toLocaleDateString()} – ${new Date(usageRes.to).toLocaleDateString()}` : TIME_RANGES.find((r) => r.id === timeRangeId)?.label ?? null)
+        if (selectedUser) {
+          setUserJobsLoading(true)
+          try {
+            const allJobs: ActivityJob[] = []
+            for (let offset = 0; offset < TIME_RANGE_SCAN_LIMIT; offset += TIME_RANGE_CHUNK_SIZE) {
+              const limit = Math.min(TIME_RANGE_CHUNK_SIZE, TIME_RANGE_SCAN_LIMIT - offset)
+              const jobRes = await getUsageStatsChunk({
+                from,
+                to,
+                limit,
+                offset,
+                scanLimit: TIME_RANGE_SCAN_LIMIT,
+                user: selectedUser,
+                includeJobs: true,
+              })
+              const chunk = jobRes.jobs ?? []
+              allJobs.push(...chunk)
+            }
+            setUserJobs(allJobs)
+          } catch {
+            setUserJobs([])
+          } finally {
+            setUserJobsLoading(false)
+          }
+        }
       } else {
         const usageRes = await getUsageStatsChunked(
           jobsLimit,
@@ -86,6 +136,28 @@ export default function Dashboard() {
         if (!selectedUser && usageRes.userActivity) setUserActivity(usageRes.userActivity)
         if (usageRes.jobsSampled != null) setJobsSampled(usageRes.jobsSampled)
         setTimeRangeLabel(null)
+        if (selectedUser) {
+          setUserJobsLoading(true)
+          try {
+            const allJobs: ActivityJob[] = []
+            for (let offset = 0; offset < jobsLimit; offset += CHUNK_SIZE) {
+              const limit = Math.min(CHUNK_SIZE, jobsLimit - offset)
+              const jobRes = await getUsageStatsChunk({
+                limit,
+                offset,
+                user: selectedUser,
+                includeJobs: true,
+              })
+              const chunk = jobRes.jobs ?? []
+              allJobs.push(...chunk)
+            }
+            setUserJobs(allJobs)
+          } catch {
+            setUserJobs([])
+          } finally {
+            setUserJobsLoading(false)
+          }
+        }
       }
       setProgress(null)
     } catch (err) {
@@ -365,6 +437,101 @@ export default function Dashboard() {
                         <span className="dashboard-server-count">{item.count}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Job details: when a user is selected, show expandable list (timestamp > workflow > server + more) */}
+            {selectedUser && (
+              <div className="dashboard-job-details-wrap">
+                <button
+                  type="button"
+                  className="dashboard-servers-toggle"
+                  onClick={() => setUserDetailsOpen((o) => !o)}
+                  aria-expanded={userDetailsOpen}
+                >
+                  {userDetailsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <List size={16} />
+                  <span>Job details</span>
+                  <span className="dashboard-servers-badge">
+                    {userJobsLoading ? '…' : userJobs.length}
+                  </span>
+                </button>
+                {userDetailsOpen && (
+                  <div className="dashboard-job-details-body">
+                    {userJobsLoading ? (
+                      <p className="dashboard-job-details-loading">Loading job list…</p>
+                    ) : userJobs.length === 0 ? (
+                      <p className="dashboard-sidebar-empty">No jobs in range for this user.</p>
+                    ) : (
+                      <div className="dashboard-job-details-table-wrap">
+                        <table className="dashboard-job-details-table">
+                          <thead>
+                            <tr>
+                              <th>Time</th>
+                              <th>Workflow</th>
+                              <th>Server</th>
+                              <th>Job ID</th>
+                              <th aria-hidden />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {userJobs.map((job) => {
+                              const isExpanded = expandedJobId === job.id
+                              const timeStr = formatJobTime(job.finishedOn ?? job.processedOn)
+                              return (
+                                <Fragment key={job.id}>
+                                  <tr
+                                    className={`dashboard-job-details-row ${isExpanded ? 'expanded' : ''}`}
+                                  >
+                                    <td className="dashboard-job-details-time" title={timeStr}>
+                                      {timeStr}
+                                    </td>
+                                    <td className="dashboard-job-details-name" title={job.name}>
+                                      {job.name || '—'}
+                                    </td>
+                                    <td className="dashboard-job-details-server" title={job.server}>
+                                      {job.server || '—'}
+                                    </td>
+                                    <td className="dashboard-job-details-id">{job.id}</td>
+                                    <td className="dashboard-job-details-more">
+                                      <button
+                                        type="button"
+                                        className="dashboard-job-details-expand"
+                                        onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
+                                        aria-expanded={isExpanded}
+                                        title={isExpanded ? 'Collapse' : 'More details'}
+                                      >
+                                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  {isExpanded && (
+                                    <tr className="dashboard-job-details-expanded-row">
+                                      <td colSpan={5}>
+                                        <dl className="dashboard-job-details-meta">
+                                          <dt>Created (queued)</dt>
+                                          <dd>{formatJobTime(job.timestamp)}</dd>
+                                          <dt>Started</dt>
+                                          <dd>{formatJobTime(job.processedOn)}</dd>
+                                          <dt>Finished</dt>
+                                          <dd>{formatJobTime(job.finishedOn)}</dd>
+                                          <dt>Duration</dt>
+                                          <dd>{formatDuration(job.processedOn, job.finishedOn)}</dd>
+                                          <dt>Job ID</dt>
+                                          <dd className="dashboard-job-details-id-full">{job.id}</dd>
+                                        </dl>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

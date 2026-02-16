@@ -595,7 +595,7 @@ app.delete('/api/workflows/:name/file/:filename', async (req, res) => {
   }
 });
 
-// --- Helper: map Bull job to activity job (id, name, user, server, processedOn). Used for queue?list=1 and activity. ---
+// --- Helper: map Bull job to activity job (id, name, user, server, processedOn, finishedOn, timestamp). Used for queue?list=1, activity, and usage includeJobs. ---
 function toActivityJob(job) {
   if (!job) return null;
   const data = job.data || {};
@@ -605,6 +605,8 @@ function toActivityJob(job) {
   const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : '';
   const userObj = data.executionContext?.context?.user;
   const processedOn = job.processedOn != null ? job.processedOn : undefined;
+  const finishedOn = job.finishedOn != null ? job.finishedOn : undefined;
+  const timestamp = job.timestamp != null ? job.timestamp : undefined;
   let user = '';
   if (userObj) {
     user = userObj.name || userObj.email || userObj.id || '';
@@ -614,7 +616,9 @@ function toActivityJob(job) {
     name: typeof wfName === 'string' ? wfName : (job.name || ''),
     user: String(user || '—'),
     server: server || '—',
-    processedOn: processedOn
+    processedOn: processedOn,
+    finishedOn: finishedOn,
+    timestamp: timestamp,
   };
 }
 

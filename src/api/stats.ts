@@ -109,6 +109,10 @@ export interface ActivityJob {
   user: string;
   server: string;
   processedOn: number;
+  /** When job finished (completed/failed). */
+  finishedOn?: number;
+  /** When job was created (queued). */
+  timestamp?: number;
 }
 
 export interface ActivityResponse {
