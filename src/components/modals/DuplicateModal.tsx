@@ -98,7 +98,7 @@ export default function DuplicateModal({
       
       // Navigate to the new workflow if requested
       if (navigateToNew) {
-        navigate(`/main/workflow/${encodeURIComponent(newWorkflowName)}`)
+        navigate(`/workflows/workflow/${encodeURIComponent(newWorkflowName)}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate workflow')

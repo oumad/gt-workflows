@@ -230,6 +230,7 @@
 }
 
 .workflow-category-content {
+  margin-top: 0.75rem;
   margin-bottom: 1rem;
   animation: slideDown 0.2s ease-out;
 }

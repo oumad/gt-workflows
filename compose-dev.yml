@@ -17,6 +17,7 @@ services:
       - GT_WF_GUEST_USER=guest
       - GT_WF_GUEST_PASSWORD=guest
       - REDIS_URL=redis://redis:6379
+      - GT_WF_ANONYMIZE_JOB_STATS_USERS=true 
     networks:
       - gt-workflows-network
 

@@ -52,7 +52,7 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
 
       await createWorkflow(workflowName.trim(), params)
       onCreated()
-      navigate(`/main/workflow/${encodeURIComponent(workflowName.trim())}`)
+      navigate(`/workflows/workflow/${encodeURIComponent(workflowName.trim())}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workflow')
     } finally {
@@ -135,7 +135,7 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
         </div>
 
         <div className="form-actions">
-          <Link to="/main" className="btn btn-secondary">
+          <Link to="/workflows" className="btn btn-secondary">
             Cancel
           </Link>
           <button

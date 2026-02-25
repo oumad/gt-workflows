@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { Lock } from 'lucide-react'
 import { setStoredAuth, clearStoredAuth, fetchWithAuth, getUnauthorizedFlag, clearUnauthorizedFlag } from '@/utils/auth'
+import { useAuth } from '@/contexts/AuthContext'
 import './Login.css'
 
 interface LoginProps {
@@ -8,6 +9,7 @@ interface LoginProps {
 }
 
 export function Login({ onSuccess }: LoginProps) {
+  const { setRole, setUsername: setAuthUsername } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +42,8 @@ export function Login({ onSuccess }: LoginProps) {
       }
       const data = await res.json().catch(() => ({}))
       if (data.sessionMaxTime != null) setStoredAuth(b64, data.sessionMaxTime)
+      if (typeof data.username === 'string') setAuthUsername(data.username)
+      setRole(data.role === 'admin' ? 'admin' : 'guest')
       try {
         sessionStorage.setItem('gt-workflows-first-login', '1')
       } catch {}

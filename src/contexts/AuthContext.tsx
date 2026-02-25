@@ -4,12 +4,16 @@ import { fetchWithAuth, onAuthRequired, isSessionExpired, clearStoredAuth, getSt
 const SESSION_CHECK_INTERVAL_MS = 60_000
 
 export type AuthStatus = 'pending' | 'required' | 'ok'
+export type UserRole = 'admin' | 'guest'
 
 interface AuthContextValue {
   authStatus: AuthStatus
   authEnabled: boolean
   username: string | null
+  role: UserRole
   setAuthStatus: (status: AuthStatus) => void
+  setRole: (role: UserRole) => void
+  setUsername: (username: string | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -28,6 +32,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('pending')
   const [authEnabled, setAuthEnabled] = useState<boolean>(true)
   const [username, setUsername] = useState<string | null>(null)
+  const [role, setRole] = useState<UserRole>('guest')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -38,6 +43,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (cancelled) return
         if (res.status === 401) {
           setUsername(null)
+          setRole('guest')
           setAuthStatus('required')
           return
         }
@@ -46,6 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const enabled = data.authEnabled === true
           setAuthEnabled(enabled)
           if (typeof data.username === 'string') setUsername(data.username)
+          setRole(!enabled ? 'admin' : (data.role === 'admin' ? 'admin' : 'guest'))
           if (!enabled) {
             setAuthStatus('ok')
             return
@@ -106,9 +113,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const setAuthStatusAndClearUser = useCallback((status: AuthStatus) => {
     setAuthStatus(status)
-    if (status === 'required') setUsername(null)
+    if (status === 'required') {
+      setUsername(null)
+      setRole('guest')
+    }
   }, [])
 
-  const value: AuthContextValue = { authStatus, authEnabled, username, setAuthStatus: setAuthStatusAndClearUser }
+  const value: AuthContextValue = {
+    authStatus,
+    authEnabled,
+    username,
+    role,
+    setAuthStatus: setAuthStatusAndClearUser,
+    setRole,
+    setUsername,
+  }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -613,7 +613,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     return (
       <div className="error-container">
         <p className="error-message">{error}</p>
-        <Link to="/main" className="btn btn-primary">
+        <Link to="/workflows" className="btn btn-primary">
           <ArrowLeft size={16} /> Back to List
         </Link>
       </div>
@@ -623,7 +623,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   return (
     <div className={`workflow-detail ${hasUnsavedChanges ? 'has-floating-apply' : ''}`}>
       <div className="detail-header">
-        <Link to="/main" className="btn btn-secondary">
+        <Link to="/workflows" className="btn btn-secondary">
           <ArrowLeft size={16} /> Back
         </Link>
         <div className="workflow-title-section">
@@ -1755,7 +1755,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             onUpdate()
             if (newWorkflowName) {
               // Navigate to the duplicated workflow
-              window.location.href = `/main/workflow/${encodeURIComponent(newWorkflowName)}`
+              window.location.href = `/workflows/workflow/${encodeURIComponent(newWorkflowName)}`
             }
           }}
           navigateToNew={false}

@@ -14,6 +14,8 @@ const ADMIN_USER = process.env.GT_WF_ADMIN_USER;
 const ADMIN_PASSWORD = process.env.GT_WF_ADMIN_PASSWORD;
 const GUEST_USER = process.env.GT_WF_GUEST_USER;
 const GUEST_PASSWORD = process.env.GT_WF_GUEST_PASSWORD;
+/** When set, job-stats user names are anonymised for guest users (e.g. john.doe → j**.**e). */
+const ANONYMIZE_JOB_STATS_USERS = process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS === 'true' || process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS === '1';
 
 const hasAdmin = typeof ADMIN_USER === 'string' && ADMIN_USER.length > 0 && typeof ADMIN_PASSWORD === 'string';
 const hasGuest = typeof GUEST_USER === 'string' && GUEST_USER.length > 0 && typeof GUEST_PASSWORD === 'string';
@@ -27,6 +29,7 @@ if (hasGuest) AUTH_CREDENTIALS.push({ user: GUEST_USER, pass: GUEST_PASSWORD });
 export const config = Object.freeze({
   port: 3011,
   host: process.env.HOST || '0.0.0.0',
+  adminUser: ADMIN_USER || null,
   workflowsPath: process.env.GT_WORKFLOWS_PATH
     ? path.resolve(process.env.GT_WORKFLOWS_PATH)
     : path.join(__dirname, '../data/gt-workflows'),
@@ -37,4 +40,6 @@ export const config = Object.freeze({
     credentials: AUTH_CREDENTIALS,
   },
   sessionMaxTime: Math.max(60, parseInt(process.env.SESSION_MAX_TIME, 10) || 86400),
+  guestUser: GUEST_USER || null,
+  anonymiseJobStatsUsers: ANONYMIZE_JOB_STATS_USERS,
 });

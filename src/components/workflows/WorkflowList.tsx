@@ -111,7 +111,7 @@ function SortableWorkflowCard({
         </div>
       )}
       <Link
-        to={`/main/workflow/${encodeURIComponent(workflow.name)}`}
+        to={`/workflows/workflow/${encodeURIComponent(workflow.name)}`}
         className="workflow-card"
         onClick={(e) => {
           if (selectionMode || editMode) {
@@ -829,7 +829,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
       {workflows.length === 0 ? (
         <div className="empty-state">
           <p>No workflows found</p>
-          <Link to="/main/create" className="btn btn-primary">
+          <Link to="/workflows/new" className="btn btn-primary">
             Create Your First Workflow
           </Link>
         </div>

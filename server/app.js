@@ -33,7 +33,7 @@ export function createApp() {
       upload,
     })
   );
-  app.use('/api', createStatsRouter());
+  app.use('/api', createStatsRouter(config));
 
   app.use('/data/gt-workflows', express.static(config.workflowsPath));
 

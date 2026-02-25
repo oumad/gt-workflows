@@ -27,10 +27,10 @@ function AuthLoading(): React.ReactElement {
 }
 
 function LoginRoute(): React.ReactElement {
-  const { authStatus, authEnabled, setAuthStatus } = useAuth()
-  if (!authEnabled) return <Navigate to="/main" replace />
+  const { authStatus, authEnabled, setAuthStatus, role } = useAuth()
+  if (!authEnabled) return <Navigate to="/workflows" replace />
   if (authStatus === 'pending') return <AuthLoading />
-  if (authStatus === 'ok') return <Navigate to="/main" replace />
+  if (authStatus === 'ok') return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
   return <Login onSuccess={() => setAuthStatus('ok')} />
 }
 
@@ -40,6 +40,12 @@ function RequireAuth({ children }: { children: React.ReactNode }): React.ReactEl
   if (authStatus === 'pending') return <AuthLoading />
   if (!authEnabled) return <>{children}</>
   if (authStatus === 'required') return <Navigate to="/login" state={{ from: location }} replace />
+  return <>{children}</>
+}
+
+function RequireAdmin({ children }: { children: React.ReactNode }): React.ReactElement {
+  const { role } = useAuth()
+  if (role === 'guest') return <Navigate to="/job-stats" replace />
   return <>{children}</>
 }
 
@@ -94,12 +100,14 @@ function LogoutButton(): React.ReactElement | null {
 function MainLayoutWithData(): React.ReactElement {
   const location = useLocation()
   const path = location.pathname
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
   const navActive = {
-    workflows: path === '/main' || path.startsWith('/main/workflow/'),
-    dashboard: path.startsWith('/main/dashboard'),
-    create: path.startsWith('/main/create'),
-    activity: path.startsWith('/main/activity'),
-    settings: path.startsWith('/main/settings'),
+    workflows: path === '/workflows' || path.startsWith('/workflows/workflow/'),
+    create: path === '/workflows/new',
+    activity: path.startsWith('/activity'),
+    dashboard: path.startsWith('/job-stats'),
+    settings: path.startsWith('/settings'),
   }
   const { workflows, loading, error, loadWorkflows } = useWorkflows()
 
@@ -110,11 +118,15 @@ function MainLayoutWithData(): React.ReactElement {
           <div className="header-left">
             <h1>GT Workflows Manager</h1>
             <nav>
-              <Link to="/main" className={`nav-link${navActive.workflows ? ' nav-link--active' : ''}`}>Workflows</Link>
-              <Link to="/main/create" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
-              <Link to="/main/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
-              <Link to="/main/dashboard" className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
-              <Link to="/main/settings" className={`nav-link${navActive.settings ? ' nav-link--active' : ''}`}>Settings</Link>
+              {isAdmin && (
+                <>
+                  <Link to="/workflows" className={`nav-link${navActive.workflows ? ' nav-link--active' : ''}`}>Workflows</Link>
+                  <Link to="/workflows/new" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
+                  <Link to="/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
+                  <Link to="/job-stats" className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
+                  <Link to="/settings" className={`nav-link${navActive.settings ? ' nav-link--active' : ''}`}>Settings</Link>
+                </>
+              )}
             </nav>
           </div>
           <LogoutButton />
@@ -143,13 +155,19 @@ function WorkflowCreateWithContext(): React.ReactElement {
 }
 
 function RootRedirect(): React.ReactElement {
-  const { authEnabled } = useAuth()
-  return <Navigate to={authEnabled ? '/login' : '/main'} replace />
+  const { authEnabled, authStatus, role } = useAuth()
+  if (authEnabled && authStatus === 'ok') {
+    return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
+  }
+  return <Navigate to={authEnabled ? '/login' : '/workflows'} replace />
 }
 
 function CatchAllRedirect(): React.ReactElement {
-  const { authEnabled } = useAuth()
-  return <Navigate to={authEnabled ? '/login' : '/main'} replace />
+  const { authEnabled, authStatus, role } = useAuth()
+  if (authEnabled && authStatus === 'ok') {
+    return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
+  }
+  return <Navigate to={authEnabled ? '/login' : '/workflows'} replace />
 }
 
 export function AppRoutes(): React.ReactElement {
@@ -158,19 +176,20 @@ export function AppRoutes(): React.ReactElement {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route
-        path="/main"
         element={
           <RequireAuth>
             <MainLayoutWithData />
           </RequireAuth>
         }
       >
-        <Route index element={<WorkflowListFromContext />} />
-        <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="create" element={<WorkflowCreateWithContext />} />
-        <Route path="activity" element={<Activity />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="workflows" element={<RequireAdmin><Outlet /></RequireAdmin>}>
+          <Route index element={<WorkflowListFromContext />} />
+          <Route path="new" element={<WorkflowCreateWithContext />} />
+          <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />
+        </Route>
+        <Route path="activity" element={<RequireAdmin><Activity /></RequireAdmin>} />
+        <Route path="job-stats" element={<Dashboard />} />
+        <Route path="settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<CatchAllRedirect />} />
     </Routes>

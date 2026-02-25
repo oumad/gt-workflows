@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import { getStatsQueue } from '../lib/queue.js';
-import { toActivityJob, jobMatchesUser } from '../lib/statsHelpers.js';
+import { toActivityJob, jobMatchesUser, anonymiseUserName } from '../lib/statsHelpers.js';
 
 const USAGE_LIMIT_MIN = 100;
 const USAGE_LIMIT_MAX = 2000;
-export function createStatsRouter() {
+
+function shouldAnonymiseUsers(config, req) {
+  return config.anonymiseJobStatsUsers && config.guestUser && req.authUsername === config.guestUser;
+}
+
+export function createStatsRouter(config) {
   const router = Router();
   const queue = getStatsQueue();
 
@@ -30,12 +35,13 @@ export function createStatsRouter() {
         },
       };
       if (req.query.list) {
+        const anonymise = shouldAnonymiseUsers(config, req);
         const [activeRaw, waitingRaw] = await Promise.all([
           queue.getJobs(['active'], 0, 9999),
           queue.getJobs(['waiting'], 0, 9999),
         ]);
-        payload.active = (activeRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
-        payload.waiting = (waitingRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+        payload.active = (activeRaw || []).filter((j) => j != null).map((j) => toActivityJob(j, anonymise)).filter(Boolean);
+        payload.waiting = (waitingRaw || []).filter((j) => j != null).map((j) => toActivityJob(j, anonymise)).filter(Boolean);
       }
       res.json(payload);
     } catch (err) {
@@ -66,7 +72,7 @@ export function createStatsRouter() {
     }
   });
 
-  router.get('/stats/activity', async (_req, res) => {
+  router.get('/stats/activity', async (req, res) => {
     if (!queue) {
       return res.json({
         configured: false,
@@ -76,12 +82,13 @@ export function createStatsRouter() {
       });
     }
     try {
+      const anonymise = shouldAnonymiseUsers(config, req);
       const [activeRaw, waitingRaw] = await Promise.all([
         queue.getJobs(['active']),
         queue.getJobs(['waiting']),
       ]);
-      const active = (activeRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
-      const waiting = (waitingRaw || []).filter((j) => j != null).map(toActivityJob).filter(Boolean);
+      const active = (activeRaw || []).filter((j) => j != null).map((j) => toActivityJob(j, anonymise)).filter(Boolean);
+      const waiting = (waitingRaw || []).filter((j) => j != null).map((j) => toActivityJob(j, anonymise)).filter(Boolean);
       res.json({ configured: true, active, waiting });
     } catch (err) {
       console.error('Error fetching activity jobs:', err);
@@ -109,12 +116,22 @@ export function createStatsRouter() {
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
       const from = req.query.from ? new Date(req.query.from).getTime() : null;
       const to = req.query.to ? new Date(req.query.to).getTime() : null;
-      const userFilter = typeof req.query.user === 'string' && req.query.user.trim() ? req.query.user.trim() : null;
+      const anonymise = shouldAnonymiseUsers(config, req);
+      let userFilter = typeof req.query.user === 'string' && req.query.user.trim() ? req.query.user.trim() : null;
       const includeJobs = req.query.includeJobs === '1' || req.query.includeJobs === 'true';
 
       let jobs;
       let totalScanned = null;
       const timeRange = from != null && to != null && !Number.isNaN(from) && !Number.isNaN(to);
+
+      const jobMatchesUserFilter = (job, filter) => {
+        if (anonymise) {
+          const user = job?.data?.executionContext?.context?.user;
+          const label = user ? (user.name || user.email || user.id) : null;
+          return label && anonymiseUserName(String(label)) === filter;
+        }
+        return jobMatchesUser(job, filter);
+      };
 
       if (timeRange) {
         const chunkSize = Math.min(limit, 2000);
@@ -125,13 +142,13 @@ export function createStatsRouter() {
           const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
           if (ts == null) return false;
           if (ts < from || ts > to) return false;
-          return jobMatchesUser(job, userFilter);
+          return !userFilter || jobMatchesUserFilter(job, userFilter);
         });
       } else {
         const raw = await queue.getJobs(['completed'], offset, offset + limit - 1);
         jobs = (raw || []).filter((j) => j != null);
         if (userFilter) {
-          jobs = jobs.filter((job) => jobMatchesUser(job, userFilter));
+          jobs = jobs.filter((job) => jobMatchesUserFilter(job, userFilter));
         }
       }
 
@@ -148,18 +165,22 @@ export function createStatsRouter() {
         if (user) {
           userLabel = user.name || user.email || user.id || 'Unknown';
           if (typeof userLabel === 'string' && userLabel !== 'Unknown') {
-            byUser[userLabel] = (byUser[userLabel] || 0) + 1;
+            if (!anonymise) byUser[userLabel] = (byUser[userLabel] || 0) + 1;
           } else if (user.id) {
             userLabel = user.id;
-            byUser[user.id] = (byUser[user.id] || 0) + 1;
+            if (!anonymise) byUser[user.id] = (byUser[user.id] || 0) + 1;
           }
+        }
+        const keyForUser = anonymise && userLabel ? anonymiseUserName(String(userLabel)) : userLabel;
+        if (anonymise && keyForUser) {
+          byUser[keyForUser] = (byUser[keyForUser] || 0) + 1;
         }
         if (wfName && typeof wfName === 'string') {
           if (!byWorkflowName[wfName]) {
             byWorkflowName[wfName] = { count: 0, users: new Set() };
           }
           byWorkflowName[wfName].count += 1;
-          if (userLabel) byWorkflowName[wfName].users.add(String(userLabel));
+          if (keyForUser) byWorkflowName[wfName].users.add(String(keyForUser));
         }
         const serverUrl = workflow?.config?.comfyui_config?.serverUrl;
         if (serverUrl && typeof serverUrl === 'string') {
@@ -194,7 +215,7 @@ export function createStatsRouter() {
       }
       if (userFilter) payload.userFilter = userFilter;
       if (includeJobs) {
-        payload.jobs = jobs.map((j) => toActivityJob(j)).filter(Boolean);
+        payload.jobs = jobs.map((j) => toActivityJob(j, anonymise)).filter(Boolean);
       }
       res.json(payload);
     } catch (err) {
