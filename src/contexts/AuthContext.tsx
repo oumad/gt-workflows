@@ -7,6 +7,7 @@ export type AuthStatus = 'pending' | 'required' | 'ok'
 
 interface AuthContextValue {
   authStatus: AuthStatus
+  authEnabled: boolean
   setAuthStatus: (status: AuthStatus) => void
 }
 
@@ -24,6 +25,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('pending')
+  const [authEnabled, setAuthEnabled] = useState<boolean>(true)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -38,6 +40,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
         if (res.ok) {
           const data = await res.json().catch(() => ({}))
+          const enabled = data.authEnabled === true
+          setAuthEnabled(enabled)
+          if (!enabled) {
+            setAuthStatus('ok')
+            return
+          }
           if (data.sessionMaxTime != null) {
             const auth = getStoredAuth()
             if (auth) setStoredAuth(auth, data.sessionMaxTime)
@@ -72,7 +80,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   useEffect(() => {
-    if (authStatus !== 'ok') return
+    if (authStatus !== 'ok' || !authEnabled) return
     const tick = () => {
       if (isSessionExpired()) {
         clearStoredAuth()
@@ -90,8 +98,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         intervalRef.current = null
       }
     }
-  }, [authStatus])
+  }, [authStatus, authEnabled])
 
-  const value: AuthContextValue = { authStatus, setAuthStatus }
+  const value: AuthContextValue = { authStatus, authEnabled, setAuthStatus }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

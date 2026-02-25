@@ -11,3 +11,4 @@ services:
       - ./data:/app/data
     environment:
       - GT_WORKFLOWS_PATH=/app/data/gt-workflows
+      - GT_WF_AUTH=false

@@ -26,22 +26,25 @@ function AuthLoading(): React.ReactElement {
 }
 
 function LoginRoute(): React.ReactElement {
-  const { authStatus, setAuthStatus } = useAuth()
+  const { authStatus, authEnabled, setAuthStatus } = useAuth()
+  if (!authEnabled) return <Navigate to="/main" replace />
   if (authStatus === 'pending') return <AuthLoading />
   if (authStatus === 'ok') return <Navigate to="/main" replace />
   return <Login onSuccess={() => setAuthStatus('ok')} />
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }): React.ReactElement {
-  const { authStatus } = useAuth()
+  const { authStatus, authEnabled } = useAuth()
   const location = useLocation()
   if (authStatus === 'pending') return <AuthLoading />
+  if (!authEnabled) return <>{children}</>
   if (authStatus === 'required') return <Navigate to="/login" state={{ from: location }} replace />
   return <>{children}</>
 }
 
-function LogoutButton(): React.ReactElement {
-  const { setAuthStatus } = useAuth()
+function LogoutButton(): React.ReactElement | null {
+  const { authEnabled, setAuthStatus } = useAuth()
+  if (!authEnabled) return null
   const handleLogout = (): void => {
     clearStoredAuth()
     setAuthStatus('required')
@@ -110,10 +113,20 @@ function WorkflowCreateWithContext(): React.ReactElement {
   return <WorkflowCreate onCreated={loadWorkflows} />
 }
 
+function RootRedirect(): React.ReactElement {
+  const { authEnabled } = useAuth()
+  return <Navigate to={authEnabled ? '/login' : '/main'} replace />
+}
+
+function CatchAllRedirect(): React.ReactElement {
+  const { authEnabled } = useAuth()
+  return <Navigate to={authEnabled ? '/login' : '/main'} replace />
+}
+
 export function AppRoutes(): React.ReactElement {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route
         path="/main"
@@ -130,7 +143,7 @@ export function AppRoutes(): React.ReactElement {
         <Route path="activity" element={<Activity />} />
         <Route path="settings" element={<Settings />} />
       </Route>
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<CatchAllRedirect />} />
     </Routes>
   )
 }

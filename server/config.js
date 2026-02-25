@@ -9,9 +9,15 @@ const __dirname = dirname(__filename);
 // Load .env from project root
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
+const GT_WF_AUTH = process.env.GT_WF_AUTH;
 const AUTH_USER = process.env.GT_WF_AUTH_USER;
 const AUTH_PASS = process.env.GT_WF_AUTH_PASSWORD;
-const AUTH_ENABLED = typeof AUTH_USER === 'string' && AUTH_USER.length > 0 && typeof AUTH_PASS === 'string';
+// Auth is enabled only when GT_WF_AUTH is not explicitly "false" and credentials are set
+const AUTH_ENABLED =
+  GT_WF_AUTH !== 'false' &&
+  typeof AUTH_USER === 'string' &&
+  AUTH_USER.length > 0 &&
+  typeof AUTH_PASS === 'string';
 
 export const config = Object.freeze({
   port: 3011,

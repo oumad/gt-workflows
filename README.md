@@ -156,7 +156,7 @@ gt-workflows/
 
 ## API endpoints
 
-All `/api` (and `/data`) routes require HTTP Basic Auth when `GT_WF_AUTH_USER` and `GT_WF_AUTH_PASSWORD` are set.
+All `/api` (and `/data`) routes require HTTP Basic Auth when authentication is enabled (see [Authentication](#authentication)).
 
 - `GET /api/ping` – Auth check; returns `sessionMaxTime` when auth is enabled
 - `GET /api/workflows/list` – List all workflows
