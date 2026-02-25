@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List, UserX } from 'lucide-react'
+import { useAuth } from '@/features/auth'
 import { getQueueStats, getUsageStatsChunked, getUsageStatsTimeRangeChunked, getUsageStatsChunk } from '@/services/api/stats'
 import type { QueueCounts, WorkflowUsageItem, ServerUsageItem, UserActivityItem, ActivityJob } from '@/services/api/stats'
+import { anonymiseUserName } from '@/utils/anonymise'
 import './Dashboard.css'
 
 const JOBS_LIMIT_OPTIONS = [500, 1000, 2000, 3000, 5000] as const
@@ -44,6 +46,8 @@ function formatDuration(processedOn: number | undefined, finishedOn: number | un
 }
 
 export function Dashboard() {
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
   const [workflowUsage, setWorkflowUsage] = useState<WorkflowUsageItem[]>([])
   const [serverUsage, setServerUsage] = useState<ServerUsageItem[]>([])
@@ -63,6 +67,7 @@ export function Dashboard() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [anonymiseUsers, setAnonymiseUsers] = useState(false)
 
   const loadStats = useCallback(async () => {
     setLoading(true)
@@ -180,6 +185,15 @@ export function Dashboard() {
   const maxWorkflow = workflowUsage.length ? Math.max(...workflowUsage.map((u) => u.count)) : 1
   const maxServer = serverUsage.length ? Math.max(...serverUsage.map((u) => u.count)) : 1
   const maxUser = userActivity.length ? Math.max(...userActivity.map((u) => u.count)) : 1
+
+  const getDisplayName = useCallback(
+    (userId: string | null): string => {
+      if (!userId) return 'All'
+      if (!anonymiseUsers) return userId
+      return anonymiseUserName(userId)
+    },
+    [anonymiseUsers]
+  )
 
   const sampleSubtitle =
     timeRangeLabel != null
@@ -313,6 +327,18 @@ export function Dashboard() {
             <div className="dashboard-sidebar-header">
               <Users size={18} />
               <span>Who&apos;s using</span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="dashboard-anonymise-btn"
+                  onClick={() => setAnonymiseUsers((a) => !a)}
+                  title={anonymiseUsers ? 'Show real user names' : 'Anonymise user names'}
+                  aria-pressed={anonymiseUsers}
+                >
+                  <UserX size={14} />
+                  {anonymiseUsers ? 'Show names' : 'Anonymise'}
+                </button>
+              )}
               {selectedUser && (
                 <button
                   type="button"
@@ -332,7 +358,7 @@ export function Dashboard() {
             <div className="dashboard-who-using-body">
               {selectedUser && (
                 <div className="dashboard-viewing-badge">
-                  Viewing: <strong>{selectedUser}</strong>
+                  Viewing: <strong>{getDisplayName(selectedUser)}</strong>
                 </div>
               )}
               {userActivity.length === 0 ? (
@@ -345,9 +371,11 @@ export function Dashboard() {
                         type="button"
                         className={`dashboard-user-btn ${selectedUser === item.user ? 'selected' : ''}`}
                         onClick={() => setSelectedUser(item.user)}
-                        title="See workflows used by this user"
+                        title={anonymiseUsers ? 'See workflows used by this user' : `See workflows used by ${item.user}`}
                       >
-                        <span className="dashboard-user-name" title={item.user}>{item.user}{index === 0 ? ' 🏆' : ''}</span>
+                        <span className="dashboard-user-name" title={!anonymiseUsers ? item.user : undefined}>
+                          {getDisplayName(item.user)}{index === 0 ? ' 🏆' : ''}
+                        </span>
                         <span className="dashboard-user-count">{item.count}</span>
                       </button>
                     </li>
@@ -361,7 +389,7 @@ export function Dashboard() {
           <section className="dashboard-workflows">
             <h2 className="dashboard-workflows-title">
               {selectedUser ? (
-                <>Workflows used by <strong>{selectedUser}</strong></>
+                <>Workflows used by <strong>{getDisplayName(selectedUser)}</strong></>
               ) : (
                 'Most used workflows'
               )}
@@ -370,12 +398,12 @@ export function Dashboard() {
               <div className="dashboard-workflows-loading" aria-busy="true">
                 <span className="dashboard-workflows-loading-spinner" />
                 <span>
-                  {selectedUser ? `Loading workflows for ${selectedUser}…` : 'Loading workflows…'}
+                  {selectedUser ? `Loading workflows for ${getDisplayName(selectedUser)}…` : 'Loading workflows…'}
                 </span>
               </div>
             ) : workflowUsage.length === 0 ? (
               <p className="dashboard-empty">
-                {selectedUser ? `No workflows in range for ${selectedUser}.` : 'No workflow data in the selected range.'}
+                {selectedUser ? `No workflows in range for ${getDisplayName(selectedUser)}.` : 'No workflow data in the selected range.'}
               </p>
             ) : (
               <div className="dashboard-workflow-list">

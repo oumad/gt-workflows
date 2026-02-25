@@ -182,7 +182,7 @@
 }
 
 .workflow-category {
-  margin-bottom: 0;
+  margin-bottom: 1.25rem;
 }
 
 .workflow-category-header {
@@ -193,7 +193,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
@@ -231,7 +231,7 @@
 
 .workflow-category-content {
   margin-top: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   animation: slideDown 0.2s ease-out;
 }
 
@@ -249,14 +249,14 @@
 .category-separator {
   height: 1px;
   background: var(--border);
-  margin: 1rem 0;
+  margin: 1.25rem 0;
   opacity: 0.5;
 }
 
 .workflow-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .workflow-card-wrapper {

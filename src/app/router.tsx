@@ -49,6 +49,12 @@ function RequireAdmin({ children }: { children: React.ReactNode }): React.ReactE
   return <>{children}</>
 }
 
+/** Forwards parent outlet context to nested workflow routes so they can use workflows/loading/error/loadWorkflows. */
+function WorkflowsOutlet(): React.ReactElement {
+  const context = useOutletContext<MainOutletContext>()
+  return <Outlet context={context} />
+}
+
 const FIRST_LOGIN_KEY = 'gt-workflows-first-login'
 
 function LogoutButton(): React.ReactElement | null {
@@ -182,7 +188,7 @@ export function AppRoutes(): React.ReactElement {
           </RequireAuth>
         }
       >
-        <Route path="workflows" element={<RequireAdmin><Outlet /></RequireAdmin>}>
+        <Route path="workflows" element={<RequireAdmin><WorkflowsOutlet /></RequireAdmin>}>
           <Route index element={<WorkflowListFromContext />} />
           <Route path="new" element={<WorkflowCreateWithContext />} />
           <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />

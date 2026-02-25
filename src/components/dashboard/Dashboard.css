@@ -208,8 +208,35 @@
   margin-bottom: 0.75rem;
 }
 
-.dashboard-clear-user {
+.dashboard-anonymise-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-left: auto;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.dashboard-anonymise-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.dashboard-anonymise-btn[aria-pressed="true"] {
+  background: rgba(107, 155, 209, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dashboard-clear-user {
   display: inline-flex;
   padding: 0.25rem;
   background: transparent;
