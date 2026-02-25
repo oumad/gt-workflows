@@ -87,32 +87,21 @@ export function Settings() {
       </div>
 
       <div className="settings-content">
-        <div className="settings-section">
+        <div className="settings-section settings-section-health">
           <div className="section-header">
-            <Activity size={20} />
+            <Activity size={20} aria-hidden />
             <h2>Server Health Checks</h2>
           </div>
+          <p className="section-description">
+            Configure ComfyUI servers to monitor. Health status is checked on demand from the Workflows tab via &quot;Check Health&quot;.
+          </p>
 
-          <div className="settings-group">
-            <div className="setting-item">
-              <label>
-                <span className="label-text">Health Checks</span>
-                <span className="label-description">
-                  Health checks are now manual only. Use the "Check Health" button in the workflow list to check server status on demand.
-                </span>
-              </label>
-              <div className="setting-control">
-                <small className="setting-hint">
-                  Manual checks improve performance and reduce server load.
-                </small>
-              </div>
-            </div>
-
-            <div className="setting-item setting-item-full">
+          <div className="settings-group health-panel">
+            <div className="setting-item setting-item-full health-servers-block">
               <label>
                 <span className="label-text">Monitored Servers</span>
                 <span className="label-description">
-                  List of ComfyUI servers to monitor. Workflows will show health status based on these servers.
+                  Add ComfyUI server URLs. Workflow cards will show connection status when you run a health check.
                 </span>
               </label>
               <div className="setting-control servers-list">
@@ -184,9 +173,9 @@ export function Settings() {
                   </div>
                 )}
                 {settings.monitoredServers.length === 0 && (
-                  <small className="setting-hint">
-                    No servers configured. Add at least one server to enable health checks.
-                  </small>
+                  <p className="health-empty-hint">
+                    No servers configured. Add at least one ComfyUI server URL above to use health checks from the Workflows tab.
+                  </p>
                 )}
               </div>
             </div>

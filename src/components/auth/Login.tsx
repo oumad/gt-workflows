@@ -1,6 +1,6 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { Lock } from 'lucide-react'
-import { setStoredAuth, clearStoredAuth, fetchWithAuth } from '@/utils/auth'
+import { setStoredAuth, clearStoredAuth, fetchWithAuth, getUnauthorizedFlag, clearUnauthorizedFlag } from '@/utils/auth'
 import './Login.css'
 
 interface LoginProps {
@@ -11,7 +11,15 @@ export function Login({ onSuccess }: LoginProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [unauthorizedMessage, setUnauthorizedMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (getUnauthorizedFlag()) {
+      setUnauthorizedMessage('Your session has expired or you are not authorized. Please sign in again.')
+      clearUnauthorizedFlag()
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -32,6 +40,9 @@ export function Login({ onSuccess }: LoginProps) {
       }
       const data = await res.json().catch(() => ({}))
       if (data.sessionMaxTime != null) setStoredAuth(b64, data.sessionMaxTime)
+      try {
+        sessionStorage.setItem('gt-workflows-first-login', '1')
+      } catch {}
       onSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -50,6 +61,11 @@ export function Login({ onSuccess }: LoginProps) {
           <p className="login-subtitle">Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
+          {unauthorizedMessage && (
+            <div className="login-unauthorized" role="status">
+              {unauthorizedMessage}
+            </div>
+          )}
           {error && (
             <div className="login-error" role="alert">
               {error}

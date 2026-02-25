@@ -1,0 +1,35 @@
+services:
+  gt-workflows:
+    container_name: gt-workflows-container
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "3011:3011"
+      - "3010:3010"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - GT_WORKFLOWS_PATH=/app/data/gt-workflows
+      - GT_WF_AUTH=true
+      - GT_WF_ADMIN_USER=admin
+      - GT_WF_ADMIN_PASSWORD=admin
+      - GT_WF_GUEST_USER=guest
+      - GT_WF_GUEST_PASSWORD=guest
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - gt-workflows-network
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - gt-workflows-network
+  
+networks:
+  gt-workflows-network:
+    driver: bridge

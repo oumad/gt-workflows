@@ -62,6 +62,41 @@
   margin: 0;
 }
 
+.section-description {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 1.5rem;
+  max-width: 56ch;
+}
+
+.settings-section-health .section-description {
+  margin-bottom: 1rem;
+}
+
+.health-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.health-servers-block {
+  background: transparent;
+  padding: 0;
+}
+
+.health-servers-block .label-text {
+  font-size: 1rem;
+}
+
+.health-empty-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0;
+}
+
 .settings-group {
   display: flex;
   flex-direction: column;

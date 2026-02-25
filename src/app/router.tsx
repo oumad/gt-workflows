@@ -1,3 +1,4 @@
+import React from 'react'
 import { Routes, Route, Link, Navigate, useLocation, Outlet, useOutletContext } from 'react-router-dom'
 import type { Workflow } from '@/types'
 import { LogOut } from 'lucide-react'
@@ -42,8 +43,29 @@ function RequireAuth({ children }: { children: React.ReactNode }): React.ReactEl
   return <>{children}</>
 }
 
+const FIRST_LOGIN_KEY = 'gt-workflows-first-login'
+
 function LogoutButton(): React.ReactElement | null {
   const { authEnabled, username, setAuthStatus } = useAuth()
+  const [showWelcome, setShowWelcome] = React.useState(() => {
+    try {
+      return sessionStorage.getItem(FIRST_LOGIN_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  React.useEffect(() => {
+    if (!showWelcome || !username) return
+    const t = setTimeout(() => {
+      try {
+        sessionStorage.removeItem(FIRST_LOGIN_KEY)
+      } catch {}
+      setShowWelcome(false)
+    }, 4000)
+    return () => clearTimeout(t)
+  }, [showWelcome, username])
+
   if (!authEnabled) return null
   const handleLogout = (): void => {
     clearStoredAuth()
@@ -53,7 +75,7 @@ function LogoutButton(): React.ReactElement | null {
     <div className="header-auth">
       {username != null && username !== '' && (
         <span className="header-auth-user" aria-label={`Logged in as ${username}`}>
-          welcome, {username}
+          {showWelcome ? `Welcome, ${username}!` : `Welcome, ${username}`}
         </span>
       )}
       <button

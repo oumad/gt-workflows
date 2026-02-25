@@ -66,6 +66,7 @@ export function clearStoredAuth(): void {
 }
 
 const AUTH_REQUIRED_EVENT = 'gt-workflows-authRequired';
+const UNAUTHORIZED_FLAG_KEY = 'gt-workflows-unauthorized';
 
 export function onAuthRequired(callback: () => void): () => void {
   const handler = () => callback();
@@ -73,7 +74,24 @@ export function onAuthRequired(callback: () => void): () => void {
   return () => window.removeEventListener(AUTH_REQUIRED_EVENT, handler);
 }
 
+export function getUnauthorizedFlag(): boolean {
+  try {
+    return sessionStorage.getItem(UNAUTHORIZED_FLAG_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearUnauthorizedFlag(): void {
+  try {
+    sessionStorage.removeItem(UNAUTHORIZED_FLAG_KEY);
+  } catch {}
+}
+
 function dispatchAuthRequired(): void {
+  try {
+    sessionStorage.setItem(UNAUTHORIZED_FLAG_KEY, '1');
+  } catch {}
   window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
 }
 

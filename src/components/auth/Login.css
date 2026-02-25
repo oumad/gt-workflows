@@ -46,6 +46,15 @@
   gap: 1rem;
 }
 
+.login-unauthorized {
+  padding: 0.5rem 0.75rem;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
 .login-error {
   padding: 0.5rem 0.75rem;
   background: rgba(239, 68, 68, 0.15);

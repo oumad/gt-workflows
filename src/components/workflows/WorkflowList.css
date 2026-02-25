@@ -6,15 +6,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
-.header-left {
+.workflow-list .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .selection-mode-badge {
@@ -29,7 +29,7 @@
 }
 
 .list-header h2 {
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -49,7 +49,7 @@
 
 .search-icon {
   position: absolute;
-  left: 12px;
+  left: 10px;
   color: var(--text-muted);
   pointer-events: none;
   z-index: 1;
@@ -57,11 +57,11 @@
 
 .search-input {
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
   color: var(--text-primary);
   transition: all 0.2s;
 }
@@ -69,7 +69,7 @@
 .search-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(107, 155, 209, 0.15);
 }
 
 .search-input::placeholder {
@@ -140,7 +140,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 2.5rem 1.5rem;
   text-align: center;
   color: var(--text-secondary);
 }
@@ -189,11 +189,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
-  background: var(--bg-primary);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
@@ -207,9 +207,9 @@
 .workflow-category-title {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: var(--text-primary);
 }
 
@@ -219,9 +219,9 @@
 
 .category-count {
   font-weight: 400;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
-  margin-left: 0.25rem;
+  margin-left: 0.2rem;
 }
 
 .workflow-category-toggle {
@@ -230,7 +230,7 @@
 }
 
 .workflow-category-content {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   animation: slideDown 0.2s ease-out;
 }
 
@@ -248,14 +248,14 @@
 .category-separator {
   height: 1px;
   background: var(--border);
-  margin: 2rem 0;
+  margin: 1rem 0;
   opacity: 0.5;
 }
 
 .workflow-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.75rem;
 }
 
 .workflow-card-wrapper {
@@ -311,25 +311,25 @@
 
 .workflow-card-wrapper.selected .workflow-card {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1.5px rgba(59, 130, 246, 0.3);
-  background: rgba(59, 130, 246, 0.03);
+  box-shadow: 0 0 0 1.5px rgba(107, 155, 209, 0.25);
+  background: rgba(107, 155, 209, 0.06);
 }
 
 .selection-indicator {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
+  top: 0.35rem;
+  right: 0.35rem;
   z-index: 20;
-  background: rgba(59, 130, 246, 0.9);
+  background: var(--accent);
   color: white;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  border: 1.5px solid var(--bg-secondary);
+  box-shadow: 0 1px 3px var(--shadow);
+  border: 1px solid var(--bg-secondary);
   backdrop-filter: blur(4px);
 }
 
@@ -342,25 +342,25 @@
 .workflow-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
   text-decoration: none;
   color: inherit;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
   position: relative;
 }
 
 .edit-mode .workflow-card {
-  padding-left: 2.5rem; /* Make room for drag handle in edit mode */
+  padding-left: 2.25rem; /* Make room for drag handle in edit mode */
 }
 
 .workflow-card:hover {
   border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px var(--shadow);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
 /* Action buttons container: flex so spacing is consistent and no gap when logs button is hidden */
@@ -441,8 +441,8 @@
 .workflow-quick-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
   background: var(--bg-primary);
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -451,8 +451,8 @@
 .quick-info-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: 0.4rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
@@ -554,18 +554,18 @@
 .workflow-card-header {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.5rem;
   position: relative;
   padding-right: 6.5rem; /* Make room for duplicate and download buttons */
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
   padding-left: 0;
   padding-top: 0;
 }
 
 .workflow-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
   background: var(--bg-tertiary);
@@ -610,7 +610,7 @@
 }
 
 .workflow-title-section h3 {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -624,8 +624,8 @@
   -webkit-box-orient: vertical;
   line-height: 1.3;
   min-width: 0;
-  width: 100%; /* Take full width of parent */
-  align-self: flex-start; /* Align to start */
+  width: 100%;
+  align-self: flex-start;
 }
 
 .workflow-badge {
@@ -733,20 +733,21 @@
   position: sticky;
   bottom: 0;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-  padding: 1rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.625rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 2rem;
+  gap: 0.75rem;
+  margin-top: 1rem;
   z-index: 100;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px var(--shadow);
 }
 
 .edit-mode-info {
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .edit-mode-actions {
