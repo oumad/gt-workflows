@@ -8,6 +8,7 @@ export type AuthStatus = 'pending' | 'required' | 'ok'
 interface AuthContextValue {
   authStatus: AuthStatus
   authEnabled: boolean
+  username: string | null
   setAuthStatus: (status: AuthStatus) => void
 }
 
@@ -26,6 +27,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('pending')
   const [authEnabled, setAuthEnabled] = useState<boolean>(true)
+  const [username, setUsername] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const res = await fetchWithAuth('/api/ping')
         if (cancelled) return
         if (res.status === 401) {
+          setUsername(null)
           setAuthStatus('required')
           return
         }
@@ -42,6 +45,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const data = await res.json().catch(() => ({}))
           const enabled = data.authEnabled === true
           setAuthEnabled(enabled)
+          if (typeof data.username === 'string') setUsername(data.username)
           if (!enabled) {
             setAuthStatus('ok')
             return
@@ -100,6 +104,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [authStatus, authEnabled])
 
-  const value: AuthContextValue = { authStatus, authEnabled, setAuthStatus }
+  const setAuthStatusAndClearUser = useCallback((status: AuthStatus) => {
+    setAuthStatus(status)
+    if (status === 'required') setUsername(null)
+  }, [])
+
+  const value: AuthContextValue = { authStatus, authEnabled, username, setAuthStatus: setAuthStatusAndClearUser }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

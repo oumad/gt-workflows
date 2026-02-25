@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
+import { securityHeadersMiddleware } from './middleware/security.js';
 import { createBasicAuthMiddleware } from './middleware/auth.js';
 import { createUploadMiddleware } from './middleware/upload.js';
 import { readParamsJson, findWorkflowJson } from './services/workflowFs.js';
@@ -14,6 +15,7 @@ export function createApp() {
   const upload = createUploadMiddleware(config.workflowsPath);
   const basicAuth = createBasicAuthMiddleware(config);
 
+  app.use(securityHeadersMiddleware);
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 

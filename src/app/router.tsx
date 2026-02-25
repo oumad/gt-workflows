@@ -43,22 +43,29 @@ function RequireAuth({ children }: { children: React.ReactNode }): React.ReactEl
 }
 
 function LogoutButton(): React.ReactElement | null {
-  const { authEnabled, setAuthStatus } = useAuth()
+  const { authEnabled, username, setAuthStatus } = useAuth()
   if (!authEnabled) return null
   const handleLogout = (): void => {
     clearStoredAuth()
     setAuthStatus('required')
   }
   return (
-    <button
-      type="button"
-      onClick={handleLogout}
-      className="logout-btn"
-      title="Disconnect"
-      aria-label="Disconnect"
-    >
-      <LogOut size={20} />
-    </button>
+    <div className="header-auth">
+      {username != null && username !== '' && (
+        <span className="header-auth-user" aria-label={`Logged in as ${username}`}>
+          welcome, {username}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="logout-btn"
+        title="Disconnect"
+        aria-label="Disconnect"
+      >
+        <LogOut size={20} />
+      </button>
+    </div>
   )
 }
 

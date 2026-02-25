@@ -22,8 +22,9 @@ export function setStoredAuth(b64Basic: string, sessionMaxTimeSeconds?: number):
     if (sessionMaxTimeSeconds != null && sessionMaxTimeSeconds > 0) {
       sessionStorage.setItem(SESSION_MAX_KEY, String(sessionMaxTimeSeconds));
     }
-  } catch (e) {
-    console.error('Failed to store auth', e);
+  } catch {
+    // Do not log the error object to avoid any risk of exposing credentials
+    console.error('Failed to store auth');
   }
 }
 

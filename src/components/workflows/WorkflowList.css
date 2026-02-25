@@ -363,12 +363,29 @@
   box-shadow: 0 4px 12px var(--shadow);
 }
 
+/* Action buttons container: flex so spacing is consistent and no gap when logs button is hidden */
+.workflow-card-actions {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.workflow-card-actions .quick-duplicate-btn,
+.workflow-card-actions .quick-download-btn,
+.workflow-card-actions .quick-logs-btn {
+  pointer-events: auto;
+}
+
 .quick-edit-btn,
 .quick-download-btn,
 .quick-duplicate-btn,
 .quick-logs-btn {
-  position: absolute;
-  top: 0.75rem;
+  position: relative;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -381,25 +398,12 @@
   cursor: pointer;
   opacity: 0;
   transition: all 0.2s;
-  z-index: 20;
-  pointer-events: auto;
+  flex-shrink: 0;
 }
 
-.quick-duplicate-btn {
-  right: 5.75rem; /* to the left of logs + download */
-}
-
-.quick-logs-btn {
-  right: 3.5rem; /* next to download button */
-}
-
-.quick-download-btn {
-  right: 0.75rem;
-}
-
-.workflow-card-wrapper:not(.selection-mode):hover .quick-download-btn,
-.workflow-card-wrapper:not(.selection-mode):hover .quick-duplicate-btn,
-.workflow-card-wrapper:not(.selection-mode):hover .quick-logs-btn {
+.workflow-card-wrapper:not(.selection-mode):hover .workflow-card-actions .quick-download-btn,
+.workflow-card-wrapper:not(.selection-mode):hover .workflow-card-actions .quick-duplicate-btn,
+.workflow-card-wrapper:not(.selection-mode):hover .workflow-card-actions .quick-logs-btn {
   opacity: 1;
 }
 
@@ -425,7 +429,8 @@
   border-color: var(--border);
 }
 
-/* When selection indicator is present, hide quick action buttons */
+/* When selection indicator is present, hide quick action buttons and their container */
+.workflow-card-wrapper.selection-mode .workflow-card-actions,
 .workflow-card-wrapper.selection-mode .quick-edit-btn,
 .workflow-card-wrapper.selection-mode .quick-download-btn,
 .workflow-card-wrapper.selection-mode .quick-duplicate-btn,

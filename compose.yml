@@ -11,4 +11,8 @@ services:
       - ./data:/app/data
     environment:
       - GT_WORKFLOWS_PATH=/app/data/gt-workflows
-      - GT_WF_AUTH=false
+      - GT_WF_AUTH=true
+      - GT_WF_ADMIN_USER=admin
+      - GT_WF_ADMIN_PASSWORD=admin
+      - GT_WF_GUEST_USER=guest
+      - GT_WF_GUEST_PASSWORD=guest

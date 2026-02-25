@@ -77,16 +77,25 @@ The path can be absolute or relative. If not set, it defaults to `../data/gt-wor
 
 #### Authentication
 
-To protect the app with a login screen and HTTP Basic Auth, set both:
+To protect the app with a login screen and HTTP Basic Auth, set at least one credential pair (admin and/or guest):
 
 ```env
-GT_WF_AUTH_USER=admin
-GT_WF_AUTH_PASSWORD=your-secure-password
+GT_WF_ADMIN_USER=admin
+GT_WF_ADMIN_PASSWORD=your-secure-password
+# Optional: guest account (logged-in username is shown next to the logout button)
+GT_WF_GUEST_USER=guest
+GT_WF_GUEST_PASSWORD=guest-password
 ```
 
-- The app shows the login page first (`/` redirects to `/login`). After login, the main UI is at `/main`.
-- All `/api` and `/data` requests require this username and password.
+- The app shows the login page first (`/` redirects to `/login`). After login, the main UI is at `/main`. The logged-in username is shown next to the logout button.
+- All `/api` and `/data` requests require valid credentials (admin or guest).
 - Optional: `SESSION_MAX_TIME` (seconds) logs out the user after that much inactivity (default: 86400 = 24 hours). Only applies when auth is enabled.
+
+#### Security (credentials and MITM)
+
+- **Use HTTPS in production.** Credentials are sent in the `Authorization` header with every request. Over HTTP they are visible to anyone on the network (MITM). Serve the app and API behind a reverse proxy with TLS (e.g. nginx, Caddy) and use HTTPS URLs.
+- **Credentials are never exposed in responses or logs.** The server does not return passwords or tokens in JSON, does not log the `Authorization` header or any credential, and uses security headers (e.g. `X-Content-Type-Options`, `X-Frame-Options`). If you add request logging, redact sensitive headers (see `server/middleware/security.js`).
+- **Client:** The auth token is kept in `sessionStorage` and sent only in the request header; it is never put in URLs or response bodies.
 
 #### Job stats (optional)
 

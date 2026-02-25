@@ -10,14 +10,19 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const GT_WF_AUTH = process.env.GT_WF_AUTH;
-const AUTH_USER = process.env.GT_WF_AUTH_USER;
-const AUTH_PASS = process.env.GT_WF_AUTH_PASSWORD;
-// Auth is enabled only when GT_WF_AUTH is not explicitly "false" and credentials are set
-const AUTH_ENABLED =
-  GT_WF_AUTH !== 'false' &&
-  typeof AUTH_USER === 'string' &&
-  AUTH_USER.length > 0 &&
-  typeof AUTH_PASS === 'string';
+const ADMIN_USER = process.env.GT_WF_ADMIN_USER;
+const ADMIN_PASSWORD = process.env.GT_WF_ADMIN_PASSWORD;
+const GUEST_USER = process.env.GT_WF_GUEST_USER;
+const GUEST_PASSWORD = process.env.GT_WF_GUEST_PASSWORD;
+
+const hasAdmin = typeof ADMIN_USER === 'string' && ADMIN_USER.length > 0 && typeof ADMIN_PASSWORD === 'string';
+const hasGuest = typeof GUEST_USER === 'string' && GUEST_USER.length > 0 && typeof GUEST_PASSWORD === 'string';
+const AUTH_ENABLED = GT_WF_AUTH !== 'false' && (hasAdmin || hasGuest);
+
+/** List of { user, pass } pairs for validation; used to set req.authUsername to the matched username. */
+const AUTH_CREDENTIALS = [];
+if (hasAdmin) AUTH_CREDENTIALS.push({ user: ADMIN_USER, pass: ADMIN_PASSWORD });
+if (hasGuest) AUTH_CREDENTIALS.push({ user: GUEST_USER, pass: GUEST_PASSWORD });
 
 export const config = Object.freeze({
   port: 3011,
@@ -29,8 +34,7 @@ export const config = Object.freeze({
   bullQueueName: process.env.BULL_QUEUE_NAME || 'workflow-studio-comfyui-process-queue',
   auth: {
     enabled: AUTH_ENABLED,
-    user: AUTH_USER,
-    pass: AUTH_PASS,
+    credentials: AUTH_CREDENTIALS,
   },
   sessionMaxTime: Math.max(60, parseInt(process.env.SESSION_MAX_TIME, 10) || 86400),
 });

@@ -1,11 +1,15 @@
 /**
  * HTTP Basic Auth middleware. Does not send WWW-Authenticate so the browser never shows a native Basic Auth popup.
+ * Sets req.authUsername to the matched username so routes can return who is logged in.
+ *
+ * SECURITY: Never log req.headers.authorization, authHeader, decoded user/pass, or any credential.
+ * Credentials must only be compared in memory and never appear in responses, logs, or errors.
  */
 export function createBasicAuthMiddleware({ auth }) {
   if (!auth.enabled) {
     return (_req, _res, next) => next();
   }
-  const { user: AUTH_USER, pass: AUTH_PASS } = auth;
+  const credentials = auth.credentials || [];
 
   return function basicAuthMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -18,9 +22,11 @@ export function createBasicAuthMiddleware({ auth }) {
       const colon = decoded.indexOf(':');
       const user = colon >= 0 ? decoded.slice(0, colon) : decoded;
       const pass = colon >= 0 ? decoded.slice(colon + 1) : '';
-      if (user !== AUTH_USER || pass !== AUTH_PASS) {
+      const matched = credentials.find((c) => c.user === user && c.pass === pass);
+      if (!matched) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
+      req.authUsername = matched.user;
     } catch {
       return res.status(401).json({ error: 'Authentication required' });
     }

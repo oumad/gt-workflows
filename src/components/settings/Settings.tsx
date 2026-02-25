@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Save, Settings as SettingsIcon, Activity, Plus, X, Server, ListPlus, FileText } from 'lucide-react'
+import { Save, Settings as SettingsIcon, Activity, Plus, X, Server, ListPlus, FileText } from 'lucide-react'
 import { getSettings, saveSettings } from '@/utils/settings'
 import type { AppSettings } from '@/utils/settings'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
@@ -81,10 +80,6 @@ export function Settings() {
   return (
     <div className="settings-page">
       <div className="settings-header">
-        <Link to="/main" className="back-link">
-          <ArrowLeft size={20} />
-          Back to Workflows
-        </Link>
         <h1>
           <SettingsIcon size={24} />
           Settings

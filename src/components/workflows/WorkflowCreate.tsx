@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { createWorkflow } from '@/services/api/workflows'
 import type { WorkflowParams } from '@/types'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import './WorkflowCreate.css'
 
 interface WorkflowCreateProps {
@@ -63,9 +63,6 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
   return (
     <div className="workflow-create">
       <div className="create-header">
-        <Link to="/main" className="btn btn-secondary">
-          <ArrowLeft size={16} /> Back
-        </Link>
         <h1>Create New Workflow</h1>
       </div>
 

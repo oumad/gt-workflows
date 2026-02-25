@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { Workflow } from '@/types'
 import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText } from 'lucide-react'
@@ -303,7 +303,7 @@ function SortableWorkflowCard({
         </div>
       </Link>
       {!selectionMode && (
-        <>
+        <div className="workflow-card-actions">
           <button
             className="quick-duplicate-btn"
             onClick={(e) => {
@@ -346,7 +346,7 @@ function SortableWorkflowCard({
           >
             <Download size={16} />
           </button>
-        </>
+        </div>
       )}
     </div>
   )
@@ -480,12 +480,14 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     return sortedCategories
   }, [filteredWorkflows, localWorkflows, isReordering])
 
-  // Expand all categories by default on first load
+  // Expand all categories only on first load (so collapsing all stays collapsed)
+  const hasInitialExpandDone = useRef(false)
   useEffect(() => {
-    if (expandedCategories.size === 0 && categorizedWorkflows.length > 0) {
+    if (categorizedWorkflows.length > 0 && !hasInitialExpandDone.current) {
+      hasInitialExpandDone.current = true
       setExpandedCategories(new Set(categorizedWorkflows.map(([category]) => category)))
     }
-  }, [categorizedWorkflows, expandedCategories.size])
+  }, [categorizedWorkflows])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {

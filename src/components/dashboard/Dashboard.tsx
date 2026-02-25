@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List } from 'lucide-react'
 import { getQueueStats, getUsageStatsChunked, getUsageStatsTimeRangeChunked, getUsageStatsChunk } from '@/services/api/stats'
 import type { QueueCounts, WorkflowUsageItem, ServerUsageItem, UserActivityItem, ActivityJob } from '@/services/api/stats'
 import './Dashboard.css'
@@ -192,10 +191,6 @@ export function Dashboard() {
   return (
     <div className="dashboard-page">
       <header className="dashboard-header">
-        <Link to="/main" className="back-link">
-          <ArrowLeft size={20} />
-          Back to Workflows
-        </Link>
         <div className="dashboard-toolbar">
           <h1 className="dashboard-title">
             <BarChart3 size={26} />
