@@ -26,8 +26,8 @@ export function getSettings(): AppSettings {
           : DEFAULT_SETTINGS.monitoredServers,
       };
     }
-  } catch (error) {
-    console.error('Error loading settings:', error);
+  } catch {
+    // Fall back to defaults
   }
   return DEFAULT_SETTINGS;
 }
@@ -37,16 +37,16 @@ export function saveSettings(settings: Partial<AppSettings>): void {
     const current = getSettings();
     const updated = { ...current, ...settings };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-  } catch (error) {
-    console.error('Error saving settings:', error);
+  } catch {
+    // Ignore storage errors
   }
 }
 
 export function resetSettings(): void {
   try {
     localStorage.removeItem(SETTINGS_KEY);
-  } catch (error) {
-    console.error('Error resetting settings:', error);
+  } catch {
+    // Ignore storage errors
   }
 }
 

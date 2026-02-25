@@ -13,26 +13,31 @@ alwaysApply: true
 - **Prefer composition over inheritance**: Compose small components and hooks; avoid class hierarchies.
 - **Pure functions where possible**: Same inputs → same outputs; side effects only in dedicated layers (hooks, API layer).
 
-## Project structure (target)
+## Project structure (current)
 
 ```
 src/
-  app/           # router, providers
-  components/
-    ui/          # generic UI building blocks
-    layout/      # layout components
-  features/      # feature-based modules
-    <feature>/
-      components/
-      hooks/
-      services/
-      types.ts
-  hooks/         # shared hooks
+  app/              # router.tsx (routes), providers.tsx (Auth + Router)
+  components/       # UI components in subfolders
+    ui/              # AuthImage (generic)
+    auth/            # Login, AuthGuard
+    modals/          # All *Modal components
+    workflows/       # WorkflowList, WorkflowDetail, WorkflowCreate, NodeManager, NodeParserEditor
+    settings/       # Settings
+    dashboard/       # Dashboard
+    activity/       # Activity
+  features/         # feature-based public API (index.ts re-exports)
+    auth/           # AuthProvider, useAuth, Login, AuthGuard, clearStoredAuth
+    workflows/      # WorkflowList, WorkflowDetail, WorkflowCreate, useWorkflows
+    settings/       # Settings
+    activity/       # Activity
+    dashboard/      # Dashboard
+  hooks/            # shared hooks (useWorkflows, useServerHealthCheck)
   services/
-    api/         # HTTP client, API modules
-  lib/
-  types/
-  utils/
+    api/            # workflows, servers, stats (HTTP layer)
+  lib/              # shared helpers
+  types/            # shared types (index.ts)
+  utils/            # auth, settings, imageCompression
 ```
 
 - **Feature-based**: Each feature is self-contained (components, hooks, services, types).

@@ -1,29 +1,15 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchWithAuth, onAuthRequired, isSessionExpired, clearStoredAuth, getStoredAuth, setStoredAuth } from '@/utils/auth'
+import { Login } from './Login'
 
-const SESSION_CHECK_INTERVAL_MS = 60_000
+const SESSION_CHECK_INTERVAL_MS = 60_000 // 1 minute
 
-export type AuthStatus = 'pending' | 'required' | 'ok'
-
-interface AuthContextValue {
-  authStatus: AuthStatus
-  setAuthStatus: (status: AuthStatus) => void
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
-}
-
-interface AuthProviderProps {
+interface AuthGuardProps {
   children: React.ReactNode
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [authStatus, setAuthStatus] = useState<AuthStatus>('pending')
+export default function AuthGuard({ children }: AuthGuardProps) {
+  const [authStatus, setAuthStatus] = useState<'pending' | 'required' | 'ok'>('pending')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -92,6 +78,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [authStatus])
 
-  const value: AuthContextValue = { authStatus, setAuthStatus }
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  if (authStatus === 'pending') {
+    return (
+      <div className="auth-guard-loading">
+        <span className="auth-guard-spinner" />
+        <span>Checking authentication…</span>
+      </div>
+    )
+  }
+
+  if (authStatus === 'required') {
+    return <Login onSuccess={() => setAuthStatus('ok')} />
+  }
+
+  return <>{children}</>
 }
