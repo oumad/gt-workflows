@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Type-check the whole project
+yarn exec tsc --noEmit
+
+# Lint and format only staged files
+yarn exec lint-staged

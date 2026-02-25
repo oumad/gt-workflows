@@ -1,0 +1,13 @@
+services:
+  gt-workflows:
+    container_name: gt-workflows-container
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "3011:3011"
+      - "3010:3010"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - GT_WORKFLOWS_PATH=/app/data/gt-workflows

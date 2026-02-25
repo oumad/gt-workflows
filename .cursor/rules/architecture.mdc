@@ -1,0 +1,46 @@
+---
+description: Architecture principles and project structure
+alwaysApply: true
+---
+
+# Architecture Principles
+
+## Core principles
+
+- **Single Responsibility Principle (SRP)**: One clear purpose per module/component.
+- **Explicit dependency boundaries**: Dependencies flow in one direction; no circular imports.
+- **No business logic inside UI components**: Keep components declarative; put logic in hooks, services, or utils.
+- **Prefer composition over inheritance**: Compose small components and hooks; avoid class hierarchies.
+- **Pure functions where possible**: Same inputs → same outputs; side effects only in dedicated layers (hooks, API layer).
+
+## Project structure (target)
+
+```
+src/
+  app/           # router, providers
+  components/
+    ui/          # generic UI building blocks
+    layout/      # layout components
+  features/      # feature-based modules
+    <feature>/
+      components/
+      hooks/
+      services/
+      types.ts
+  hooks/         # shared hooks
+  services/
+    api/         # HTTP client, API modules
+  lib/
+  types/
+  utils/
+```
+
+- **Feature-based**: Each feature is self-contained (components, hooks, services, types).
+- **No cross-feature imports** except via shared services or `lib/`.
+- **UI components** in `components/ui`; **business logic** in `features/*/services` or `services/api`.
+
+## Boundaries
+
+- **No circular imports**: Dependencies must form a DAG. Use dependency inversion (e.g. callbacks, interfaces) if needed.
+- **Absolute imports**: Use path alias (e.g. `@/`) configured in Vite/tsconfig; avoid deep relative paths.
+- **Typed API contracts**: Prefer shared types/schemas with backend; validate responses (e.g. Zod).

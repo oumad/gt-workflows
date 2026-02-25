@@ -12,7 +12,7 @@ export default defineConfig({
     allowedHosts: true, // Allow all hosts (e.g. when accessing via IP or custom hostname)
     proxy: {
       '/api': {
-        target: 'http://localhost:3011',
+        target: 'http://127.0.0.1:3011',
         changeOrigin: true,
         secure: false,
         timeout: 300000, // 5 min for stats (loading many jobs from Redis can be slow under load)
@@ -31,7 +31,7 @@ export default defineConfig({
         },
       },
       '/data': {
-        target: 'http://localhost:3011',
+        target: 'http://127.0.0.1:3011',
         changeOrigin: true,
         secure: false,
         timeout: 5000,
