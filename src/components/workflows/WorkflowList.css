@@ -358,6 +358,17 @@
   padding-left: 2.25rem; /* Make room for drag handle in edit mode */
 }
 
+.workflow-card-no-link {
+  cursor: default;
+  pointer-events: auto;
+}
+
+.workflow-card-no-link:hover {
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
 .workflow-card:hover {
   border-color: var(--accent);
   transform: translateY(-1px);

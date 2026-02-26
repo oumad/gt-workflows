@@ -112,14 +112,16 @@ function SortableWorkflowCard({
         </div>
       )}
       <Link
-        to={`/workflows/workflow/${encodeURIComponent(workflow.name)}`}
-        className="workflow-card"
+        to={editMode ? '#' : `/workflows/workflow/${encodeURIComponent(workflow.name)}`}
+        className={`workflow-card${editMode ? ' workflow-card-no-link' : ''}`}
         onClick={(e) => {
-          if (selectionMode || editMode) {
+          if (selectionMode) {
             e.preventDefault()
-            if (selectionMode) {
-              onToggleSelection(workflow.name)
-            }
+            onToggleSelection(workflow.name)
+          } else if (editMode) {
+            // Let checkbox/input clicks through so they toggle and fire onChange
+            const el = e.target as HTMLElement
+            if (!(el instanceof HTMLInputElement)) e.preventDefault()
           }
         }}
       >
@@ -233,8 +235,6 @@ function SortableWorkflowCard({
                 type="number"
                 value={editedParams.timeout ?? workflow.params.timeout ?? ''}
                 onChange={(e) => onFieldChange(workflow.name, 'timeout', e.target.value ? Number(e.target.value) : undefined)}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
                 className="quick-info-edit-input"
                 placeholder="Not set"
               />
@@ -248,15 +248,22 @@ function SortableWorkflowCard({
           </div>
           <div className="quick-info-item">
             {editMode ? (
-              <label 
+              <label
                 className="dev-mode-checkbox"
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const current = editedParams.devMode ?? workflow.params.devMode ?? false
+                  onFieldChange(workflow.name, 'devMode', !current)
+                }}
               >
                 <input
                   type="checkbox"
                   checked={editedParams.devMode ?? workflow.params.devMode ?? false}
-                  onChange={(e) => onFieldChange(workflow.name, 'devMode', e.target.checked || undefined)}
+                  onChange={(e) => {
+                    e.stopPropagation()
+                    onFieldChange(workflow.name, 'devMode', e.target.checked || undefined)
+                  }}
                 />
                 <Code size={14} />
                 <span>Dev Mode</span>
