@@ -1,5 +1,7 @@
-import { useState, useCallback, useEffect, Fragment } from 'react'
-import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List, UserX } from 'lucide-react'
+import React, { useState, useCallback, useEffect, useMemo, Fragment } from 'react'
+import { Link } from 'react-router-dom'
+import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List, UserX, Search } from 'lucide-react'
+import { ROUTES } from '@/app/routes'
 import { useAuth } from '@/features/auth'
 import { useJobStats, JOBS_LIMIT_OPTIONS, TIME_RANGES, type TimeRangeId } from '@/features/dashboard'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
@@ -24,7 +26,7 @@ function formatDuration(processedOn: number | undefined, finishedOn: number | un
   return `${h}h ${m}m ${s}s`
 }
 
-export function Dashboard() {
+export function Dashboard(): React.ReactElement {
   const { role } = useAuth()
   const isAdmin = role === 'admin'
   const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
@@ -33,8 +35,8 @@ export function Dashboard() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
-  const [serversOpen, setServersOpen] = useState(false)
   const [anonymiseUsers, setAnonymiseUsers] = useState(false)
+  const [workflowSearch, setWorkflowSearch] = useState('')
 
   const {
     queueCounts,
@@ -60,13 +62,18 @@ export function Dashboard() {
     getPreferences()
       .then((prefs) => {
         setAnonymiseUsers(prefs.anonymiseUsers)
-        setServersOpen(prefs.serversOpen)
         setUserDetailsOpen(prefs.userDetailsOpen)
       })
       .catch(() => {})
   }, [])
 
-  const maxWorkflow = workflowUsage.length ? Math.max(...workflowUsage.map((u) => u.count)) : 1
+  const filteredWorkflowUsage = useMemo(() => {
+    const q = workflowSearch.trim().toLowerCase()
+    if (!q) return workflowUsage
+    return workflowUsage.filter((item) => item.name.toLowerCase().includes(q))
+  }, [workflowUsage, workflowSearch])
+
+  const maxWorkflow = filteredWorkflowUsage.length ? Math.max(...filteredWorkflowUsage.map((u) => u.count)) : 1
   const maxServer = serverUsage.length ? Math.max(...serverUsage.map((u) => u.count)) : 1
   const maxUser = userActivity.length ? Math.max(...userActivity.map((u) => u.count)) : 1
 
@@ -159,6 +166,9 @@ export function Dashboard() {
               <RefreshCw size={18} className={loading ? 'spin' : ''} />
               Refresh
             </button>
+            <Link to={ROUTES.jobStatsTimeView} className="dashboard-timeview-btn">
+              Time View
+            </Link>
           </div>
         </div>
         {configured && queueCounts && (
@@ -206,8 +216,9 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="dashboard-main">
-          {/* Left: Users — click to filter workflows */}
-          <aside className="dashboard-sidebar">
+          <div className="dashboard-top">
+            {/* Left: Users — click to filter workflows */}
+            <aside className="dashboard-sidebar">
             <div className="dashboard-sidebar-header">
               <Users size={18} />
               <span>Who&apos;s using</span>
@@ -273,15 +284,29 @@ export function Dashboard() {
             </div>
           </aside>
 
-          {/* Right: Workflows — main focus, updates when user selected */}
-          <section className="dashboard-workflows">
-            <h2 className="dashboard-workflows-title">
-              {selectedUser ? (
-                <>Workflows used by <strong>{getDisplayName(selectedUser)}</strong></>
-              ) : (
-                'Most used workflows'
-              )}
-            </h2>
+            {/* Right: Workflows — same size as Who's using */}
+            <section className="dashboard-workflows">
+            <div className="dashboard-workflows-header">
+              <h2 className="dashboard-workflows-title">
+                {selectedUser ? (
+                  <>Workflows used by <strong>{getDisplayName(selectedUser)}</strong></>
+                ) : (
+                  'Most used workflows'
+                )}
+              </h2>
+              <div className="dashboard-workflows-search-wrap">
+                <Search size={14} className="dashboard-workflows-search-icon" aria-hidden />
+                <input
+                  type="search"
+                  className="dashboard-workflows-search"
+                  placeholder="Search workflows…"
+                  value={workflowSearch}
+                  onChange={(e) => setWorkflowSearch(e.target.value)}
+                  aria-label="Search workflows"
+                />
+              </div>
+            </div>
+            <div className="dashboard-workflows-inner">
             {loading ? (
               <div className="dashboard-workflows-loading" aria-busy="true">
                 <span className="dashboard-workflows-loading-spinner" />
@@ -293,9 +318,11 @@ export function Dashboard() {
               <p className="dashboard-empty">
                 {selectedUser ? `No workflows in range for ${getDisplayName(selectedUser)}.` : 'No workflow data in the selected range.'}
               </p>
+            ) : filteredWorkflowUsage.length === 0 ? (
+              <p className="dashboard-empty">No matching workflows.</p>
             ) : (
               <div className="dashboard-workflow-list">
-                {workflowUsage.map((item, index) => {
+                {filteredWorkflowUsage.map((item, index) => {
                   const userCount = item.users?.length ?? 0
                   return (
                     <div key={item.name} className="dashboard-workflow-row">
@@ -317,43 +344,6 @@ export function Dashboard() {
                     </div>
                   )
                 })}
-              </div>
-            )}
-
-            {/* Servers: secondary, collapsible */}
-            {serverUsage.length > 0 && (
-              <div className="dashboard-servers-wrap">
-                <button
-                  type="button"
-                  className="dashboard-servers-toggle"
-                  onClick={() => {
-                    const next = !serversOpen
-                    setServersOpen(next)
-                    updatePreferences({ serversOpen: next }).catch(() => setServersOpen(!next))
-                  }}
-                  aria-expanded={serversOpen}
-                >
-                  {serversOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  <Server size={16} />
-                  <span>Servers</span>
-                  <span className="dashboard-servers-badge">{serverUsage.length}</span>
-                </button>
-                {serversOpen && (
-                  <div className="dashboard-servers-list">
-                    {serverUsage.map((item) => (
-                      <div key={item.server} className="dashboard-server-row">
-                        <span className="dashboard-server-name" title={item.server}>{item.server}</span>
-                        <div className="dashboard-server-bar-wrap">
-                          <div
-                            className="dashboard-server-bar"
-                            style={{ width: `${(item.count / maxServer) * 100}%` }}
-                          />
-                        </div>
-                        <span className="dashboard-server-count">{item.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -455,7 +445,33 @@ export function Dashboard() {
                 )}
               </div>
             )}
+            </div>
           </section>
+          </div>
+
+          {/* Servers: separate panel below Who's using and Most used workflows — always visible */}
+          {serverUsage.length > 0 && (
+            <section className="dashboard-servers-panel">
+              <h2 className="dashboard-servers-panel-title">
+                <Server size={18} />
+                Servers
+              </h2>
+              <div className="dashboard-servers-list">
+                {serverUsage.map((item) => (
+                  <div key={item.server} className="dashboard-server-row">
+                    <span className="dashboard-server-name" title={item.server}>{item.server}</span>
+                    <div className="dashboard-server-bar-wrap">
+                      <div
+                        className="dashboard-server-bar"
+                        style={{ width: `${(item.count / maxServer) * 100}%` }}
+                      />
+                    </div>
+                    <span className="dashboard-server-count">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

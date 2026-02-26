@@ -1,12 +1,13 @@
 import React from 'react'
 import { Routes, Route, Link, Navigate, useLocation, Outlet, useOutletContext } from 'react-router-dom'
 import type { Workflow } from '@/types'
+import { ROUTES } from '@/app/routes'
 import { LogOut } from 'lucide-react'
 import { useAuth, Login, clearStoredAuth } from '@/features/auth'
 import { useWorkflows } from '@/features/workflows'
 import { WorkflowList, WorkflowDetail, WorkflowCreate } from '@/features/workflows'
 import { Settings } from '@/features/settings'
-import { Dashboard } from '@/features/dashboard'
+import { Dashboard, DashboardTimeView } from '@/features/dashboard'
 import { Activity } from '@/features/activity'
 import '@/App.css'
 
@@ -30,7 +31,7 @@ function LoginRoute(): React.ReactElement {
   const { authStatus, authEnabled, setAuthStatus, role } = useAuth()
   if (!authEnabled) return <Navigate to="/workflows" replace />
   if (authStatus === 'pending') return <AuthLoading />
-  if (authStatus === 'ok') return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
+  if (authStatus === 'ok') return <Navigate to={role === 'admin' ? ROUTES.workflows : ROUTES.jobStats} replace />
   return <Login onSuccess={() => setAuthStatus('ok')} />
 }
 
@@ -45,7 +46,7 @@ function RequireAuth({ children }: { children: React.ReactNode }): React.ReactEl
 
 function RequireAdmin({ children }: { children: React.ReactNode }): React.ReactElement {
   const { role } = useAuth()
-  if (role === 'guest') return <Navigate to="/job-stats" replace />
+  if (role === 'guest') return <Navigate to={ROUTES.jobStats} replace />
   return <>{children}</>
 }
 
@@ -112,7 +113,7 @@ function MainLayoutWithData(): React.ReactElement {
     workflows: path === '/workflows' || path.startsWith('/workflows/workflow/'),
     create: path === '/workflows/new',
     activity: path.startsWith('/activity'),
-    dashboard: path.startsWith('/job-stats'),
+    dashboard: path.startsWith(ROUTES.jobStats),
     settings: path.startsWith('/settings'),
   }
   const { workflows, loading, error, loadWorkflows } = useWorkflows()
@@ -129,7 +130,7 @@ function MainLayoutWithData(): React.ReactElement {
                   <Link to="/workflows" className={`nav-link${navActive.workflows ? ' nav-link--active' : ''}`}>Workflows</Link>
                   <Link to="/workflows/new" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
                   <Link to="/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
-                  <Link to="/job-stats" className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
+                  <Link to={ROUTES.jobStats} className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
                   <Link to="/settings" className={`nav-link${navActive.settings ? ' nav-link--active' : ''}`}>Settings</Link>
                 </>
               )}
@@ -163,7 +164,7 @@ function WorkflowCreateWithContext(): React.ReactElement {
 function RootRedirect(): React.ReactElement {
   const { authEnabled, authStatus, role } = useAuth()
   if (authEnabled && authStatus === 'ok') {
-    return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
+    return <Navigate to={role === 'admin' ? ROUTES.workflows : ROUTES.jobStats} replace />
   }
   return <Navigate to={authEnabled ? '/login' : '/workflows'} replace />
 }
@@ -171,7 +172,7 @@ function RootRedirect(): React.ReactElement {
 function CatchAllRedirect(): React.ReactElement {
   const { authEnabled, authStatus, role } = useAuth()
   if (authEnabled && authStatus === 'ok') {
-    return <Navigate to={role === 'admin' ? '/workflows' : '/job-stats'} replace />
+    return <Navigate to={role === 'admin' ? ROUTES.workflows : ROUTES.jobStats} replace />
   }
   return <Navigate to={authEnabled ? '/login' : '/workflows'} replace />
 }
@@ -194,7 +195,10 @@ export function AppRoutes(): React.ReactElement {
           <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />
         </Route>
         <Route path="activity" element={<RequireAdmin><Activity /></RequireAdmin>} />
-        <Route path="job-stats" element={<Dashboard />} />
+        <Route path="job-stats" element={<Outlet />}>
+          <Route index element={<Dashboard />} />
+          <Route path="timeview" element={<DashboardTimeView />} />
+        </Route>
         <Route path="settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<CatchAllRedirect />} />

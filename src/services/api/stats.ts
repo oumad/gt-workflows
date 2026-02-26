@@ -239,3 +239,40 @@ export async function getUsageStatsTimeRangeChunked(
   }
   return merged
 }
+
+const TIME_VIEW_CHUNK_SIZE = 2000
+const TIME_VIEW_SCAN_LIMIT_MAX = 15000
+
+export interface TimeViewJobsResult {
+  jobs: ActivityJob[]
+  configured: boolean
+  error?: string
+}
+
+/** Fetches all jobs in a time range for Time View usage-by-day aggregation. */
+export async function getUsageStatsTimeRangeWithJobs(
+  from: string,
+  to: string,
+  onProgress?: (scanned: number, total: number) => void
+): Promise<TimeViewJobsResult> {
+  const scanLimit = TIME_VIEW_SCAN_LIMIT_MAX
+  const allJobs: ActivityJob[] = []
+  for (let offset = 0; offset < scanLimit; offset += TIME_VIEW_CHUNK_SIZE) {
+    const limit = Math.min(TIME_VIEW_CHUNK_SIZE, scanLimit - offset)
+    const res = await getUsageStatsChunk({
+      from,
+      to,
+      offset,
+      limit,
+      scanLimit,
+      includeJobs: true,
+    })
+    if (res.error) return { jobs: [], configured: res.configured, error: res.error }
+    if (!res.configured) return { jobs: [], configured: false }
+    const chunk = res.jobs ?? []
+    allJobs.push(...chunk)
+    onProgress?.(offset + chunk.length, scanLimit)
+    if (chunk.length < limit) break
+  }
+  return { jobs: allJobs, configured: true }
+}
