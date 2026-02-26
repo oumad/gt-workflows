@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { Workflow } from '@/types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText, LayoutGrid } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -747,12 +747,13 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
 
   return (
     <div className="workflow-list">
-      <div className="list-header">
+      <header className="list-header page-toolbar">
         <div className="header-left">
-          <h2>
+          <h1 className="page-title">
+            <LayoutGrid size={24} />
             Workflows ({filteredWorkflows.length}
             {searchTerm && filteredWorkflows.length !== workflows.length && ` of ${workflows.length}`})
-          </h2>
+          </h1>
           {selectionMode && (
             <span className="selection-mode-badge">
               {selectedWorkflows.size > 0
@@ -865,7 +866,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
             </>
           )}
         </div>
-      </div>
+      </header>
 
       {workflows.length === 0 ? (
         <div className="empty-state">

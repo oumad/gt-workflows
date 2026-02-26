@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Activity as ActivityIcon } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
@@ -223,7 +223,12 @@ export function Activity() {
 
   return (
     <div className="activity-page">
-      <div className="activity-toolbar">
+      <header className="activity-toolbar page-toolbar">
+        <h1 className="page-title">
+          <ActivityIcon size={24} />
+          Activity
+        </h1>
+        <div className="activity-toolbar-controls">
         <button
           type="button"
           className="activity-refresh-btn"
@@ -270,7 +275,8 @@ export function Activity() {
             data is loading, please wait :)
           </span>
         )}
-      </div>
+        </div>
+      </header>
 
       {data?.error && (
         <div className="activity-error">{data.error}</div>

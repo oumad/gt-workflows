@@ -657,7 +657,10 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <ArrowLeft size={16} /> Back
         </Link>
         <div className="workflow-title-section">
-          <h1>{params?.label || name}</h1>
+          <h1 className="page-title">
+            <FileJson size={24} />
+            {params?.label || name}
+          </h1>
         </div>
         <div className="header-actions">
           <button

@@ -1,7 +1,18 @@
 .activity-page {
-  padding: 1.5rem 2rem;
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.activity-toolbar.page-toolbar {
+  /* title left, controls right — same row as Workflows / Job stats */
+}
+
+.activity-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 /* ----- Loading (initial) ----- */
@@ -61,12 +72,8 @@
   font-size: 0.85em;
 }
 
-/* ----- Toolbar ----- */
+/* ----- Toolbar (when used as page-toolbar, layout from App.css) ----- */
 .activity-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 

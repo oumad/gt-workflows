@@ -102,6 +102,31 @@ nav {
   padding: 2rem;
 }
 
+/* Shared page title: icon + text, same across Workflows, Job stats, Activity, Settings, Create */
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.page-title svg {
+  flex-shrink: 0;
+}
+
+/* Shared first row: title left, controls right — same position for Workflows, Activity, Job stats */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 @media (max-width: 768px) {
   .app-main {
     padding: 1rem;

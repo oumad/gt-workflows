@@ -121,12 +121,12 @@ export function Settings() {
 
   return (
     <div className="settings-page">
-      <div className="settings-header">
-        <h1>
+      <header className="settings-header">
+        <h1 className="page-title">
           <SettingsIcon size={24} />
           Settings
         </h1>
-      </div>
+      </header>
 
       <div className="settings-content">
         <div className="settings-section settings-section-health">

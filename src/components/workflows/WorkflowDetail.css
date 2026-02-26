@@ -17,11 +17,8 @@
   gap: 1rem;
 }
 
-.workflow-title-section h1 {
-  font-size: 2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
+.workflow-title-section .page-title {
+  /* inherits from App.css for consistent tab title styling */
 }
 
 .workflow-header-icon {

@@ -89,9 +89,9 @@ export function Dashboard() {
   return (
     <div className="dashboard-page">
       <header className="dashboard-header">
-        <div className="dashboard-toolbar">
-          <h1 className="dashboard-title">
-            <BarChart3 size={26} />
+        <div className="dashboard-toolbar page-toolbar">
+          <h1 className="page-title dashboard-title">
+            <BarChart3 size={24} />
             Job stats
           </h1>
           <div className="dashboard-controls">

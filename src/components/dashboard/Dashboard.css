@@ -24,22 +24,12 @@
   color: var(--accent);
 }
 
-.dashboard-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
+.dashboard-toolbar.page-toolbar {
+  /* layout from App.css — title left, controls right */
 }
 
 .dashboard-title {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
+  /* inherits from .page-title in App.css */
 }
 
 .dashboard-controls {

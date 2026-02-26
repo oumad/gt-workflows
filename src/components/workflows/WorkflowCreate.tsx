@@ -62,9 +62,12 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
 
   return (
     <div className="workflow-create">
-      <div className="create-header">
-        <h1>Create New Workflow</h1>
-      </div>
+      <header className="create-header">
+        <h1 className="page-title">
+          <Plus size={24} />
+          Create New Workflow
+        </h1>
+      </header>
 
       <form onSubmit={handleSubmit} className="create-form">
         {error && (
