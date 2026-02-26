@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { Workflow } from '@/types'
 import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText } from 'lucide-react'
@@ -29,6 +29,7 @@ import DownloadModal from '@/components/modals/DownloadModal'
 import { useServerHealthCheck } from '@/hooks/useServerHealthCheck'
 import type { AppSettings } from '@/utils/settings'
 import { getSettings } from '@/utils/settings'
+import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
 import type { ServerHealthStatus } from '@/hooks/useServerHealthCheck'
 import './WorkflowList.css'
@@ -358,13 +359,17 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [settings, setSettings] = useState(getSettings())
+  const [settings, setSettings] = useState<AppSettings>(getSettings())
+  const [monitoredServersFromPrefs, setMonitoredServersFromPrefs] = useState<string[] | null>(null)
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
   const [downloadingWorkflow, setDownloadingWorkflow] = useState<Workflow | null>(null)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [prefsLoadedForCategories, setPrefsLoadedForCategories] = useState(false)
+  const expandedCategoriesRestoredFromPrefs = useRef(false)
   const [localWorkflows, setLocalWorkflows] = useState<Workflow[]>(workflows)
+  const expandSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isReordering] = useState(false) // Reserved for future drag-and-drop reordering
   const [editMode, setEditMode] = useState(false)
   const [editedWorkflows, setEditedWorkflows] = useState<Map<string, Partial<Workflow['params']>>>(new Map())
@@ -372,6 +377,13 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
   // Update local workflows when workflows prop changes
   useEffect(() => {
     setLocalWorkflows(workflows)
+  }, [workflows])
+
+  // Persist workflows info (names + all params) to preferences when list is loaded
+  useEffect(() => {
+    if (workflows.length > 0) {
+      updatePreferences({ workflowsInfo: workflows }).catch(() => {})
+    }
   }, [workflows])
 
   // Drag and drop sensors
@@ -386,30 +398,45 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     })
   )
 
-  // Health check hook - only check servers from settings (manual only)
-  // Filter out empty strings and invalid entries
+  // Monitored servers: from file-based preferences first, then fallback to legacy settings
   const monitoredServers = useMemo(() => {
-    const servers = settings.monitoredServers || []
-    return servers.filter(server => server && server.trim().length > 0)
-  }, [settings.monitoredServers]);
-  
+    const raw = monitoredServersFromPrefs !== null ? monitoredServersFromPrefs : settings.monitoredServers || []
+    return raw.filter((server: string) => server && server.trim().length > 0)
+  }, [monitoredServersFromPrefs, settings.monitoredServers])
+
+  const effectiveSettings = useMemo<AppSettings>(() => ({
+    ...settings,
+    monitoredServers: monitoredServersFromPrefs ?? settings.monitoredServers ?? [],
+  }), [settings, monitoredServersFromPrefs])
+
   const { getHealthStatus, checkAllServers, isChecking, healthStatuses } = useServerHealthCheck(monitoredServers, {
-    enabled: true, // Enable checks - they're still manual via button click
+    enabled: true,
   })
 
-  // Update settings when they change
+  // Load preferences (monitored servers + expanded categories) and listen for settings updates
   useEffect(() => {
-    const handleStorageChange = () => {
-      setSettings(getSettings())
+    const load = () => {
+      getPreferences()
+        .then((prefs) => {
+          setMonitoredServersFromPrefs(prefs.monitoredServers?.length ? prefs.monitoredServers : null)
+          if (prefs.expandedCategories?.length > 0) {
+            setExpandedCategories(new Set(prefs.expandedCategories))
+            expandedCategoriesRestoredFromPrefs.current = true
+          }
+          setPrefsLoadedForCategories(true)
+        })
+        .catch(() => setPrefsLoadedForCategories(true))
     }
-    // Listen for custom settings update event (fired from Settings page)
-    window.addEventListener('settingsUpdated', handleStorageChange)
-    // Also listen for storage events (from other tabs)
+    load()
+    window.addEventListener('settingsUpdated', load)
+    return () => window.removeEventListener('settingsUpdated', load)
+  }, [])
+
+  // Legacy: sync from localStorage when it changes (e.g. other tab)
+  useEffect(() => {
+    const handleStorageChange = () => setSettings(getSettings())
     window.addEventListener('storage', handleStorageChange)
-    return () => {
-      window.removeEventListener('settingsUpdated', handleStorageChange)
-      window.removeEventListener('storage', handleStorageChange)
-    }
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   // Filter workflows based on search term
@@ -480,26 +507,31 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     return sortedCategories
   }, [filteredWorkflows, localWorkflows, isReordering])
 
-  // Expand all categories only on first load (so collapsing all stays collapsed)
-  const hasInitialExpandDone = useRef(false)
+  // Expand all categories on first load only when we didn't restore from preferences
   useEffect(() => {
-    if (categorizedWorkflows.length > 0 && !hasInitialExpandDone.current) {
-      hasInitialExpandDone.current = true
+    if (
+      categorizedWorkflows.length > 0 &&
+      prefsLoadedForCategories &&
+      !expandedCategoriesRestoredFromPrefs.current
+    ) {
+      expandedCategoriesRestoredFromPrefs.current = true
       setExpandedCategories(new Set(categorizedWorkflows.map(([category]) => category)))
     }
-  }, [categorizedWorkflows])
+  }, [categorizedWorkflows, prefsLoadedForCategories])
 
-  const toggleCategory = (category: string) => {
-    setExpandedCategories(prev => {
+  const toggleCategory = useCallback((category: string) => {
+    setExpandedCategories((prev) => {
       const next = new Set(prev)
-      if (next.has(category)) {
-        next.delete(category)
-      } else {
-        next.add(category)
-      }
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      if (expandSaveTimeoutRef.current) clearTimeout(expandSaveTimeoutRef.current)
+      expandSaveTimeoutRef.current = setTimeout(() => {
+        updatePreferences({ expandedCategories: Array.from(next) as string[] }).catch(() => {})
+        expandSaveTimeoutRef.current = null
+      }, 500)
       return next
     })
-  }
+  }, [])
 
   if (loading) {
     return (
@@ -889,7 +921,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                                     isSelected={isSelected}
                                     selectionMode={selectionMode}
                                     editMode={editMode}
-                                    settings={settings}
+                                    settings={effectiveSettings}
                                     getHealthStatus={getHealthStatus}
                                     monitoredServers={monitoredServers}
                                     editedParams={editedParams}
@@ -915,7 +947,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                                 isSelected={isSelected}
                                 selectionMode={selectionMode}
                                 editMode={editMode}
-                                settings={settings}
+                                settings={effectiveSettings}
                                 getHealthStatus={getHealthStatus}
                                 monitoredServers={monitoredServers}
                                 editedParams={{}}

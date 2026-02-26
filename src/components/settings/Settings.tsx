@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Save, Settings as SettingsIcon, Activity, Plus, X, Server, ListPlus, FileText } from 'lucide-react'
-import { getSettings, saveSettings } from '@/utils/settings'
-import type { AppSettings } from '@/utils/settings'
+import { getSettings } from '@/utils/settings'
+import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import './Settings.css'
 
@@ -13,68 +13,70 @@ function normalizeServerUrl(s: string): string {
 }
 
 export function Settings() {
-  const [settings, setSettings] = useState<AppSettings>(getSettings())
+  const [monitoredServers, setMonitoredServers] = useState<string[]>([])
+  const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    // Reset saved message after 2 seconds
+    getPreferences()
+      .then((prefs) => {
+        const list = prefs.monitoredServers?.length ? prefs.monitoredServers : getSettings().monitoredServers
+        setMonitoredServers(list)
+        setPrefsLoaded(true)
+      })
+      .catch(() => setPrefsLoaded(true))
+  }, [])
+
+  useEffect(() => {
     if (saved) {
       const timer = setTimeout(() => setSaved(false), 2000)
       return () => clearTimeout(timer)
     }
   }, [saved])
 
-  const handleSave = () => {
-    saveSettings(settings)
-    setSaved(true)
-    // Trigger custom event so other components can update
-    window.dispatchEvent(new Event('settingsUpdated'))
+  const handleSave = async () => {
+    try {
+      await updatePreferences({ monitoredServers })
+      setSaved(true)
+      window.dispatchEvent(new Event('settingsUpdated'))
+    } catch {
+      setSaved(false)
+    }
   }
 
   const handleAddServer = () => {
     const newServer = prompt('Enter ComfyUI server URL (e.g., http://127.0.0.1:8188):')
     if (newServer && newServer.trim()) {
       const normalized = normalizeServerUrl(newServer)
-      if (normalized && !settings.monitoredServers.includes(normalized)) {
-        setSettings({
-          ...settings,
-          monitoredServers: [...settings.monitoredServers, normalized]
-        })
+      if (normalized && !monitoredServers.includes(normalized)) {
+        setMonitoredServers([...monitoredServers, normalized])
       }
     }
   }
 
   const handleBulkAdd = () => {
     const lines = bulkText.split(/\n/).map((line) => normalizeServerUrl(line)).filter(Boolean)
-    const existing = new Set(settings.monitoredServers)
+    const existing = new Set(monitoredServers)
     const added = lines.filter((u) => !existing.has(u))
     if (added.length > 0) {
-      setSettings({
-        ...settings,
-        monitoredServers: [...settings.monitoredServers, ...added]
-      })
+      setMonitoredServers([...monitoredServers, ...added])
     }
     setBulkText('')
     setBulkOpen(false)
   }
 
   const handleRemoveServer = (index: number) => {
-    setSettings({
-      ...settings,
-      monitoredServers: settings.monitoredServers.filter((_, i) => i !== index)
-    })
+    setMonitoredServers(monitoredServers.filter((_, i) => i !== index))
   }
 
   const handleServerUrlChange = (index: number, newUrl: string) => {
-    const updated = [...settings.monitoredServers]
-    let normalized = newUrl.trim()
-    // Normalize URL (remove trailing slash)
-    normalized = normalized.replace(/\/$/, '')
+    const updated = [...monitoredServers]
+    let normalized = newUrl.trim().replace(/\/$/, '')
     updated[index] = normalized
-    setSettings({ ...settings, monitoredServers: updated })
+    setMonitoredServers(updated)
   }
 
   return (
@@ -106,7 +108,7 @@ export function Settings() {
               </label>
               <div className="setting-control servers-list">
                 <div className="servers-list-items">
-                  {settings.monitoredServers.map((server, index) => (
+                  {(!prefsLoaded ? getSettings().monitoredServers : monitoredServers).map((server, index) => (
                     <div key={index} className="server-item">
                       <Server size={16} />
                       <input
@@ -172,7 +174,7 @@ export function Settings() {
                     </div>
                   </div>
                 )}
-                {settings.monitoredServers.length === 0 && (
+                {monitoredServers.length === 0 && prefsLoaded && (
                   <p className="health-empty-hint">
                     No servers configured. Add at least one ComfyUI server URL above to use health checks from the Workflows tab.
                   </p>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import type { WorkflowParams, IconBadge, WorkflowJson, SubgraphConfig } from '@/types'
 import {
@@ -20,6 +20,8 @@ import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import { compressImage } from '@/utils/imageCompression'
+import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import type { WorkflowDetailUIState } from '@/services/api/preferences'
 import './WorkflowDetail.css'
 
 interface WorkflowDetailProps {
@@ -302,6 +304,34 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
+  const workflowDetailUIRef = useRef<Record<string, WorkflowDetailUIState>>({})
+
+  // Load persisted workflow detail UI state (JSON panels open/closed)
+  useEffect(() => {
+    if (!name) return
+    getPreferences()
+      .then((prefs) => {
+        workflowDetailUIRef.current = prefs.workflowDetailUI ?? {}
+        const ui = prefs.workflowDetailUI?.[name]
+        if (ui) {
+          if (typeof ui.showWorkflowJson === 'boolean') setShowWorkflowJson(ui.showWorkflowJson)
+          if (typeof ui.showParamsJson === 'boolean') setShowParamsJson(ui.showParamsJson)
+        }
+      })
+      .catch(() => {})
+  }, [name])
+
+  const persistWorkflowDetailUI = useCallback(
+    (workflowName: string, showWorkflow: boolean, showParams: boolean) => {
+      const next: Record<string, WorkflowDetailUIState> = {
+        ...workflowDetailUIRef.current,
+        [workflowName]: { showWorkflowJson: showWorkflow, showParamsJson: showParams },
+      }
+      workflowDetailUIRef.current = next
+      updatePreferences({ workflowDetailUI: next }).catch(() => {})
+    },
+    []
+  )
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -1579,7 +1609,13 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             <Settings size={20} />
             <h2>Parameters (params.json)</h2>
             <button
-              onClick={() => setShowParamsJson(!showParamsJson)}
+              onClick={() => {
+                setShowParamsJson((prev) => {
+                  const next = !prev
+                  if (name) persistWorkflowDetailUI(name, showWorkflowJson, next)
+                  return next
+                })
+              }}
               className="btn-toggle"
             >
               {showParamsJson ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -1669,7 +1705,13 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
               <FileJson size={20} />
               <h2>Workflow JSON</h2>
               <button
-                onClick={() => setShowWorkflowJson(!showWorkflowJson)}
+                onClick={() => {
+                  setShowWorkflowJson((prev) => {
+                    const next = !prev
+                    if (name) persistWorkflowDetailUI(name, next, showParamsJson)
+                    return next
+                  })
+                }}
                 className="btn-toggle"
               >
                 {showWorkflowJson ? <EyeOff size={16} /> : <Eye size={16} />}

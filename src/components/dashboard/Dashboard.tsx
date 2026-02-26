@@ -1,32 +1,11 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useCallback, useEffect, Fragment } from 'react'
 import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List, UserX } from 'lucide-react'
 import { useAuth } from '@/features/auth'
-import { getQueueStats, getUsageStatsChunked, getUsageStatsTimeRangeChunked, getUsageStatsChunk } from '@/services/api/stats'
-import type { QueueCounts, WorkflowUsageItem, ServerUsageItem, UserActivityItem, ActivityJob } from '@/services/api/stats'
+import { useJobStats, JOBS_LIMIT_OPTIONS, TIME_RANGES, type TimeRangeId } from '@/features/dashboard'
+import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import type { ActivityJob } from '@/services/api/stats'
 import { anonymiseUserName } from '@/utils/anonymise'
 import './Dashboard.css'
-
-const JOBS_LIMIT_OPTIONS = [500, 1000, 2000, 3000, 5000] as const
-const CHUNK_SIZE = 500
-const TIME_RANGE_SCAN_LIMIT = 15000
-const TIME_RANGE_CHUNK_SIZE = 2000
-const TIME_RANGES = [
-  { id: '24h', label: 'Last 24 hours' },
-  { id: '7d', label: 'Last 7 days' },
-  { id: '15d', label: 'Last 15 days' },
-  { id: '30d', label: 'Last 30 days' },
-] as const
-type TimeRangeId = (typeof TIME_RANGES)[number]['id']
-
-function getTimeRangeBounds(rangeId: TimeRangeId): { from: string; to: string } {
-  const to = new Date()
-  const from = new Date()
-  if (rangeId === '24h') from.setHours(from.getHours() - 24)
-  else if (rangeId === '7d') from.setDate(from.getDate() - 7)
-  else if (rangeId === '15d') from.setDate(from.getDate() - 15)
-  else from.setDate(from.getDate() - 30)
-  return { from: from.toISOString(), to: to.toISOString() }
-}
 
 function formatJobTime(ms: number | null | undefined): string {
   if (ms == null || !Number.isFinite(ms)) return '—'
@@ -48,139 +27,44 @@ function formatDuration(processedOn: number | undefined, finishedOn: number | un
 export function Dashboard() {
   const { role } = useAuth()
   const isAdmin = role === 'admin'
-  const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
-  const [workflowUsage, setWorkflowUsage] = useState<WorkflowUsageItem[]>([])
-  const [serverUsage, setServerUsage] = useState<ServerUsageItem[]>([])
-  const [userActivity, setUserActivity] = useState<UserActivityItem[]>([])
-  const [jobsSampled, setJobsSampled] = useState<number | null>(null)
-  const [timeRangeLabel, setTimeRangeLabel] = useState<string | null>(null)
   const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
   const [timeRangeId, setTimeRangeId] = useState<TimeRangeId>('7d')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
-  const [userJobs, setUserJobs] = useState<ActivityJob[]>([])
-  const [userJobsLoading, setUserJobsLoading] = useState(false)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
   const [serversOpen, setServersOpen] = useState(false)
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
-  const [configured, setConfigured] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [anonymiseUsers, setAnonymiseUsers] = useState(false)
 
-  const loadStats = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    setProgress(null)
-    try {
-      const queueRes = await getQueueStats()
-      setConfigured(queueRes.configured)
-      if (queueRes.counts) setQueueCounts(queueRes.counts)
-      if (queueRes.error) setError(queueRes.error)
-      if (!queueRes.configured) {
-        setLoading(false)
-        return
-      }
-
-      const userOpt = selectedUser ? { user: selectedUser } : {}
-      setUserJobs([])
-      setExpandedJobId(null)
-
-      if (rangeMode === 'time') {
-        const { from, to } = getTimeRangeBounds(timeRangeId)
-        const usageRes = await getUsageStatsTimeRangeChunked(
-          from,
-          to,
-          15000,
-          userOpt,
-          (scanned, total) => setProgress({ current: scanned, total })
-        )
-        if (usageRes.error) setError(usageRes.error)
-        if (usageRes.workflowUsage) setWorkflowUsage(usageRes.workflowUsage)
-        if (usageRes.serverUsage) setServerUsage(usageRes.serverUsage)
-        if (!selectedUser && usageRes.userActivity) setUserActivity(usageRes.userActivity)
-        if (usageRes.jobsSampled != null) setJobsSampled(usageRes.jobsSampled)
-        setTimeRangeLabel(usageRes.from && usageRes.to ? `${new Date(usageRes.from).toLocaleDateString()} – ${new Date(usageRes.to).toLocaleDateString()}` : TIME_RANGES.find((r) => r.id === timeRangeId)?.label ?? null)
-        if (selectedUser) {
-          setUserJobsLoading(true)
-          try {
-            const allJobs: ActivityJob[] = []
-            for (let offset = 0; offset < TIME_RANGE_SCAN_LIMIT; offset += TIME_RANGE_CHUNK_SIZE) {
-              const limit = Math.min(TIME_RANGE_CHUNK_SIZE, TIME_RANGE_SCAN_LIMIT - offset)
-              const jobRes = await getUsageStatsChunk({
-                from,
-                to,
-                limit,
-                offset,
-                scanLimit: TIME_RANGE_SCAN_LIMIT,
-                user: selectedUser,
-                includeJobs: true,
-              })
-              const chunk = jobRes.jobs ?? []
-              allJobs.push(...chunk)
-            }
-            setUserJobs(allJobs)
-          } catch {
-            setUserJobs([])
-          } finally {
-            setUserJobsLoading(false)
-          }
-        }
-      } else {
-        const usageRes = await getUsageStatsChunked(
-          jobsLimit,
-          CHUNK_SIZE,
-          userOpt,
-          (current, total) => setProgress({ current, total })
-        )
-        if (usageRes.error) setError(usageRes.error)
-        if (usageRes.workflowUsage) setWorkflowUsage(usageRes.workflowUsage)
-        if (usageRes.serverUsage) setServerUsage(usageRes.serverUsage)
-        if (!selectedUser && usageRes.userActivity) setUserActivity(usageRes.userActivity)
-        if (usageRes.jobsSampled != null) setJobsSampled(usageRes.jobsSampled)
-        setTimeRangeLabel(null)
-        if (selectedUser) {
-          setUserJobsLoading(true)
-          try {
-            const allJobs: ActivityJob[] = []
-            for (let offset = 0; offset < jobsLimit; offset += CHUNK_SIZE) {
-              const limit = Math.min(CHUNK_SIZE, jobsLimit - offset)
-              const jobRes = await getUsageStatsChunk({
-                limit,
-                offset,
-                user: selectedUser,
-                includeJobs: true,
-              })
-              const chunk = jobRes.jobs ?? []
-              allJobs.push(...chunk)
-            }
-            setUserJobs(allJobs)
-          } catch {
-            setUserJobs([])
-          } finally {
-            setUserJobsLoading(false)
-          }
-        }
-      }
-      setProgress(null)
-    } catch (err) {
-      const message =
-        err instanceof Error && err.name === 'AbortError'
-          ? 'Request took too long. Try a smaller range or fewer jobs.'
-          : err instanceof Error
-            ? err.message
-            : 'Failed to load stats'
-      setError(message)
-      setProgress(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [rangeMode, jobsLimit, timeRangeId, selectedUser])
+  const {
+    queueCounts,
+    workflowUsage,
+    serverUsage,
+    userActivity,
+    jobsSampled,
+    timeRangeLabel,
+    configured,
+    loading,
+    error,
+    progress,
+    userJobs,
+    userJobsLoading,
+    loadStats,
+  } = useJobStats({ rangeMode, jobsLimit, timeRangeId, selectedUser })
 
   useEffect(() => {
-    loadStats()
-  }, [loadStats])
+    setExpandedJobId(null)
+  }, [selectedUser])
+
+  useEffect(() => {
+    getPreferences()
+      .then((prefs) => {
+        setAnonymiseUsers(prefs.anonymiseUsers)
+        setServersOpen(prefs.serversOpen)
+        setUserDetailsOpen(prefs.userDetailsOpen)
+      })
+      .catch(() => {})
+  }, [])
 
   const maxWorkflow = workflowUsage.length ? Math.max(...workflowUsage.map((u) => u.count)) : 1
   const maxServer = serverUsage.length ? Math.max(...serverUsage.map((u) => u.count)) : 1
@@ -268,7 +152,7 @@ export function Dashboard() {
             <button
               type="button"
               className="refresh-btn"
-              onClick={loadStats}
+              onClick={() => loadStats(true)}
               disabled={loading}
               title="Refresh stats"
             >
@@ -331,7 +215,11 @@ export function Dashboard() {
                 <button
                   type="button"
                   className="dashboard-anonymise-btn"
-                  onClick={() => setAnonymiseUsers((a) => !a)}
+                  onClick={() => {
+                  const next = !anonymiseUsers
+                  setAnonymiseUsers(next)
+                  updatePreferences({ anonymiseUsers: next }).catch(() => setAnonymiseUsers(!next))
+                }}
                   title={anonymiseUsers ? 'Show real user names' : 'Anonymise user names'}
                   aria-pressed={anonymiseUsers}
                 >
@@ -438,7 +326,11 @@ export function Dashboard() {
                 <button
                   type="button"
                   className="dashboard-servers-toggle"
-                  onClick={() => setServersOpen((o) => !o)}
+                  onClick={() => {
+                    const next = !serversOpen
+                    setServersOpen(next)
+                    updatePreferences({ serversOpen: next }).catch(() => setServersOpen(!next))
+                  }}
                   aria-expanded={serversOpen}
                 >
                   {serversOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -471,7 +363,11 @@ export function Dashboard() {
                 <button
                   type="button"
                   className="dashboard-servers-toggle"
-                  onClick={() => setUserDetailsOpen((o) => !o)}
+                  onClick={() => {
+                    const next = !userDetailsOpen
+                    setUserDetailsOpen(next)
+                    updatePreferences({ userDetailsOpen: next }).catch(() => setUserDetailsOpen(!next))
+                  }}
                   aria-expanded={userDetailsOpen}
                 >
                   {userDetailsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}

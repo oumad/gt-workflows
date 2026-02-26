@@ -26,6 +26,7 @@ const AUTH_CREDENTIALS = [];
 if (hasAdmin) AUTH_CREDENTIALS.push({ user: ADMIN_USER, pass: ADMIN_PASSWORD });
 if (hasGuest) AUTH_CREDENTIALS.push({ user: GUEST_USER, pass: GUEST_PASSWORD });
 
+const dataDir = path.join(__dirname, '..', 'data');
 export const config = Object.freeze({
   port: 3011,
   host: process.env.HOST || '0.0.0.0',
@@ -33,6 +34,10 @@ export const config = Object.freeze({
   workflowsPath: process.env.GT_WORKFLOWS_PATH
     ? path.resolve(process.env.GT_WORKFLOWS_PATH)
     : path.join(__dirname, '../data/gt-workflows'),
+  /** Directory for app state (e.g. user preferences). One JSON file per user. */
+  preferencesPath: process.env.GT_PREFERENCES_PATH
+    ? path.resolve(process.env.GT_PREFERENCES_PATH)
+    : path.join(dataDir, 'preferences'),
   redisUrl: process.env.REDIS_URL || process.env.REDIS_HOST,
   bullQueueName: process.env.BULL_QUEUE_NAME || 'workflow-studio-comfyui-process-queue',
   auth: {

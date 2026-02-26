@@ -9,6 +9,7 @@ import { createPingRouter } from './routes/ping.js';
 import { createServersRouter } from './routes/servers.js';
 import { createWorkflowsRouter } from './routes/workflows.js';
 import { createStatsRouter } from './routes/stats.js';
+import { createPreferencesRouter } from './routes/preferences.js';
 
 export function createApp() {
   const app = express();
@@ -34,6 +35,7 @@ export function createApp() {
     })
   );
   app.use('/api', createStatsRouter(config));
+  app.use('/api', createPreferencesRouter(config));
 
   app.use('/data/gt-workflows', express.static(config.workflowsPath));
 
