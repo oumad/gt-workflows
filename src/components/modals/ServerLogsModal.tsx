@@ -50,10 +50,16 @@ function formatLogTimestamp(iso: string | undefined): string {
 
 interface ServerLogsModalProps {
   serverUrl: string
+  serverAliases?: Record<string, string>
   onClose: () => void
 }
 
-export default function ServerLogsModal({ serverUrl, onClose }: ServerLogsModalProps) {
+function serverDisplayLabel(serverUrl: string, serverAliases?: Record<string, string>): string {
+  const alias = serverAliases?.[serverUrl]?.trim()
+  return alias ? `${alias} - ${serverUrl}` : serverUrl
+}
+
+export default function ServerLogsModal({ serverUrl, serverAliases, onClose }: ServerLogsModalProps) {
   const [content, setContent] = useState<string | null>(null)
   const [contentType, setContentType] = useState<'text/plain' | 'text/html'>('text/plain')
   const [loading, setLoading] = useState(true)
@@ -104,7 +110,7 @@ export default function ServerLogsModal({ serverUrl, onClose }: ServerLogsModalP
           <div className="server-logs-title">
             <FileText size={20} />
             <span>Server logs</span>
-            <span className="server-logs-url" title={serverUrl}>{serverUrl}</span>
+            <span className="server-logs-url" title={serverUrl}>{serverDisplayLabel(serverUrl, serverAliases)}</span>
           </div>
           <div className="server-logs-actions">
             {contentType !== 'text/html' && (

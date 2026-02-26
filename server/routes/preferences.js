@@ -15,6 +15,10 @@ export function createPreferencesRouter(config) {
       const workflowDetailUI =
         prefs.workflowDetailUI && typeof prefs.workflowDetailUI === 'object' ? prefs.workflowDetailUI : {};
       const workflowsInfo = Array.isArray(prefs.workflowsInfo) ? prefs.workflowsInfo : [];
+      const serverAliases =
+        prefs.serverAliases && typeof prefs.serverAliases === 'object' && !Array.isArray(prefs.serverAliases)
+          ? prefs.serverAliases
+          : {};
       res.json({
         anonymiseUsers: Boolean(prefs.anonymiseUsers),
         serversOpen: Boolean(prefs.serversOpen),
@@ -23,6 +27,7 @@ export function createPreferencesRouter(config) {
         expandedCategories,
         workflowDetailUI,
         workflowsInfo,
+        serverAliases,
       });
     } catch (err) {
       console.error('Preferences read error:', err.message);
@@ -55,6 +60,15 @@ export function createPreferencesRouter(config) {
       }
       partial.workflowDetailUI = sanitized;
     }
+    if (body.serverAliases != null && typeof body.serverAliases === 'object' && !Array.isArray(body.serverAliases)) {
+      const sanitized = {};
+      for (const [key, val] of Object.entries(body.serverAliases)) {
+        if (typeof key === 'string' && typeof val === 'string' && val.trim()) {
+          sanitized[key.trim()] = String(val).trim();
+        }
+      }
+      partial.serverAliases = sanitized;
+    }
     if (Array.isArray(body.workflowsInfo)) {
       partial.workflowsInfo = body.workflowsInfo
         .filter((item) => item != null && typeof item === 'object' && typeof item.name === 'string' && typeof item.params === 'object' && item.params !== null)
@@ -73,6 +87,8 @@ export function createPreferencesRouter(config) {
       const workflowDetailUI =
         merged.workflowDetailUI && typeof merged.workflowDetailUI === 'object' ? merged.workflowDetailUI : {};
       const workflowsInfo = Array.isArray(merged.workflowsInfo) ? merged.workflowsInfo : [];
+      const serverAliases =
+        merged.serverAliases && typeof merged.serverAliases === 'object' ? merged.serverAliases : {};
       res.json({
         anonymiseUsers: Boolean(merged.anonymiseUsers),
         serversOpen: Boolean(merged.serversOpen),
@@ -81,6 +97,7 @@ export function createPreferencesRouter(config) {
         expandedCategories,
         workflowDetailUI,
         workflowsInfo,
+        serverAliases,
       });
     } catch (err) {
       console.error('Preferences write error:', err.message);

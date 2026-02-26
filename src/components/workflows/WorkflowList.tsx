@@ -368,6 +368,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
   const [searchTerm, setSearchTerm] = useState('')
   const [settings, setSettings] = useState<AppSettings>(getSettings())
   const [monitoredServersFromPrefs, setMonitoredServersFromPrefs] = useState<string[] | null>(null)
+  const [serverAliasesFromPrefs, setServerAliasesFromPrefs] = useState<Record<string, string>>({})
   const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
   const [downloadingWorkflow, setDownloadingWorkflow] = useState<Workflow | null>(null)
@@ -426,6 +427,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
       getPreferences()
         .then((prefs) => {
           setMonitoredServersFromPrefs(prefs.monitoredServers?.length ? prefs.monitoredServers : null)
+          setServerAliasesFromPrefs(prefs.serverAliases ?? {})
           if (prefs.expandedCategories?.length > 0) {
             setExpandedCategories(new Set(prefs.expandedCategories))
             expandedCategoriesRestoredFromPrefs.current = true
@@ -1007,6 +1009,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               healthStatuses={healthStatuses}
               isChecking={isChecking}
               monitoredServers={monitoredServers}
+              serverAliases={serverAliasesFromPrefs}
               onClose={() => setShowHealthCheckModal(false)}
             />
           )}
@@ -1029,6 +1032,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
           {logsServerUrl && (
             <ServerLogsModal
               serverUrl={logsServerUrl}
+              serverAliases={serverAliasesFromPrefs}
               onClose={() => setLogsServerUrl(null)}
             />
           )}

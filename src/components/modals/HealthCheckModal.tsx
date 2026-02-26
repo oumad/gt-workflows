@@ -8,10 +8,16 @@ interface HealthCheckModalProps {
   healthStatuses: ServerHealthStatus[]
   isChecking: boolean
   monitoredServers: string[]
+  serverAliases?: Record<string, string>
   onClose: () => void
 }
 
-export default function HealthCheckModal({ healthStatuses, isChecking, monitoredServers, onClose }: HealthCheckModalProps) {
+function serverDisplayLabel(serverUrl: string, serverAliases?: Record<string, string>): string {
+  const name = serverAliases?.[serverUrl]?.trim()
+  return name ? `${name} - ${serverUrl}` : serverUrl
+}
+
+export default function HealthCheckModal({ healthStatuses, isChecking, monitoredServers, serverAliases, onClose }: HealthCheckModalProps) {
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const healthyCount = healthStatuses.filter(s => s.healthy === true).length
   const unhealthyCount = healthStatuses.filter(s => s.healthy === false).length
@@ -107,7 +113,9 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
                             <div className="health-check-item-info">
                               <div className="health-check-item-server">
                                 <Server size={14} />
-                                <span className="health-check-item-url">{status.serverUrl}</span>
+                                <span className="health-check-item-url" title={status.serverUrl}>
+                                  {serverDisplayLabel(status.serverUrl, serverAliases)}
+                                </span>
                                 <button
                                   type="button"
                                   className="health-check-logs-btn"
@@ -164,7 +172,7 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
                     <strong style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Configured servers:</strong>
                     <ul style={{ margin: 0, paddingLeft: '1.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                       {monitoredServers.map((server, idx) => (
-                        <li key={idx} style={{ marginBottom: '0.25rem' }}>{server}</li>
+                        <li key={idx} style={{ marginBottom: '0.25rem' }}>{serverDisplayLabel(server, serverAliases)}</li>
                       ))}
                     </ul>
                   </div>
@@ -175,7 +183,11 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
         </div>
       </div>
       {logsServerUrl && (
-        <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />
+        <ServerLogsModal
+          serverUrl={logsServerUrl}
+          serverAliases={serverAliases}
+          onClose={() => setLogsServerUrl(null)}
+        />
       )}
     </div>
   )

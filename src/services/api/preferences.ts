@@ -16,6 +16,8 @@ export interface AppPreferences {
   workflowDetailUI: Record<string, WorkflowDetailUIState>
   /** Cached list of workflows with names and all params (synced when workflow list is loaded) */
   workflowsInfo: Workflow[]
+  /** Optional display names for monitored servers (URL -> name) */
+  serverAliases: Record<string, string>
 }
 
 /** @deprecated Use AppPreferences */
@@ -29,6 +31,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   expandedCategories: [],
   workflowDetailUI: {},
   workflowsInfo: [],
+  serverAliases: {},
 }
 
 export async function getPreferences(): Promise<AppPreferences> {
@@ -43,6 +46,10 @@ export async function getPreferences(): Promise<AppPreferences> {
     const workflowsInfo = Array.isArray(data.workflowsInfo)
       ? (data.workflowsInfo as Workflow[])
       : []
+    const serverAliases =
+      data.serverAliases && typeof data.serverAliases === 'object' && !Array.isArray(data.serverAliases)
+        ? data.serverAliases
+        : {}
     return {
       anonymiseUsers: Boolean(data.anonymiseUsers),
       serversOpen: Boolean(data.serversOpen),
@@ -51,6 +58,7 @@ export async function getPreferences(): Promise<AppPreferences> {
       expandedCategories: Array.isArray(data.expandedCategories) ? data.expandedCategories : [],
       workflowDetailUI,
       workflowsInfo,
+      serverAliases,
     }
   } catch {
     return { ...DEFAULT_PREFERENCES }
@@ -73,6 +81,10 @@ export async function updatePreferences(prefs: Partial<AppPreferences>): Promise
       ? data.workflowDetailUI
       : {}
   const workflowsInfo = Array.isArray(data.workflowsInfo) ? (data.workflowsInfo as Workflow[]) : []
+  const serverAliases =
+    data.serverAliases && typeof data.serverAliases === 'object' && !Array.isArray(data.serverAliases)
+      ? data.serverAliases
+      : {}
   return {
     anonymiseUsers: Boolean(data.anonymiseUsers),
     serversOpen: Boolean(data.serversOpen),
@@ -81,5 +93,6 @@ export async function updatePreferences(prefs: Partial<AppPreferences>): Promise
     expandedCategories: Array.isArray(data.expandedCategories) ? data.expandedCategories : [],
     workflowDetailUI,
     workflowsInfo,
+    serverAliases,
   }
 }
