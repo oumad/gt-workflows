@@ -150,3 +150,6 @@ dist/
 gt-plugins
 gt-plugins-master
 gt-workflows-manager-e2e
+
+# Claude Code
+.claude/settings.local.json

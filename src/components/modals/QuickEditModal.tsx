@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Save, Server, Clock, Code } from 'lucide-react'
 import type { WorkflowParams } from '@/types'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
+import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import './QuickEditModal.css'
 
 interface QuickEditModalProps {
@@ -17,7 +18,7 @@ export default function QuickEditModal({
   onClose,
   onSave,
 }: QuickEditModalProps) {
-  const [serverUrl, setServerUrl] = useState('')
+  const [serverUrl, setServerUrl] = useState<string | string[] | undefined>(undefined)
   const [timeout, setTimeout] = useState<number | undefined>(undefined)
   const [devMode, setDevMode] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -84,7 +85,7 @@ export default function QuickEditModal({
         }
         updatedParams.comfyui_config = {
           ...updatedParams.comfyui_config,
-          serverUrl: serverUrl || undefined,
+          serverUrl: serverUrl,
         }
       }
 
@@ -147,17 +148,13 @@ export default function QuickEditModal({
 
           {isComfyUI && (
             <div className="form-group">
-              <label htmlFor="serverUrl">
+              <label>
                 <Server size={16} />
                 ComfyUI Server URL
               </label>
-              <input
-                id="serverUrl"
-                type="text"
+              <ServerUrlEditor
                 value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="http://127.0.0.1:8188"
-                className="form-input"
+                onChange={setServerUrl}
               />
             </div>
           )}
@@ -203,7 +200,7 @@ export default function QuickEditModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !fullParams || (isComfyUI && !serverUrl.trim())}
+            disabled={saving || !fullParams || (isComfyUI && !serverUrl)}
             className="btn btn-primary"
           >
             <Save size={16} />

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Save, Server, Clock, Code, CheckSquare } from 'lucide-react'
 import type { Workflow } from '@/types'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
+import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import './BulkEditModal.css'
 
 interface BulkEditModalProps {
@@ -15,7 +16,7 @@ export default function BulkEditModal({
   onClose,
   onSave,
 }: BulkEditModalProps) {
-  const [serverUrl, setServerUrl] = useState('')
+  const [serverUrl, setServerUrl] = useState<string | string[] | undefined>(undefined)
   const [timeout, setTimeout] = useState<number | undefined>(undefined)
   const [devMode, setDevMode] = useState<boolean | undefined>(undefined)
   const [saving, setSaving] = useState(false)
@@ -45,14 +46,14 @@ export default function BulkEditModal({
           // Update server URL for ComfyUI workflows
           if (
             workflow.params.parser === 'comfyui' &&
-            serverUrl.trim()
+            serverUrl !== undefined
           ) {
             if (!updatedParams.comfyui_config) {
               updatedParams.comfyui_config = {}
             }
             updatedParams.comfyui_config = {
               ...updatedParams.comfyui_config,
-              serverUrl: serverUrl.trim(),
+              serverUrl: serverUrl,
             }
           }
 
@@ -139,17 +140,14 @@ export default function BulkEditModal({
 
           {hasComfyUI && (
             <div className="form-group">
-              <label htmlFor="bulk-serverUrl">
+              <label>
                 <Server size={16} />
                 ComfyUI Server URL
               </label>
-              <input
-                id="bulk-serverUrl"
-                type="text"
+              <ServerUrlEditor
                 value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
+                onChange={setServerUrl}
                 placeholder="Leave empty to keep current values"
-                className="form-input"
               />
               <small>
                 Will only update {comfyUIWorkflows.length} ComfyUI workflow

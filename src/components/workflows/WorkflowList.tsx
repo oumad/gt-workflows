@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import AuthImage from '@/components/ui/AuthImage'
+import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import QuickEditModal from '@/components/modals/QuickEditModal'
 import BulkEditModal from '@/components/modals/BulkEditModal'
 import HealthCheckModal from '@/components/modals/HealthCheckModal'
@@ -28,6 +29,7 @@ import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import { useServerHealthCheck } from '@/hooks/useServerHealthCheck'
 import type { AppSettings } from '@/utils/settings'
+import { getPrimaryServerUrl, serverUrlDisplayLabel } from '@/utils/serverUrl'
 import { getSettings } from '@/utils/settings'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
@@ -54,7 +56,7 @@ interface SortableWorkflowCardProps {
   onDownload: (name: string, e: React.MouseEvent) => void
   onDuplicate: (name: string, e: React.MouseEvent) => void
   onViewLogs?: (serverUrl: string) => void
-  onFieldChange: (workflowName: string, field: string, value: string | number | boolean | undefined) => void
+  onFieldChange: (workflowName: string, field: string, value: string | string[] | number | boolean | undefined) => void
 }
 
 function SortableWorkflowCard({
@@ -72,7 +74,7 @@ function SortableWorkflowCard({
   onViewLogs,
   onFieldChange,
 }: SortableWorkflowCardProps) {
-  const comfyServerUrl = workflow.params?.parser === 'comfyui' ? workflow.params?.comfyui_config?.serverUrl : undefined
+  const comfyServerUrl = workflow.params?.parser === 'comfyui' ? getPrimaryServerUrl(workflow.params?.comfyui_config?.serverUrl) || undefined : undefined
   const {
     attributes,
     listeners,
@@ -151,9 +153,9 @@ function SortableWorkflowCard({
                         ? 'var(--success)'
                         : 'var(--accent)',
                     ...(Object.fromEntries(
-                      Object.entries(workflow.params.iconBadge).filter(
-                        ([key]) => key !== 'content' && key !== 'colorVariant'
-                      )
+                      Object.entries(workflow.params.iconBadge)
+                        .filter(([key]) => key !== 'content' && key !== 'colorVariant')
+                        .map(([key, val]) => [key, typeof val === 'string' ? val.replace(/;+$/, '') : val])
                     ) as React.CSSProperties),
                   }}
                 >
@@ -175,36 +177,36 @@ function SortableWorkflowCard({
         <div className="workflow-quick-info">
           {workflow.params.parser === 'comfyui' &&
             workflow.params.comfyui_config?.serverUrl && (() => {
-              const serverUrl = (editedParams.comfyui_config?.serverUrl ?? workflow.params.comfyui_config!.serverUrl!) || ''
+              const rawServerUrl = editedParams.comfyui_config?.serverUrl ?? workflow.params.comfyui_config!.serverUrl!
+              const serverUrl = getPrimaryServerUrl(rawServerUrl)
+              if (!serverUrl) return null
               const normalizedServerUrl = serverUrl.replace(/\/$/, '')
               const normalizedMonitoredServers = (settings.monitoredServers || []).map((s: string) => s.replace(/\/$/, ''))
               const isMonitored = normalizedMonitoredServers.includes(normalizedServerUrl)
               const healthStatus = isMonitored ? getHealthStatus(normalizedServerUrl) : null
               const isHealthy = healthStatus?.healthy === true
               const isUnhealthy = healthStatus?.healthy === false
-              
+
               return (
                 <div className="quick-info-item">
                   <Server size={14} />
                   <span className="quick-info-label">Server:</span>
                   {editMode ? (
-                    <input
-                      type="text"
-                      value={serverUrl}
-                      onChange={(e) => onFieldChange(workflow.name, 'comfyui_config.serverUrl', e.target.value || undefined)}
-                      className="quick-info-edit-input"
-                      placeholder="http://127.0.0.1:8188"
+                    <ServerUrlEditor
+                      compact
+                      value={rawServerUrl}
+                      onChange={(v) => onFieldChange(workflow.name, 'comfyui_config.serverUrl', v)}
                     />
                   ) : (
                     <span className="quick-info-value" title={serverUrl}>
-                      {serverUrl.replace(/^https?:\/\//, '')}
+                      {serverUrlDisplayLabel(rawServerUrl)}
                     </span>
                   )}
                   {!editMode && isMonitored && healthStatus && (
-                    <span 
+                    <span
                       className={`server-health-indicator ${
-                        isHealthy ? 'healthy' : 
-                        isUnhealthy ? 'unhealthy' : 
+                        isHealthy ? 'healthy' :
+                        isUnhealthy ? 'unhealthy' :
                         'checking'
                       }`}
                       title={
@@ -217,7 +219,7 @@ function SortableWorkflowCard({
                     </span>
                   )}
                   {!editMode && !isMonitored && (
-                    <span 
+                    <span
                       className="server-health-indicator not-monitored"
                       title="This server is not in the monitored servers list. Add it in Settings to see health status."
                     >
@@ -686,7 +688,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     setLocalWorkflows(updatedWorkflows)
   }
 
-  const handleFieldChange = (workflowName: string, field: string, value: string | number | boolean | undefined) => {
+  const handleFieldChange = (workflowName: string, field: string, value: string | string[] | number | boolean | undefined) => {
     setEditedWorkflows(prev => {
       const next = new Map(prev)
       const existing = next.get(workflowName) || {}

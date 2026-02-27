@@ -111,7 +111,7 @@ export interface DashboardConfig {
 }
 
 export interface ComfyUIConfig {
-  serverUrl?: string;
+  serverUrl?: string | string[];
   workflow?: string;
   parser_type?: string;
   input_ids?: string[];
@@ -119,16 +119,26 @@ export interface ComfyUIConfig {
   nonPersistentNodeIds?: string[];
   hiddenNodeIds?: string[];
   wrappedNodeIds?: string[];
+  saveInputPath?: string;
   saveOutputPath?: string;
-  node_parsers?: Record<string, unknown>;
+  node_parsers?: Record<string, unknown> | string;
   subgraphs?: Record<string, SubgraphConfig>;
-  placeholders?: Record<string, unknown>;
+  placeholders?: PlaceholdersConfig;
   outputComparator?: OutputComparatorConfig;
   ACCEPTED_FILE_FORMATS?: string[];
   ACCEPTED_IMG_FORMATS?: string[];
   ACCEPTED_VIDEO_FORMATS?: string[];
   ACCEPTED_AUDIO_FORMATS?: string[];
   SAVE_INPUT_PATH?: string;
+}
+
+export interface PlaceholdersConfig {
+  ACCEPTED_FILE_FORMATS?: string[];
+  ACCEPTED_IMG_FORMATS?: string[];
+  ACCEPTED_VIDEO_FORMATS?: string[];
+  ACCEPTED_AUDIO_FORMATS?: string[];
+  SAVE_INPUT_PATH?: string;
+  [key: string]: unknown;
 }
 
 export interface SubgraphConfig {

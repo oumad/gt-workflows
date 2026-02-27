@@ -19,7 +19,9 @@ import ResetConfirmationModal from '@/components/modals/ResetConfirmationModal'
 import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
+import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import { compressImage } from '@/utils/imageCompression'
+import { getPrimaryServerUrl } from '@/utils/serverUrl'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import type { WorkflowDetailUIState } from '@/services/api/preferences'
 import './WorkflowDetail.css'
@@ -1264,24 +1266,23 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                   <div className="info-item">
                     <label>Server URL</label>
                     <div className="info-input-with-action">
-                      <input
-                        type="text"
-                        value={params.comfyui_config?.serverUrl || ''}
-                        onChange={(e) => handleParamsUpdate({
+                      <ServerUrlEditor
+                        value={params.comfyui_config?.serverUrl}
+                        onChange={(v) => handleParamsUpdate({
                           ...params,
                           comfyui_config: {
                             ...(params.comfyui_config || {}),
-                            serverUrl: e.target.value || undefined
+                            serverUrl: v
                           }
                         })}
-                        placeholder="http://127.0.0.1:8188"
-                        className={`info-input ${isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}`}
+                        className={isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}
+                        onViewLogs={(url) => setLogsServerUrl(url)}
                       />
                       {params.comfyui_config?.serverUrl && (
                         <button
                           type="button"
                           className="workflow-detail-logs-btn"
-                          onClick={() => setLogsServerUrl(params.comfyui_config!.serverUrl!)}
+                          onClick={() => setLogsServerUrl(getPrimaryServerUrl(params.comfyui_config!.serverUrl!))}
                           title="View server logs"
                         >
                           <FileText size={16} />

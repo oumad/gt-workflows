@@ -386,13 +386,14 @@ Here the list of parameters availables for the params.json:
 - **ACCEPTED_VIDEO_FORMATS** (optional): an array of strings representing the allowed video file extensions (e.g., ["mp4", "mov"])
 - **SAVE_INPUT_PATH** (optional/required): a string specifying the path where input files should be saved before being processed by ComfyUI. This is particularly useful when handling file uploads. Note: This field becomes required when using certain node parser templates (e.g., uploadImage, uploadVideo).
 - **comfyui_config** (required): object used by the parser for ui and execution
-  - **serverUrl** (required): a string that represent your comfyui server url
+  - **serverUrl** (required): a string or an array of strings for load balancing across multiple ComfyUI servers. Supports globalEnv references like `<globalEnv.variableName>`
   - **workflow** (required): the path of your comfyui workflow api file. Note: the file should be on the workflow folder
   - **input_ids** (optional): a string array that contain ids of node you want to show and interact on the ui. You can also use AppInfo node from mixlab comfyui plugin to expose ids for the ui without declaring this field
   - **output_ids** (optional): same as input_ids but for output nodes
   - **nonPersistentNodeIds** (optional): a string array that contain ids of node for which the persistence should be ignored.
   - **hiddenNodeIds** (optional): an array of string that determines a list of the nodes that will not be displayed.
   - **wrappedNodeIds** (optional): an array of string that determines a list of the nodes that will be wrapped by default.
+  - **saveInputPath** (optional): a string specifying the path where input files are saved before being processed by ComfyUI. Required when using `uploadImage` or `uploadVideo` input parsers that need file uploads.
   - **saveOutputPath** (optional): A string specifying the path where the output results should be saved. Output files will be automatically organized into a folder named after the current date. You can use placeholders for dynamic folder names:
     - `[userName]`: The user's display name in the system (e.g., GT).
     - `[last-ad-id]`: The last Active Directory ID used for login.
@@ -420,16 +421,32 @@ Here the list of parameters availables for the params.json:
 - **iconBadge** (optional): an object that defines the configuration of the icon badge (see ICON BADGE section above)
 - **description** (optional): simple description that displayed on hover of the workflow card from the catalogue
 - **documentation** (optional): a path of .md file for the documentation that will be available on workflow preview from the info icon button (should be an absolute path)
+- **tags** (optional): an array of strings for workflow categorization and searching
+- **category** (optional): a string for dynamic workflow grouping in the gallery
+- **order** (optional): a number for sorting workflows within a category in the gallery
+
+### GLOBAL ENVIRONMENT VARIABLES
+
+You can reference global environment variables in certain fields (such as `serverUrl`) using the syntax `<globalEnv.variableName>`. When the workflow is executed, these references are resolved to the corresponding values from the global environment configuration. This is useful for sharing server URLs or paths across multiple workflows without hardcoding them.
+
+Example:
+```json
+{
+  "comfyui_config": {
+    "serverUrl": "<globalEnv.comfyuiServer>"
+  }
+}
+```
 
 ### WORKFLOW REQUIREMENTS
 
 If you want to expose input or output nodes directly from your workflow, we recommend using the App Info node from the Mixlab plugin in ComfyUI.
 
-Supported output nodes: native SaveImageWebSocket (images), VHS_VideoCombine (videos), SaveVideo (videos), and Display Any (rgthree) (text content or arbitrary file downloads).
+Supported output nodes: native SaveImageWebSocket (images), SaveImage (images), VHS_VideoCombine (videos), SaveVideo (videos), SaveAudio (audio), and Display Any (rgthree) (text content or arbitrary file downloads).
 
 To use Display Any (rgthree) for downloading files, add the file: prefix to the output file path (e.g., file:3D/12_Hy21_Mesh_00001_.glb).
 
-Supported input nodes: any nodes can be supported as long as you use node parsers to configure them. By default, all node inputs will be visible and represented by their type (checkbox for boolean, text field for string, and number input for numbers).
+Supported input nodes: any nodes can be supported as long as you use node parsers to configure them. By default, all node inputs will be visible and represented by their type (checkbox for boolean, text field for string, and number input for numbers). Default parsers are provided for common nodes including LoadImage, LoadVideo, VHS_LoadVideo, VHS_LoadVideoPath, LoadAudio, TextInput_, CLIPTextEncode, ETN_LoadImageBase64, IntNumber, FloatSlider, and Switch any [Crystools].
 
 We recommend using TextInput from the Mixlab plugin in ComfyUI for a better text‑input experience in the GT UI.
 
