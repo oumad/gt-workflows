@@ -2,17 +2,21 @@ import path from 'path';
 import fs from 'fs/promises';
 import { Router } from 'express';
 import archiver from 'archiver';
+import { resolveWorkflowPath, validateWorkflowName } from '../lib/workflowPath.js';
 
-export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkflowJson, upload }) {
+export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkflowJson, upload, requireAdmin }) {
   const router = Router();
+  const admin = requireAdmin || ((_req, _res, next) => next());
 
   router.get('/workflows/list', async (_req, res) => {
     try {
+      const root = path.resolve(workflowsPath);
       const entries = await fs.readdir(workflowsPath, { withFileTypes: true });
       const workflows = [];
       for (const entry of entries) {
         if (entry.isDirectory() && !entry.name.startsWith('.')) {
           const workflowPath = path.join(workflowsPath, entry.name);
+          if (!path.resolve(workflowPath).startsWith(root + path.sep)) continue;
           try {
             const params = await readParamsJson(workflowPath);
             if (!params) continue;
@@ -38,9 +42,14 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
 
   router.get('/workflows/:name/params', async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
-      const params = await readParamsJson(workflowPath);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      const params = await readParamsJson(resolved.workflowPath);
+      if (!params) {
+        return res.status(404).json({ error: 'Workflow not found' });
+      }
       res.json(params);
     } catch (error) {
       console.error('Error fetching workflow params:', error);
@@ -50,9 +59,11 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
 
   router.get('/workflows/:name/workflow', async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
-      const workflowData = await findWorkflowJson(workflowPath);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      const workflowData = await findWorkflowJson(resolved.workflowPath);
       if (!workflowData) {
         return res.status(404).json({ error: 'Workflow JSON file not found' });
       }
@@ -63,16 +74,18 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.put('/workflows/:name/params', async (req, res) => {
+  router.put('/workflows/:name/params', admin, async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
-      const paramsPath = path.join(workflowPath, 'params.json');
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       try {
-        await fs.access(workflowPath);
+        await fs.access(resolved.workflowPath);
       } catch {
         return res.status(404).json({ error: 'Workflow not found' });
       }
+      const paramsPath = path.join(resolved.workflowPath, 'params.json');
       await fs.writeFile(paramsPath, JSON.stringify(req.body, null, 2), 'utf-8');
       res.json({ success: true });
     } catch (error) {
@@ -81,14 +94,20 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.post('/workflows/create', async (req, res) => {
+  router.post('/workflows/create', admin, async (req, res) => {
     try {
       const { name, params } = req.body;
-      if (!name || !name.trim()) {
-        return res.status(400).json({ error: 'Workflow name is required' });
+      const validated = validateWorkflowName(name);
+      if (!validated.ok) {
+        return res.status(400).json({ error: validated.error });
       }
-      const workflowName = name.trim();
+      const workflowName = validated.workflowName;
       const workflowPath = path.join(workflowsPath, workflowName);
+      const root = path.resolve(workflowsPath);
+      const resolvedPath = path.resolve(workflowPath);
+      if (!resolvedPath.startsWith(root + path.sep)) {
+        return res.status(400).json({ error: 'Invalid workflow name' });
+      }
       try {
         await fs.access(workflowPath);
         return res.status(409).json({ error: 'Workflow already exists' });
@@ -110,16 +129,23 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.post('/workflows/:name/duplicate', async (req, res) => {
+  router.post('/workflows/:name/duplicate', admin, async (req, res) => {
     try {
-      const sourceWorkflowName = decodeURIComponent(req.params.name);
-      const { newName } = req.body;
-      if (!newName || !newName.trim()) {
-        return res.status(400).json({ error: 'New workflow name is required' });
+      const sourceResolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!sourceResolved.ok) {
+        return res.status(400).json({ error: sourceResolved.error });
       }
-      const sourceWorkflowPath = path.join(workflowsPath, sourceWorkflowName);
-      const newWorkflowName = newName.trim();
-      const newWorkflowPath = path.join(workflowsPath, newWorkflowName);
+      const sourceWorkflowPath = sourceResolved.workflowPath;
+      const newValidated = validateWorkflowName(req.body?.newName);
+      if (!newValidated.ok) {
+        return res.status(400).json({ error: newValidated.error || 'New workflow name is required' });
+      }
+      const newWorkflowName = newValidated.workflowName;
+      const newWorkflowPath = path.resolve(workflowsPath, newWorkflowName);
+      const root = path.resolve(workflowsPath);
+      if (!newWorkflowPath.startsWith(root + path.sep)) {
+        return res.status(400).json({ error: 'Invalid workflow name' });
+      }
       try {
         await fs.access(sourceWorkflowPath);
       } catch {
@@ -147,7 +173,7 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
         }
       }
       const updatedParams = { ...sourceParams };
-      if (updatedParams.label === sourceWorkflowName) {
+      if (updatedParams.label === sourceResolved.workflowName) {
         updatedParams.label = newWorkflowName;
       }
       const paramsPath = path.join(newWorkflowPath, 'params.json');
@@ -159,16 +185,18 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.delete('/workflows/:name', async (req, res) => {
+  router.delete('/workflows/:name', admin, async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       try {
-        await fs.access(workflowPath);
+        await fs.access(resolved.workflowPath);
       } catch {
         return res.status(404).json({ error: 'Workflow not found' });
       }
-      await fs.rm(workflowPath, { recursive: true, force: true });
+      await fs.rm(resolved.workflowPath, { recursive: true, force: true });
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting workflow:', error);
@@ -176,43 +204,53 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.post('/workflows/:name/upload', upload.single('file'), async (req, res) => {
+  router.post('/workflows/:name/upload', admin, upload.single('file'), async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       try {
-        await fs.access(workflowPath);
+        await fs.access(resolved.workflowPath);
       } catch {
         return res.status(404).json({ error: 'Workflow not found' });
       }
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
+      const workflowPath = resolved.workflowPath;
       try {
         await fs.access(req.file.path);
       } catch {
         // ignore
       }
       const params = await readParamsJson(workflowPath);
+      const resolvedWorkflowRoot = path.resolve(workflowPath);
+      const workflowPrefix = resolvedWorkflowRoot + path.sep;
       if (req.file.filename === 'icon.jpg' && params?.icon) {
-        const oldIconPath = path.join(workflowPath, params.icon.replace(/^\.\//, ''));
-        const newIconPath = req.file.path;
-        if (oldIconPath !== newIconPath) {
+        const rawIcon = params.icon.replace(/^\.\//, '');
+        const oldIconPath = path.resolve(workflowPath, rawIcon);
+        if (oldIconPath.startsWith(workflowPrefix) && oldIconPath !== req.file.path) {
           try {
             await fs.unlink(oldIconPath);
           } catch (err) {
             if (err.code !== 'ENOENT') console.warn('Failed to delete old icon file:', err.message);
           }
+        } else if (!oldIconPath.startsWith(workflowPrefix)) {
+          console.warn('Skipped deleting old icon: path outside workflow directory');
         }
       }
       if (req.file.filename === 'workflow.json' && params?.comfyui_config?.workflow) {
-        const oldWorkflowPath = path.join(workflowPath, params.comfyui_config.workflow.replace(/^\.\//, ''));
-        if (oldWorkflowPath !== req.file.path) {
+        const rawWorkflow = params.comfyui_config.workflow.replace(/^\.\//, '');
+        const oldWorkflowPath = path.resolve(workflowPath, rawWorkflow);
+        if (oldWorkflowPath.startsWith(workflowPrefix) && oldWorkflowPath !== req.file.path) {
           try {
             await fs.unlink(oldWorkflowPath);
           } catch (err) {
             if (err.code !== 'ENOENT') console.warn('Failed to delete old workflow file:', err.message);
           }
+        } else if (!oldWorkflowPath.startsWith(workflowPrefix)) {
+          console.warn('Skipped deleting old workflow file: path outside workflow directory');
         }
       }
       const filePath = path.relative(workflowsPath, req.file.path);
@@ -231,15 +269,17 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
 
   router.get('/workflows/:name/file/:filename', async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       const filename = decodeURIComponent(req.params.filename);
       if (!filename || filename.includes('..') || path.isAbsolute(filename)) {
         return res.status(400).json({ error: 'Invalid filename' });
       }
-      const workflowPath = path.join(workflowsPath, workflowName);
-      const filePath = path.join(workflowPath, filename);
+      const filePath = path.join(resolved.workflowPath, filename);
       const resolvedPath = path.resolve(filePath);
-      const resolvedWorkflowPath = path.resolve(workflowPath);
+      const resolvedWorkflowPath = path.resolve(resolved.workflowPath);
       if (!resolvedPath.startsWith(resolvedWorkflowPath)) {
         return res.status(403).json({ error: 'Invalid file path' });
       }
@@ -256,20 +296,25 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.delete('/workflows/:name/file/:filename', async (req, res) => {
+  router.delete('/workflows/:name/file/:filename', admin, async (req, res) => {
     try {
-      const workflowName = decodeURIComponent(req.params.name);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       const filename = decodeURIComponent(req.params.filename);
-      const workflowPath = path.join(workflowsPath, workflowName);
-      const filePath = path.join(workflowPath, filename);
+      if (!filename || filename.includes('..') || path.isAbsolute(filename)) {
+        return res.status(400).json({ error: 'Invalid filename' });
+      }
+      const filePath = path.join(resolved.workflowPath, filename);
       try {
-        await fs.access(workflowPath);
+        await fs.access(resolved.workflowPath);
       } catch {
         return res.status(404).json({ error: 'Workflow not found' });
       }
       try {
         const resolvedPath = path.resolve(filePath);
-        const resolvedWorkflowPath = path.resolve(workflowPath);
+        const resolvedWorkflowPath = path.resolve(resolved.workflowPath);
         if (!resolvedPath.startsWith(resolvedWorkflowPath)) {
           return res.status(403).json({ error: 'Invalid file path' });
         }
@@ -288,13 +333,17 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
   router.get('/workflows/:name/download', async (req, res) => {
     let archive = null;
     try {
-      const workflowName = decodeURIComponent(req.params.name);
-      const workflowPath = path.join(workflowsPath, workflowName);
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
       try {
-        await fs.access(workflowPath);
+        await fs.access(resolved.workflowPath);
       } catch {
         return res.status(404).json({ error: 'Workflow not found' });
       }
+      const workflowPath = resolved.workflowPath;
+      const workflowName = resolved.workflowName;
       archive = archiver('zip', { zlib: { level: 9 } });
       let errorSent = false;
       archive.on('error', (err) => {

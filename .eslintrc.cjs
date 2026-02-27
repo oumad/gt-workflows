@@ -24,6 +24,12 @@ module.exports = {
     },
   },
   plugins: ['react-refresh', 'unused-imports'],
+  overrides: [
+    {
+      files: ['server/**/*.js'],
+      env: { node: true },
+    },
+  ],
   rules: {
     'react-refresh/only-export-components': [
       'warn',

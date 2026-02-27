@@ -16,3 +16,4 @@ services:
       - GT_WF_ADMIN_PASSWORD=admin
       - GT_WF_GUEST_USER=guest
       - GT_WF_GUEST_PASSWORD=guest
+      - GT_WF_ANONYMIZE_JOB_STATS_USERS=true

@@ -316,6 +316,9 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         if (ui) {
           if (typeof ui.showWorkflowJson === 'boolean') setShowWorkflowJson(ui.showWorkflowJson)
           if (typeof ui.showParamsJson === 'boolean') setShowParamsJson(ui.showParamsJson)
+        } else {
+          setShowWorkflowJson(false)
+          setShowParamsJson(false)
         }
       })
       .catch(() => {})

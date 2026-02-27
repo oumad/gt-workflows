@@ -14,11 +14,20 @@ const ADMIN_USER = process.env.GT_WF_ADMIN_USER;
 const ADMIN_PASSWORD = process.env.GT_WF_ADMIN_PASSWORD;
 const GUEST_USER = process.env.GT_WF_GUEST_USER;
 const GUEST_PASSWORD = process.env.GT_WF_GUEST_PASSWORD;
-/** When set, job-stats user names are anonymised for guest users (e.g. john.doe → j**.**e). */
-const ANONYMIZE_JOB_STATS_USERS = process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS === 'true' || process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS === '1';
+/** When true (default), job-stats user names are anonymised for guest users. Set to false or 0 to disable. */
+const ANONYMIZE_JOB_STATS_USERS =
+  process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS !== 'false' && process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS !== '0';
 
-const hasAdmin = typeof ADMIN_USER === 'string' && ADMIN_USER.length > 0 && typeof ADMIN_PASSWORD === 'string';
-const hasGuest = typeof GUEST_USER === 'string' && GUEST_USER.length > 0 && typeof GUEST_PASSWORD === 'string';
+const hasAdmin =
+  typeof ADMIN_USER === 'string' &&
+  ADMIN_USER.length > 0 &&
+  typeof ADMIN_PASSWORD === 'string' &&
+  ADMIN_PASSWORD.length > 0;
+const hasGuest =
+  typeof GUEST_USER === 'string' &&
+  GUEST_USER.length > 0 &&
+  typeof GUEST_PASSWORD === 'string' &&
+  GUEST_PASSWORD.length > 0;
 const AUTH_ENABLED = GT_WF_AUTH !== 'false' && (hasAdmin || hasGuest);
 
 /** List of { user, pass } pairs for validation; used to set req.authUsername to the matched username. */

@@ -26,7 +26,7 @@ export function Settings() {
   useEffect(() => {
     getPreferences()
       .then((prefs) => {
-        const list = prefs.monitoredServers?.length ? prefs.monitoredServers : getSettings().monitoredServers
+        const list = prefs.monitoredServers ?? getSettings().monitoredServers
         setMonitoredServers(list)
         setServerAliases(prefs.serverAliases ?? {})
         setPrefsLoaded(true)
@@ -80,10 +80,14 @@ export function Settings() {
       if (url) entries.push({ url, name })
     }
     const existing = new Set(monitoredServers)
-    const newUrls = entries.filter((e) => !existing.has(e.url)).map((e) => e.url)
+    const uniqueNewUrls = new Set<string>()
+    for (const e of entries) {
+      if (e.url && !existing.has(e.url)) uniqueNewUrls.add(e.url)
+    }
+    const newUrls = Array.from(uniqueNewUrls)
     const newNames: Record<string, string> = {}
     for (const e of entries) {
-      if (e.name && newUrls.includes(e.url)) newNames[e.url] = e.name
+      if (e.name && uniqueNewUrls.has(e.url)) newNames[e.url] = e.name
     }
     if (newUrls.length > 0) {
       setMonitoredServers([...monitoredServers, ...newUrls])
@@ -108,7 +112,7 @@ export function Settings() {
   const handleServerUrlChange = (index: number, newUrl: string) => {
     const updated = [...monitoredServers]
     const oldUrl = monitoredServers[index]
-    let normalized = newUrl.trim().replace(/\/$/, '')
+    const normalized = newUrl.trim().replace(/\/$/, '')
     updated[index] = normalized
     setMonitoredServers(updated)
     if (serverAliases[oldUrl] && oldUrl !== normalized) {

@@ -495,17 +495,64 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
-.dev-mode-checkbox {
+.dev-mode-switch-wrap {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  cursor: pointer;
   user-select: none;
 }
 
-.dev-mode-checkbox input[type="checkbox"] {
+.dev-mode-label {
+  flex-shrink: 0;
+}
+
+.dev-mode-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.dev-mode-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.dev-mode-slider {
+  position: absolute;
   cursor: pointer;
-  margin: 0;
+  inset: 0;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.dev-mode-slider::before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.dev-mode-switch input:checked + .dev-mode-slider {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.dev-mode-switch input:checked + .dev-mode-slider::before {
+  transform: translateX(20px);
+}
+
+.dev-mode-switch:hover .dev-mode-slider {
+  border-color: var(--accent);
 }
 
 .dev-mode-badge {

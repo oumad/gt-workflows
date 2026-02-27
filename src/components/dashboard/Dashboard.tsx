@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, Fragment } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, RefreshCw, AlertCircle, Users, X, ChevronDown, ChevronRight, Server, List, UserX, Search } from 'lucide-react'
 import { ROUTES } from '@/app/routes'
@@ -27,7 +27,7 @@ function formatDuration(processedOn: number | undefined, finishedOn: number | un
 }
 
 export function Dashboard(): React.ReactElement {
-  const { role } = useAuth()
+  const { role, username } = useAuth()
   const isAdmin = role === 'admin'
   const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
@@ -35,7 +35,7 @@ export function Dashboard(): React.ReactElement {
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
-  const [anonymiseUsers, setAnonymiseUsers] = useState(false)
+  const [anonymiseUsers, setAnonymiseUsers] = useState(role === 'guest')
   const [workflowSearch, setWorkflowSearch] = useState('')
 
   const {
@@ -54,6 +54,9 @@ export function Dashboard(): React.ReactElement {
     loadStats,
   } = useJobStats({ rangeMode, jobsLimit, timeRangeId, selectedUser })
 
+  const loadStatsRef = useRef(loadStats)
+  loadStatsRef.current = loadStats
+
   useEffect(() => {
     setExpandedJobId(null)
   }, [selectedUser])
@@ -61,11 +64,12 @@ export function Dashboard(): React.ReactElement {
   useEffect(() => {
     getPreferences()
       .then((prefs) => {
-        setAnonymiseUsers(prefs.anonymiseUsers)
+        setAnonymiseUsers(role === 'guest' ? (prefs.anonymiseUsers !== false) : prefs.anonymiseUsers)
         setUserDetailsOpen(prefs.userDetailsOpen)
       })
       .catch(() => {})
-  }, [])
+    loadStatsRef.current(true)
+  }, [username, role])
 
   const filteredWorkflowUsage = useMemo(() => {
     const q = workflowSearch.trim().toLowerCase()

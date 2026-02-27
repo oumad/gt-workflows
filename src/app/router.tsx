@@ -73,7 +73,9 @@ function LogoutButton(): React.ReactElement | null {
     const t = setTimeout(() => {
       try {
         sessionStorage.removeItem(FIRST_LOGIN_KEY)
-      } catch {}
+      } catch (err) {
+        console.debug('Failed to remove FIRST_LOGIN_KEY from sessionStorage', err)
+      }
       setShowWelcome(false)
     }, 4000)
     return () => clearTimeout(t)

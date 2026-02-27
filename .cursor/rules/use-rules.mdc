@@ -1,0 +1,17 @@
+---
+description: Always apply project rules from .cursor/rules when making changes
+alwaysApply: true
+---
+
+# Use project rules
+
+When editing this codebase, **always consult and follow** the rules in `.cursor/rules/`:
+
+- **architecture.mdc** – Structure, SRP, boundaries, path aliases, no circular imports.
+- **typescript-node.mdc** – Type discipline, ESM, named exports, error handling (for `.ts` / `.tsx`).
+- **tooling.mdc** – ESLint, Prettier, pre-commit (format and lint).
+- **workflow-studio.mdc** – Workflow Studio params, API, and plugin behaviour.
+- **react-vite.mdc** – Frontend components and state (when touching React/Vite).
+- **yarn-scripts.mdc** – Scripts and commands (when adding or changing scripts).
+
+Apply the rules that match the files you change (e.g. server JS → architecture; frontend TS → architecture + typescript-node + react-vite).

@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { securityHeadersMiddleware } from './middleware/security.js';
-import { createBasicAuthMiddleware } from './middleware/auth.js';
+import { createBasicAuthMiddleware, createBlockGuestExceptStatsMiddleware, createRequireAdminMiddleware } from './middleware/auth.js';
 import { createUploadMiddleware } from './middleware/upload.js';
 import { readParamsJson, findWorkflowJson } from './services/workflowFs.js';
 import { createPingRouter } from './routes/ping.js';
@@ -21,10 +21,13 @@ export function createApp() {
   app.use(express.json({ limit: '50mb' }));
 
   app.use('/api', basicAuth);
+  app.use('/api', createBlockGuestExceptStatsMiddleware(config));
   app.use('/data', basicAuth);
+  app.use('/data', createBlockGuestExceptStatsMiddleware(config));
 
   app.use('/api', createPingRouter(config));
   app.use('/api', createServersRouter());
+  const requireAdmin = createRequireAdminMiddleware(config);
   app.use(
     '/api',
     createWorkflowsRouter({
@@ -32,6 +35,7 @@ export function createApp() {
       readParamsJson,
       findWorkflowJson,
       upload,
+      requireAdmin,
     })
   );
   app.use('/api', createStatsRouter(config));

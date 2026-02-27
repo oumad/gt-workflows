@@ -56,10 +56,13 @@ export function createServersRouter() {
   router.post('/servers/health-check', async (req, res) => {
     try {
       const { serverUrl } = req.body;
-      if (!serverUrl) {
+      if (!serverUrl || typeof serverUrl !== 'string') {
         return res.status(400).json({ error: 'Server URL is required' });
       }
-      const normalizedUrl = serverUrl.replace(/\/$/, '');
+      const normalizedUrl = serverUrl.trim().replace(/\/$/, '');
+      if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+        return res.status(400).json({ error: 'Invalid server URL' });
+      }
       let lastError = null;
       let lastStatus = null;
 

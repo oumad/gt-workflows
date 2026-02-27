@@ -111,6 +111,9 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
   const [userJobs, setUserJobs] = useState<ActivityJob[]>([])
   const [userJobsLoading, setUserJobsLoading] = useState(false)
 
+  const latestLoadUserJobsIdRef = useRef(0)
+  const loadCounterRef = useRef(0)
+
   const setState = {
     setWorkflowUsage,
     setServerUsage,
@@ -121,6 +124,8 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
 
   const loadUserJobs = useCallback(
     async (user: string) => {
+      latestLoadUserJobsIdRef.current += 1
+      const localId = latestLoadUserJobsIdRef.current
       setUserJobsLoading(true)
       setUserJobs([])
       try {
@@ -128,6 +133,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
         if (rangeMode === 'time') {
           const { from, to } = getTimeRangeBounds(timeRangeId)
           for (let offset = 0; offset < TIME_RANGE_SCAN_LIMIT; offset += TIME_RANGE_CHUNK_SIZE) {
+            if (latestLoadUserJobsIdRef.current !== localId) return
             const limit = Math.min(TIME_RANGE_CHUNK_SIZE, TIME_RANGE_SCAN_LIMIT - offset)
             const res = await getUsageStatsChunk({
               from,
@@ -142,6 +148,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
           }
         } else {
           for (let offset = 0; offset < jobsLimit; offset += CHUNK_SIZE) {
+            if (latestLoadUserJobsIdRef.current !== localId) return
             const limit = Math.min(CHUNK_SIZE, jobsLimit - offset)
             const res = await getUsageStatsChunk({
               limit,
@@ -152,10 +159,13 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
             allJobs.push(...(res.jobs ?? []))
           }
         }
+        if (latestLoadUserJobsIdRef.current !== localId) return
         setUserJobs(allJobs)
       } catch {
+        if (latestLoadUserJobsIdRef.current !== localId) return
         setUserJobs([])
       } finally {
+        if (latestLoadUserJobsIdRef.current !== localId) return
         setUserJobsLoading(false)
       }
     },
@@ -164,6 +174,9 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
 
   const loadStats = useCallback(
     async (forceRefresh = false) => {
+      loadCounterRef.current += 1
+      const localId = loadCounterRef.current
+
       const useCache = !forceRefresh && hasCachedUsageStats(cacheParams)
       const cachedQueue = getCachedQueueStats()
       const cachedUsage = getCachedUsageStats(cacheParams)
@@ -171,7 +184,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
       if (useCache && cachedUsage && cachedQueue !== null) {
         setConfigured(cachedQueue.configured)
         if (cachedQueue.counts) setQueueCounts(cachedQueue.counts)
-        if (cachedQueue.error) setError(cachedQueue.error)
+        setError(cachedQueue.error ?? null)
         applyUsageResponse(
           cachedUsage,
           {
@@ -185,7 +198,6 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
           timeRangeId
         )
         setLoading(false)
-        setError(null)
         setProgress(null)
         if (selectedUser) loadUserJobs(selectedUser)
         return
@@ -198,6 +210,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
 
       try {
         const queueRes = await getQueueStats()
+        if (loadCounterRef.current !== localId) return
         setConfigured(queueRes.configured)
         if (queueRes.counts) setQueueCounts(queueRes.counts)
         if (queueRes.error) setError(queueRes.error)
@@ -217,8 +230,11 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
             to,
             TIME_RANGE_SCAN_LIMIT,
             userOpt,
-            (scanned, total) => setProgress({ current: scanned, total })
+            (scanned, total) => {
+              if (loadCounterRef.current === localId) setProgress({ current: scanned, total })
+            }
           )
+          if (loadCounterRef.current !== localId) return
           if (usageRes.error) setError(usageRes.error)
           applyUsageResponse(usageRes, setState, selectedUser, timeRangeId)
           setCachedUsageStats(cacheParams, usageRes)
@@ -228,16 +244,21 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
             jobsLimit,
             CHUNK_SIZE,
             userOpt,
-            (current, total) => setProgress({ current, total })
+            (current, total) => {
+              if (loadCounterRef.current === localId) setProgress({ current, total })
+            }
           )
+          if (loadCounterRef.current !== localId) return
           if (usageRes.error) setError(usageRes.error)
           applyUsageResponse(usageRes, setState, selectedUser, timeRangeId)
           setCachedUsageStats(cacheParams, usageRes)
           if (selectedUser) loadUserJobs(selectedUser)
         }
 
+        if (loadCounterRef.current !== localId) return
         setProgress(null)
       } catch (err) {
+        if (loadCounterRef.current !== localId) return
         const message =
           err instanceof Error && err.name === 'AbortError'
             ? 'Request took too long. Try a smaller range or fewer jobs.'
@@ -247,6 +268,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
         setError(message)
         setProgress(null)
       } finally {
+        if (loadCounterRef.current !== localId) return
         setLoading(false)
       }
     },

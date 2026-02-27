@@ -132,6 +132,10 @@ function mergeUserActivity(a: UserActivityItem[], b: UserActivityItem[]): UserAc
 
 export async function getQueueStats(): Promise<QueueStatsResponse> {
   const response = await fetchWithTimeout('/api/stats/queue', STATS_REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Queue stats failed (${response.status}): ${body || response.statusText}`)
+  }
   return response.json()
 }
 
@@ -167,6 +171,10 @@ export async function getUsageStatsChunk(options: UsageStatsOptions): Promise<Us
   if (options.includeJobs) params.set('includeJobs', '1')
   const url = `/api/stats/usage?${params.toString()}`
   const response = await fetchWithTimeout(url, STATS_REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Usage stats failed (${response.status}): ${body || response.statusText}`)
+  }
   return response.json()
 }
 

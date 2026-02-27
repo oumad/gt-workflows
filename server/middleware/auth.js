@@ -33,3 +33,45 @@ export function createBasicAuthMiddleware({ auth }) {
     next();
   };
 }
+
+/**
+ * Middleware that allows only admin when auth is enabled. Use for workflow write operations
+ * (create, update, delete, duplicate, upload) so guests cannot mutate data via direct API calls.
+ */
+export function createRequireAdminMiddleware(config) {
+  const { auth, adminUser } = config;
+  if (!auth?.enabled || adminUser == null) {
+    return (_req, _res, next) => next();
+  }
+  return function requireAdminMiddleware(req, res, next) {
+    if (req.authUsername === adminUser) {
+      return next();
+    }
+    return res.status(403).json({ error: 'Admin access required' });
+  };
+}
+
+/**
+ * When auth is enabled, restricts guest users to ping and job-stats API only. All other /api
+ * and /data routes return 403 for guests so UI redirects are enforced server-side.
+ */
+export function createBlockGuestExceptStatsMiddleware(config) {
+  const { auth, guestUser } = config;
+  if (!auth?.enabled || guestUser == null) {
+    return (_req, _res, next) => next();
+  }
+  return function blockGuestExceptStatsMiddleware(req, res, next) {
+    if (req.authUsername !== guestUser) {
+      return next();
+    }
+    // req.path is relative to mount: /api -> /ping, /workflows/create; /data -> /gt-workflows/...
+    const path = req.path || '';
+    const baseUrl = req.baseUrl || '';
+    const allowed =
+      baseUrl === '/api' && (path === '/ping' || path.startsWith('/stats'));
+    if (allowed) {
+      return next();
+    }
+    return res.status(403).json({ error: 'Guest access is limited to job stats' });
+  };
+}

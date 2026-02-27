@@ -248,26 +248,23 @@ function SortableWorkflowCard({
           </div>
           <div className="quick-info-item">
             {editMode ? (
-              <label
-                className="dev-mode-checkbox"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const current = editedParams.devMode ?? workflow.params.devMode ?? false
-                  onFieldChange(workflow.name, 'devMode', !current)
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={editedParams.devMode ?? workflow.params.devMode ?? false}
-                  onChange={(e) => {
-                    e.stopPropagation()
-                    onFieldChange(workflow.name, 'devMode', e.target.checked || undefined)
-                  }}
-                />
+              <div className="dev-mode-switch-wrap" onClick={(e) => e.stopPropagation()}>
                 <Code size={14} />
-                <span>Dev Mode</span>
-              </label>
+                <span className="dev-mode-label">Dev Mode</span>
+                <label className="dev-mode-switch" htmlFor={`dev-mode-${workflow.name}`} aria-label="Dev Mode">
+                  <input
+                    id={`dev-mode-${workflow.name}`}
+                    type="checkbox"
+                    role="switch"
+                    checked={editedParams.devMode ?? workflow.params.devMode ?? false}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      onFieldChange(workflow.name, 'devMode', checked)
+                    }}
+                  />
+                  <span className="dev-mode-slider" />
+                </label>
+              </div>
             ) : (
               <>
                 <Code size={14} />
@@ -426,7 +423,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     const load = () => {
       getPreferences()
         .then((prefs) => {
-          setMonitoredServersFromPrefs(prefs.monitoredServers?.length ? prefs.monitoredServers : null)
+          setMonitoredServersFromPrefs(prefs.monitoredServers != null ? prefs.monitoredServers : null)
           setServerAliasesFromPrefs(prefs.serverAliases ?? {})
           if (prefs.expandedCategories?.length > 0) {
             setExpandedCategories(new Set(prefs.expandedCategories))

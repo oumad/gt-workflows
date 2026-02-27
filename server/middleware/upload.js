@@ -1,17 +1,27 @@
 import path from 'path';
 import fs from 'fs/promises';
 import multer from 'multer';
+import { resolveWorkflowPath, sanitizeFilename } from '../lib/workflowPath.js';
 
 const FILE_SIZE_LIMIT = 50 * 1024 * 1024; // 50MB
 
 export function createUploadMiddleware(workflowsPath) {
+  const resolvedRoot = path.resolve(workflowsPath);
+
   const storage = multer.diskStorage({
     destination: async (req, _file, cb) => {
-      const workflowName = req.params.name || req.body.workflowName;
-      if (!workflowName) {
+      const rawName = req.params.name || req.body?.workflowName;
+      if (!rawName) {
         return cb(new Error('Workflow name is required'));
       }
-      const workflowPath = path.join(workflowsPath, workflowName);
+      const resolved = resolveWorkflowPath(workflowsPath, rawName);
+      if (!resolved.ok) {
+        return cb(new Error(resolved.error || 'Invalid workflow name'));
+      }
+      const workflowPath = resolved.workflowPath;
+      if (!workflowPath.startsWith(resolvedRoot + path.sep)) {
+        return cb(new Error('Invalid path'));
+      }
       try {
         await fs.mkdir(workflowPath, { recursive: true });
         cb(null, workflowPath);
@@ -20,15 +30,15 @@ export function createUploadMiddleware(workflowsPath) {
       }
     },
     filename: async (req, file, cb) => {
-      let finalFilename = file.originalname;
+      let finalFilename;
       if (file.mimetype && file.mimetype.startsWith('image/')) {
         finalFilename = 'icon.jpg';
-        const workflowName = req.params.name || req.body.workflowName;
-        if (workflowName) {
-          try {
-            const workflowPath = path.join(workflowsPath, workflowName);
-            const iconPath = path.join(workflowPath, 'icon.jpg');
+        const rawName = req.params.name || req.body?.workflowName;
+        if (rawName) {
+          const resolved = resolveWorkflowPath(workflowsPath, rawName);
+          if (resolved.ok && resolved.workflowPath.startsWith(resolvedRoot + path.sep)) {
             try {
+              const iconPath = path.join(resolved.workflowPath, 'icon.jpg');
               await fs.access(iconPath);
               await fs.unlink(iconPath);
             } catch (err) {
@@ -36,12 +46,13 @@ export function createUploadMiddleware(workflowsPath) {
                 console.warn('Failed to delete old icon before upload:', err.message);
               }
             }
-          } catch (err) {
-            console.warn('Error during icon cleanup:', err.message);
           }
         }
-      } else if (file.mimetype === 'application/json' || file.originalname.toLowerCase().endsWith('.json')) {
+      } else if (file.mimetype === 'application/json' || (file.originalname && file.originalname.toLowerCase().endsWith('.json'))) {
         finalFilename = 'workflow.json';
+      } else {
+        const safe = sanitizeFilename(file.originalname);
+        finalFilename = safe || 'file';
       }
       cb(null, finalFilename);
     },

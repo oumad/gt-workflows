@@ -49,11 +49,13 @@ export function createPreferencesRouter(config) {
     if (Array.isArray(body.expandedCategories)) {
       partial.expandedCategories = body.expandedCategories.filter((s) => typeof s === 'string');
     }
+    const DANGEROUS_KEYS = new Set(['__proto__', 'constructor']);
     if (body.workflowDetailUI != null && typeof body.workflowDetailUI === 'object' && !Array.isArray(body.workflowDetailUI)) {
-      const sanitized = {};
+      const sanitized = Object.create(null);
       for (const [wfName, val] of Object.entries(body.workflowDetailUI)) {
+        if (DANGEROUS_KEYS.has(wfName)) continue;
         if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-          sanitized[wfName] = {};
+          sanitized[wfName] = Object.create(null);
           if (typeof val.showWorkflowJson === 'boolean') sanitized[wfName].showWorkflowJson = val.showWorkflowJson;
           if (typeof val.showParamsJson === 'boolean') sanitized[wfName].showParamsJson = val.showParamsJson;
         }
@@ -61,8 +63,9 @@ export function createPreferencesRouter(config) {
       partial.workflowDetailUI = sanitized;
     }
     if (body.serverAliases != null && typeof body.serverAliases === 'object' && !Array.isArray(body.serverAliases)) {
-      const sanitized = {};
+      const sanitized = Object.create(null);
       for (const [key, val] of Object.entries(body.serverAliases)) {
+        if (DANGEROUS_KEYS.has(key)) continue;
         if (typeof key === 'string' && typeof val === 'string' && val.trim()) {
           sanitized[key.trim()] = String(val).trim();
         }
@@ -71,14 +74,26 @@ export function createPreferencesRouter(config) {
     }
     if (Array.isArray(body.workflowsInfo)) {
       partial.workflowsInfo = body.workflowsInfo
-        .filter((item) => item != null && typeof item === 'object' && typeof item.name === 'string' && typeof item.params === 'object' && item.params !== null)
-        .map((item) => ({
-          name: String(item.name),
-          folderPath: typeof item.folderPath === 'string' ? item.folderPath : undefined,
-          params: item.params,
-          hasWorkflowFile: typeof item.hasWorkflowFile === 'boolean' ? item.hasWorkflowFile : undefined,
-          workflowFilePath: typeof item.workflowFilePath === 'string' ? item.workflowFilePath : undefined,
-        }));
+        .filter(
+          (item) =>
+            item != null &&
+            typeof item === 'object' &&
+            !Array.isArray(item) &&
+            typeof item.name === 'string' &&
+            typeof item.params === 'object' &&
+            item.params !== null &&
+            !Array.isArray(item.params)
+        )
+        .map((item) => {
+          const params = item.params && typeof item.params === 'object' && !Array.isArray(item.params) ? item.params : {};
+          return {
+            name: String(item.name),
+            folderPath: typeof item.folderPath === 'string' ? item.folderPath : undefined,
+            params,
+            hasWorkflowFile: typeof item.hasWorkflowFile === 'boolean' ? item.hasWorkflowFile : undefined,
+            workflowFilePath: typeof item.workflowFilePath === 'string' ? item.workflowFilePath : undefined,
+          };
+        });
     }
     try {
       const merged = await writePreferences(preferencesPath, userId, partial);

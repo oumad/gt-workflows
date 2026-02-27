@@ -1,0 +1,36 @@
+---
+description: Server-side auth and role checks for API and data routes
+globs: "server/**/*.js"
+alwaysApply: false
+---
+
+# Server auth and roles
+
+When auth is enabled (config has admin and/or guest credentials), the server enforces:
+
+## Middleware (server/middleware/auth.js)
+
+- **basicAuth** – Validates credentials; sets `req.authUsername`. No role yet.
+- **createRequireAdminMiddleware(config)** – When auth is on and `adminUser` is set, only that user may proceed; others get 403.
+- **createBlockGuestExceptStatsMiddleware(config)** – When auth is on and `guestUser` is set, guests may only access:
+  - `/api/ping`
+  - `/api/stats` (job-stats and job-stats/timeview)
+  All other `/api` and `/data` routes return 403 for guests. Uses `req.baseUrl` and `req.path` (relative to mount).
+
+## App wiring (server/app.js)
+
+- `basicAuth` and `createBlockGuestExceptStatsMiddleware` run for both `/api` and `/data`.
+- **Workflow write routes** use `createRequireAdminMiddleware`: only admin may call create, update, delete, duplicate, upload, delete file.
+
+## Workflow write routes (admin-only)
+
+In `server/routes/workflows.js`, `requireAdmin` is applied to:
+
+- `PUT /workflows/:name/params`
+- `POST /workflows/create`
+- `POST /workflows/:name/duplicate`
+- `DELETE /workflows/:name`
+- `POST /workflows/:name/upload`
+- `DELETE /workflows/:name/file/:filename`
+
+When adding new write or privileged endpoints, protect them with the same admin middleware and keep guest access limited to ping and stats per the rules above.
