@@ -1,0 +1,44 @@
+---
+description: TypeScript discipline and Node/ESM conventions
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# TypeScript & Node
+
+## Type discipline
+
+- **No `any`**: Use `unknown` and narrow (type guards, assertion after validation).
+- **Strict mode**: Keep `strict: true` and related options in tsconfig.
+- **Prefer `type`** for unions and primitives; **prefer `interface`** for public contracts and object shapes.
+- **Explicit return types** for all exported functions.
+- **Discriminated unions** for state machines (e.g. `{ status: 'idle' | 'loading' | 'error' | 'success'; ... }`).
+- **Exhaustive switch**: Use `never` check for unhandled states.
+
+```typescript
+switch (state.status) {
+  case 'idle':
+  case 'loading':
+  case 'error':
+  case 'success':
+    break
+  default:
+    const _exhaustiveCheck: never = state
+    return _exhaustiveCheck
+}
+```
+
+- **No magic strings**: Use constants or enums/const objects; no implicit casting.
+- **Prefer `readonly`** where possible; no mutable global state.
+- **API validation**: Use Zod (or similar) to validate API responses; don’t trust external data as-is.
+
+## Code style
+
+- Use **named exports** only (no default exports unless required by framework).
+- Use **function** for pure/standalone functions; arrow functions for callbacks.
+- Directories: **lowercase-with-dashes**; files: PascalCase for components, camelCase for utils/hooks.
+- Use ESM only (`import`/`export`); no `require()`.
+
+## Error handling
+
+- Guard clauses and early returns; avoid empty catch blocks—log and rethrow or return typed errors.

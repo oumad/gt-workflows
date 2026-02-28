@@ -1,0 +1,28 @@
+---
+description: ESLint, Prettier, and pre-commit checks
+globs: "*.{js,cjs,mjs,ts,tsx,json}"
+alwaysApply: false
+---
+
+# Tooling & quality gates
+
+## ESLint
+
+- Use: `@typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-plugin-import`, `eslint-plugin-unused-imports`.
+- Enforce: no unused variables, no `console.log` in production (use `no-console` or strip in build), hooks rules, no default exports (optional), named exports only.
+
+## Prettier
+
+- Strict formatting to avoid noisy diffs; run on save or in pre-commit.
+
+## Pre-commit (Husky + lint-staged)
+
+- **tsc --noEmit** (type-check)
+- **eslint** (lint)
+- **prettier --check** (format check)
+
+Broken code or formatting should not be committed; AI improves when these gates are in place.
+
+## CI
+
+- Consider: bundle analyzer in CI, typed API contracts shared with backend.

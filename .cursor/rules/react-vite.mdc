@@ -1,0 +1,60 @@
+---
+description: React, state, API layer, and Vite patterns
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# React & Vite
+
+## React principles
+
+- **Components**: Declarative and side-effect free; no data fetching directly in component body.
+- **Hooks**: Encapsulate side effects and data fetching; components call hooks (e.g. `useUser(id)`), not `fetch` directly.
+- **Props**: Strictly typed (interfaces); avoid prop drilling—use context or state management when needed.
+
+## Component rules
+
+- **Max ~200 lines** per component; split into subcomponents or hooks when larger.
+- No inline complex logic; no inline object creation in JSX; no anonymous functions in JSX for heavy renders.
+- **Memoize** expensive values (`useMemo`); use `useCallback` when passing callbacks down the tree.
+- Prefer **named exports** for components.
+
+## State rules
+
+- **Local UI state** → `useState`
+- **Complex local state** → `useReducer`
+- **Server state** → React Query / TanStack Query (not ad-hoc fetch in components)
+- **Global state** → Context or Zustand; avoid Redux unless necessary
+
+## API & data layer
+
+- **Never** call `fetch` directly inside a component.
+- **Always** use a dedicated API layer, then hooks:
+
+```
+src/services/api/httpClient.ts
+src/features/<feature>/services/<feature>Api.ts
+```
+
+Pattern:
+
+```typescript
+export const getUser = async (id: string): Promise<User> => {
+  return httpClient.get(`/users/${id}`)
+}
+```
+
+Components use hooks (e.g. `useUser(id)`) that call these services.
+
+## Performance
+
+- Lazy-load routes with `React.lazy`; avoid large barrel files; stable keys in lists (no index as key).
+- Avoid unnecessary re-renders; keep dependency arrays correct.
+
+## Vite
+
+- Use `import.meta.env` for env; absolute imports via path alias in Vite/tsconfig.
+
+## Constraints
+
+- Do not remove existing code or comments unless necessary; preserve import order and formatting.

@@ -1,0 +1,51 @@
+---
+description: Architecture principles and project structure
+alwaysApply: true
+---
+
+# Architecture Principles
+
+## Core principles
+
+- **Single Responsibility Principle (SRP)**: One clear purpose per module/component.
+- **Explicit dependency boundaries**: Dependencies flow in one direction; no circular imports.
+- **No business logic inside UI components**: Keep components declarative; put logic in hooks, services, or utils.
+- **Prefer composition over inheritance**: Compose small components and hooks; avoid class hierarchies.
+- **Pure functions where possible**: Same inputs → same outputs; side effects only in dedicated layers (hooks, API layer).
+
+## Project structure (current)
+
+```
+src/
+  app/              # router.tsx (routes), providers.tsx (Auth + Router)
+  components/       # UI components in subfolders
+    ui/              # AuthImage (generic)
+    auth/            # Login, AuthGuard
+    modals/          # All *Modal components
+    workflows/       # WorkflowList, WorkflowDetail, WorkflowCreate, NodeManager, NodeParserEditor
+    settings/       # Settings
+    dashboard/       # Dashboard
+    activity/       # Activity
+  features/         # feature-based public API (index.ts re-exports)
+    auth/           # AuthProvider, useAuth, Login, AuthGuard, clearStoredAuth
+    workflows/      # WorkflowList, WorkflowDetail, WorkflowCreate, useWorkflows
+    settings/       # Settings
+    activity/       # Activity
+    dashboard/      # Dashboard
+  hooks/            # shared hooks (useWorkflows, useServerHealthCheck)
+  services/
+    api/            # workflows, servers, stats (HTTP layer)
+  lib/              # shared helpers
+  types/            # shared types (index.ts)
+  utils/            # auth, settings, imageCompression
+```
+
+- **Feature-based**: Each feature is self-contained (components, hooks, services, types).
+- **No cross-feature imports** except via shared services or `lib/`.
+- **UI components** in `components/ui`; **business logic** in `features/*/services` or `services/api`.
+
+## Boundaries
+
+- **No circular imports**: Dependencies must form a DAG. Use dependency inversion (e.g. callbacks, interfaces) if needed.
+- **Absolute imports**: Use path alias (e.g. `@/`) configured in Vite/tsconfig; avoid deep relative paths.
+- **Typed API contracts**: Prefer shared types/schemas with backend; validate responses (e.g. Zod).

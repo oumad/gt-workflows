@@ -1,9 +1,18 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   server: {
     host: '0.0.0.0', // Allow connections from network
     port: 3010,
@@ -12,7 +21,7 @@ export default defineConfig({
     allowedHosts: true, // Allow all hosts (e.g. when accessing via IP or custom hostname)
     proxy: {
       '/api': {
-        target: 'http://localhost:3011',
+        target: 'http://127.0.0.1:3011',
         changeOrigin: true,
         secure: false,
         timeout: 300000, // 5 min for stats (loading many jobs from Redis can be slow under load)
@@ -31,7 +40,7 @@ export default defineConfig({
         },
       },
       '/data': {
-        target: 'http://localhost:3011',
+        target: 'http://127.0.0.1:3011',
         changeOrigin: true,
         secure: false,
         timeout: 5000,

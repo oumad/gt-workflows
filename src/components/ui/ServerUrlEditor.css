@@ -1,0 +1,86 @@
+.server-url-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.server-url-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.server-url-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.server-url-index {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 20px;
+  text-align: right;
+}
+
+.server-url-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.server-url-remove-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--error);
+}
+
+.server-url-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+  align-self: flex-start;
+}
+
+.server-url-add-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Compact mode (for WorkflowList inline editing) */
+.server-url-editor--compact {
+  gap: 4px;
+}
+
+.server-url-editor--compact .server-url-add-btn {
+  padding: 2px 6px;
+  font-size: 0.75rem;
+}
+
+.server-url-editor--compact .server-url-remove-btn {
+  padding: 2px;
+}
+
+/* In single-string mode, keep add button inline with input */
+.server-url-editor:not(.server-url-editor--compact) > .server-url-row .server-url-add-btn {
+  /* When the add button is inside the row (single mode), no border */
+  border: none;
+  padding: 4px;
+}

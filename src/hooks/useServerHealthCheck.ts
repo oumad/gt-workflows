@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { fetchWithAuth } from '../utils/auth';
+import { fetchWithAuth } from '@/utils/auth'
 
 export interface ServerHealthStatus {
   serverUrl: string;
@@ -45,10 +45,6 @@ export function useServerHealthCheck(
 
       // Backend always returns 200 with health status in body
       // But check response.ok just in case
-      if (!response.ok && !data.healthy) {
-        console.error(`[Frontend] Health check failed for ${serverUrl}:`, data.error || response.statusText);
-      }
-
       return {
         serverUrl,
         healthy: data.healthy === true,
@@ -57,7 +53,6 @@ export function useServerHealthCheck(
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[Frontend] Health check error for ${serverUrl}:`, errorMessage, error);
       return {
         serverUrl,
         healthy: false,
@@ -70,19 +65,13 @@ export function useServerHealthCheck(
   // Check all unique servers
   const checkAllServers = useCallback(async () => {
     if (!enabled || serverUrls.length === 0) {
-      console.log('[Health Check] Skipping - enabled:', enabled, 'serverUrls.length:', serverUrls.length)
       return
     }
 
-    // Get unique server URLs
     const uniqueServers = Array.from(new Set(serverUrls.filter(Boolean)));
-    
     if (uniqueServers.length === 0) {
-      console.log('[Health Check] No valid servers to check')
       return
     }
-
-    console.log('[Health Check] Starting checks for', uniqueServers.length, 'server(s):', uniqueServers)
 
     // Filter out servers that are currently being checked
     const serversToCheck = uniqueServers.filter(

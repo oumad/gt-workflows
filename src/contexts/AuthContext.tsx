@@ -1,13 +1,19 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
-import { fetchWithAuth, onAuthRequired, isSessionExpired, clearStoredAuth, getStoredAuth, setStoredAuth } from '../utils/auth'
+import { fetchWithAuth, onAuthRequired, isSessionExpired, clearStoredAuth, getStoredAuth, setStoredAuth } from '@/utils/auth'
 
 const SESSION_CHECK_INTERVAL_MS = 60_000
 
 export type AuthStatus = 'pending' | 'required' | 'ok'
+export type UserRole = 'admin' | 'guest'
 
 interface AuthContextValue {
   authStatus: AuthStatus
+  authEnabled: boolean
+  username: string | null
+  role: UserRole
   setAuthStatus: (status: AuthStatus) => void
+  setRole: (role: UserRole) => void
+  setUsername: (username: string | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -24,6 +30,9 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('pending')
+  const [authEnabled, setAuthEnabled] = useState<boolean>(true)
+  const [username, setUsername] = useState<string | null>(null)
+  const [role, setRole] = useState<UserRole>('guest')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -33,11 +42,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const res = await fetchWithAuth('/api/ping')
         if (cancelled) return
         if (res.status === 401) {
+          setUsername(null)
+          setRole('guest')
           setAuthStatus('required')
           return
         }
         if (res.ok) {
           const data = await res.json().catch(() => ({}))
+          const enabled = data.authEnabled === true
+          setAuthEnabled(enabled)
+          if (typeof data.username === 'string') setUsername(data.username)
+          setRole(!enabled ? 'admin' : (data.role === 'admin' ? 'admin' : 'guest'))
+          if (!enabled) {
+            setAuthStatus('ok')
+            return
+          }
           if (data.sessionMaxTime != null) {
             const auth = getStoredAuth()
             if (auth) setStoredAuth(auth, data.sessionMaxTime)
@@ -72,7 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   useEffect(() => {
-    if (authStatus !== 'ok') return
+    if (authStatus !== 'ok' || !authEnabled) return
     const tick = () => {
       if (isSessionExpired()) {
         clearStoredAuth()
@@ -90,8 +109,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         intervalRef.current = null
       }
     }
-  }, [authStatus])
+  }, [authStatus, authEnabled])
 
-  const value: AuthContextValue = { authStatus, setAuthStatus }
+  const setAuthStatusAndClearUser = useCallback((status: AuthStatus) => {
+    setAuthStatus(status)
+    if (status === 'required') {
+      setUsername(null)
+      setRole('guest')
+    }
+  }, [])
+
+  const value: AuthContextValue = {
+    authStatus,
+    authEnabled,
+    username,
+    role,
+    setAuthStatus: setAuthStatusAndClearUser,
+    setRole,
+    setUsername,
+  }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

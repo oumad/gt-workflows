@@ -1,0 +1,22 @@
+---
+description: Yarn and package/script conventions
+globs: "package.json"
+alwaysApply: false
+---
+
+# Yarn & Package
+
+## Tooling
+
+- Use **Yarn** (Corepack) as package manager; do not add `package-lock.json` or `npm-shrinkwrap`.
+- Scripts: prefer `yarn run <script>`; use `yarn` for install/add/remove.
+
+## Scripts
+
+- Keep scripts in `package.json`; use `concurrently` for running dev server + Vite together when needed.
+- Use `tsc` before `vite build` for type-checking in the build pipeline.
+
+## Dependencies
+
+- Add runtime deps to `dependencies`; types and build tools to `devDependencies`.
+- Prefer exact or caret ranges as in the existing project; avoid unnecessary version bumps.
