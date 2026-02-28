@@ -1,7 +1,7 @@
 import path from 'path';
 
 /** Workflow folder names: alphanumeric, dash, underscore only (no path traversal). */
-const SAFE_WORKFLOW_NAME_REGEX = /^[a-zA-Z0-9_-]+$/;
+const SAFE_WORKFLOW_NAME_REGEX = /^[a-zA-Z0-9 _\-().]+$/;
 
 /** Allowed filename chars for uploads (basename only, no path separators). */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
