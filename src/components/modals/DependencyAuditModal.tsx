@@ -262,11 +262,20 @@ export default function DependencyAuditModal({ workflowJson, serverUrls, cached,
         try {
           result = await auditWorkflowDependencies(serverUrls[i], deps.classTypes, deps.modelInputs, deps.fileInputs)
         } catch (err) {
+          // Synthesize unknown entries for all categories so tabs show "unknown" instead of empty
+          const fallbackModels: Record<string, { name: string; available: null }[]> = {}
+          for (const m of deps.modelInputs) {
+            const cat = m.field
+            if (!fallbackModels[cat]) fallbackModels[cat] = []
+            if (!fallbackModels[cat].some(e => e.name === m.value)) {
+              fallbackModels[cat].push({ name: m.value, available: null })
+            }
+          }
           result = {
             serverUrl: serverUrls[i],
             timestamp: new Date().toISOString(),
             nodes: deps.classTypes.map(name => ({ name, available: null })),
-            models: {},
+            models: fallbackModels,
             files: deps.fileInputs.map(f => ({ name: f.value, available: null })),
             nodeError: err instanceof Error ? err.message : 'Failed to connect',
           }

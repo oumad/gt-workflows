@@ -177,7 +177,7 @@ export function createServersRouter() {
         return res.status(400).json({ error: 'Invalid server URL' });
       }
 
-      const normalize = (p) => p.replace(/\\/g, '/').toLowerCase();
+      const normalize = (p) => typeof p === 'string' ? p.replace(/\\/g, '/') : null;
 
       // --- Fetch /object_info (used for both node check and model resolution) ---
       let objectInfo = null;
@@ -217,11 +217,11 @@ export function createServersRouter() {
         if (!Array.isArray(inputDef) || inputDef.length === 0) return null;
         // Old format: first element is an array of values
         if (Array.isArray(inputDef[0])) {
-          return new Set(inputDef[0].map(normalize));
+          return new Set(inputDef[0].map(normalize).filter(Boolean));
         }
         // New format: ["COMBO", { options: [...] }]
         if (inputDef[0] === 'COMBO' && inputDef[1]?.options && Array.isArray(inputDef[1].options)) {
-          return new Set(inputDef[1].options.map(normalize));
+          return new Set(inputDef[1].options.map(normalize).filter(Boolean));
         }
         return null;
       };
@@ -229,8 +229,10 @@ export function createServersRouter() {
       // --- Resolve models using object_info dropdown values ---
       const modelsResult = {};
       if (Array.isArray(modelInputs)) {
-        for (const { classType, field, value } of modelInputs) {
-          if (!classType || !field || !value) continue;
+        for (const item of modelInputs) {
+          if (!item || typeof item !== 'object') continue;
+          const { classType, field, value } = item;
+          if (typeof classType !== 'string' || typeof field !== 'string' || typeof value !== 'string' || !classType || !field || !value) continue;
 
           let available = null;
           const validFiles = getValidFiles(classType, field);
@@ -252,8 +254,10 @@ export function createServersRouter() {
       const filesResult = [];
       if (Array.isArray(fileInputs)) {
         const seen = new Set();
-        for (const { classType, field, value } of fileInputs) {
-          if (!classType || !field || !value) continue;
+        for (const item of fileInputs) {
+          if (!item || typeof item !== 'object') continue;
+          const { classType, field, value } = item;
+          if (typeof classType !== 'string' || typeof field !== 'string' || typeof value !== 'string' || !classType || !field || !value) continue;
           if (seen.has(value)) continue;
           seen.add(value);
 

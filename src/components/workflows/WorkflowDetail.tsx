@@ -310,6 +310,15 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [showDependencyAudit, setShowDependencyAudit] = useState(false)
   const [dependencyAuditCache, setDependencyAuditCache] = useState<DependencyAuditCache | null>(null)
+  // Invalidate audit cache when workflow or server config changes
+  const prevAuditKeyRef = useRef(`${name}|${params?.comfyui_config?.serverUrl}`)
+  useEffect(() => {
+    const key = `${name}|${params?.comfyui_config?.serverUrl}`
+    if (key !== prevAuditKeyRef.current) {
+      prevAuditKeyRef.current = key
+      setDependencyAuditCache(null)
+    }
+  }, [name, params?.comfyui_config?.serverUrl])
   const workflowDetailUIRef = useRef<Record<string, WorkflowDetailUIState>>({})
 
   // Load persisted workflow detail UI state (JSON panels open/closed)
