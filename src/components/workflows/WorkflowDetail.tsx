@@ -8,7 +8,7 @@ import {
   uploadFile,
   deleteWorkflowFile,
 } from '@/services/api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy, FileText } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy, FileText, Package } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
@@ -19,9 +19,11 @@ import ResetConfirmationModal from '@/components/modals/ResetConfirmationModal'
 import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
+import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
+import type { DependencyAuditCache } from '@/components/modals/DependencyAuditModal'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import { compressImage } from '@/utils/imageCompression'
-import { getPrimaryServerUrl } from '@/utils/serverUrl'
+import { getPrimaryServerUrl, getServerUrls } from '@/utils/serverUrl'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import type { WorkflowDetailUIState } from '@/services/api/preferences'
 import './WorkflowDetail.css'
@@ -306,6 +308,8 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
+  const [showDependencyAudit, setShowDependencyAudit] = useState(false)
+  const [dependencyAuditCache, setDependencyAuditCache] = useState<DependencyAuditCache | null>(null)
   const workflowDetailUIRef = useRef<Record<string, WorkflowDetailUIState>>({})
 
   // Load persisted workflow detail UI state (JSON panels open/closed)
@@ -668,6 +672,16 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           </h1>
         </div>
         <div className="header-actions">
+          {params?.parser === 'comfyui' && workflowJson && params.comfyui_config?.serverUrl && (
+            <button
+              onClick={() => setShowDependencyAudit(true)}
+              disabled={loading}
+              className="btn btn-secondary"
+              title="Audit workflow dependencies against ComfyUI server(s)"
+            >
+              <Package size={16} /> Audit
+            </button>
+          )}
           <button
             onClick={handleDuplicate}
             disabled={loading}
@@ -1825,6 +1839,16 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
 
       {logsServerUrl && (
         <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />
+      )}
+
+      {showDependencyAudit && workflowJson && params?.comfyui_config?.serverUrl && (
+        <DependencyAuditModal
+          workflowJson={workflowJson}
+          serverUrls={getServerUrls(params.comfyui_config.serverUrl)}
+          cached={dependencyAuditCache}
+          onCacheUpdate={setDependencyAuditCache}
+          onClose={() => setShowDependencyAudit(false)}
+        />
       )}
 
       {/* Floating Apply bar – visible when there are unsaved changes so user can apply without scrolling up */}
