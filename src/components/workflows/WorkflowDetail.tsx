@@ -8,7 +8,7 @@ import {
   uploadFile,
   deleteWorkflowFile,
 } from '@/services/api/workflows'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy, FileText, Package } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, Info, Image as ImageIcon, Upload, X, AlertCircle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2, Download, Copy, FileText, Package, Play } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
@@ -21,6 +21,8 @@ import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
 import type { DependencyAuditCache } from '@/components/modals/DependencyAuditModal'
+import TestWorkflowModal from '@/components/modals/TestWorkflowModal'
+import { useTestWorkflow } from '@/hooks/useTestWorkflow'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import { compressImage } from '@/utils/imageCompression'
 import { getPrimaryServerUrl, getServerUrls } from '@/utils/serverUrl'
@@ -319,6 +321,9 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setDependencyAuditCache(null)
     }
   }, [name, params?.comfyui_config?.serverUrl])
+  const [showTestWorkflow, setShowTestWorkflow] = useState(false)
+  const testServerUrls = useMemo(() => getServerUrls(params?.comfyui_config?.serverUrl), [params?.comfyui_config?.serverUrl])
+  const testWorkflowHook = useTestWorkflow(workflowJson, testServerUrls)
   const workflowDetailUIRef = useRef<Record<string, WorkflowDetailUIState>>({})
 
   // Load persisted workflow detail UI state (JSON panels open/closed)
@@ -682,14 +687,24 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         </div>
         <div className="header-actions">
           {params?.parser === 'comfyui' && workflowJson && params.comfyui_config?.serverUrl && (
-            <button
-              onClick={() => setShowDependencyAudit(true)}
-              disabled={loading}
-              className="btn btn-secondary"
-              title="Audit workflow dependencies against ComfyUI server(s)"
-            >
-              <Package size={16} /> Audit
-            </button>
+            <>
+              <button
+                onClick={() => setShowTestWorkflow(true)}
+                disabled={loading}
+                className="btn btn-secondary"
+                title="Test-execute workflow on ComfyUI server"
+              >
+                <Play size={16} /> Test
+              </button>
+              <button
+                onClick={() => setShowDependencyAudit(true)}
+                disabled={loading}
+                className="btn btn-secondary"
+                title="Audit workflow dependencies against ComfyUI server(s)"
+              >
+                <Package size={16} /> Audit
+              </button>
+            </>
           )}
           <button
             onClick={handleDuplicate}
@@ -1857,6 +1872,17 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           cached={dependencyAuditCache}
           onCacheUpdate={setDependencyAuditCache}
           onClose={() => setShowDependencyAudit(false)}
+        />
+      )}
+
+      {showTestWorkflow && workflowJson && params?.comfyui_config?.serverUrl && (
+        <TestWorkflowModal
+          state={testWorkflowHook.state}
+          actions={testWorkflowHook.actions}
+          isRunning={testWorkflowHook.isRunning}
+          workflowNodeCount={testWorkflowHook.workflowNodeCount}
+          serverUrls={testServerUrls}
+          onClose={() => setShowTestWorkflow(false)}
         />
       )}
 
