@@ -1,3 +1,6 @@
+@import '../ui/Modal.css';
+@import '../ui/Buttons.css';
+
 .save-confirmation-modal {
   max-width: 800px;
   max-height: 90vh;
@@ -68,11 +71,6 @@
 .changes-summary p {
   margin: 0;
   font-size: 14px;
-}
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 13px;
 }
 
 .changes-list {
@@ -158,13 +156,4 @@
   margin: 0 0 8px 0;
 }
 
-.btn-warning {
-  background: var(--warning);
-  color: white;
-}
-
-.btn-warning:hover {
-  background: var(--warning);
-  opacity: 0.9;
-}
 

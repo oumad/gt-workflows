@@ -1,3 +1,5 @@
+@import '../ui/Buttons.css';
+
 .settings-page {
   max-width: 800px;
   margin: 0 auto;
@@ -443,17 +445,6 @@
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
 }
 
 .add-server-btn {

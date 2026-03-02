@@ -1,9 +1,19 @@
 import type { Workflow } from '@/types'
 import { fetchWithAuth } from '@/utils/auth'
 
+export type LastRunStatus = 'ok' | 'nok'
+
 export interface WorkflowDetailUIState {
   showWorkflowJson?: boolean
   showParamsJson?: boolean
+  /** ISO timestamp of last test workflow run */
+  lastTestRun?: string
+  /** Status of last test run: ok = completed, nok = error */
+  lastTestRunStatus?: LastRunStatus
+  /** ISO timestamp of last dependency audit run */
+  lastAuditRun?: string
+  /** Status of last audit run: ok = no error, nok = error */
+  lastAuditRunStatus?: LastRunStatus
 }
 
 export interface AppPreferences {

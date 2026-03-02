@@ -58,6 +58,10 @@ export function createPreferencesRouter(config) {
           sanitized[wfName] = Object.create(null);
           if (typeof val.showWorkflowJson === 'boolean') sanitized[wfName].showWorkflowJson = val.showWorkflowJson;
           if (typeof val.showParamsJson === 'boolean') sanitized[wfName].showParamsJson = val.showParamsJson;
+          if (typeof val.lastTestRun === 'string' && val.lastTestRun.trim()) sanitized[wfName].lastTestRun = val.lastTestRun.trim();
+          if (val.lastTestRunStatus === 'ok' || val.lastTestRunStatus === 'nok') sanitized[wfName].lastTestRunStatus = val.lastTestRunStatus;
+          if (typeof val.lastAuditRun === 'string' && val.lastAuditRun.trim()) sanitized[wfName].lastAuditRun = val.lastAuditRun.trim();
+          if (val.lastAuditRunStatus === 'ok' || val.lastAuditRunStatus === 'nok') sanitized[wfName].lastAuditRunStatus = val.lastAuditRunStatus;
         }
       }
       partial.workflowDetailUI = sanitized;

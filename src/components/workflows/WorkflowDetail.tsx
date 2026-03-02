@@ -21,13 +21,14 @@ import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
 import type { DependencyAuditCache } from '@/components/modals/DependencyAuditModal'
-import TestWorkflowModal from '@/components/modals/TestWorkflowModal'
+import { TestWorkflowModal } from '@/components/modals/TestWorkflowModal'
 import { useTestWorkflow } from '@/hooks/useTestWorkflow'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import { compressImage } from '@/utils/imageCompression'
 import { getPrimaryServerUrl, getServerUrls } from '@/utils/serverUrl'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
-import type { WorkflowDetailUIState } from '@/services/api/preferences'
+import type { WorkflowDetailUIState, LastRunStatus } from '@/services/api/preferences'
+import { formatDateTimeShort } from '@/utils/dateFormat'
 import './WorkflowDetail.css'
 
 interface WorkflowDetailProps {
@@ -325,8 +326,13 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   const testServerUrls = useMemo(() => getServerUrls(params?.comfyui_config?.serverUrl), [params?.comfyui_config?.serverUrl])
   const testWorkflowHook = useTestWorkflow(workflowJson, testServerUrls)
   const workflowDetailUIRef = useRef<Record<string, WorkflowDetailUIState>>({})
+  const [lastTestRun, setLastTestRun] = useState<string | null>(null)
+  const [lastTestRunStatus, setLastTestRunStatus] = useState<LastRunStatus | null>(null)
+  const [lastAuditRun, setLastAuditRun] = useState<string | null>(null)
+  const [lastAuditRunStatus, setLastAuditRunStatus] = useState<LastRunStatus | null>(null)
+  const testPhasePrevRef = useRef<string | undefined>(undefined)
 
-  // Load persisted workflow detail UI state (JSON panels open/closed)
+  // Load persisted workflow detail UI state (JSON panels open/closed, last run timestamps)
   useEffect(() => {
     if (!name) return
     getPreferences()
@@ -336,9 +342,19 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         if (ui) {
           if (typeof ui.showWorkflowJson === 'boolean') setShowWorkflowJson(ui.showWorkflowJson)
           if (typeof ui.showParamsJson === 'boolean') setShowParamsJson(ui.showParamsJson)
+          if (typeof ui.lastTestRun === 'string') setLastTestRun(ui.lastTestRun)
+          else setLastTestRun(null)
+          setLastTestRunStatus(ui.lastTestRunStatus === 'ok' || ui.lastTestRunStatus === 'nok' ? ui.lastTestRunStatus : null)
+          if (typeof ui.lastAuditRun === 'string') setLastAuditRun(ui.lastAuditRun)
+          else setLastAuditRun(null)
+          setLastAuditRunStatus(ui.lastAuditRunStatus === 'ok' || ui.lastAuditRunStatus === 'nok' ? ui.lastAuditRunStatus : null)
         } else {
           setShowWorkflowJson(false)
           setShowParamsJson(false)
+          setLastTestRun(null)
+          setLastTestRunStatus(null)
+          setLastAuditRun(null)
+          setLastAuditRunStatus(null)
         }
       })
       .catch(() => {})
@@ -346,15 +362,60 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
 
   const persistWorkflowDetailUI = useCallback(
     (workflowName: string, showWorkflow: boolean, showParams: boolean) => {
+      const current = workflowDetailUIRef.current[workflowName] ?? {}
       const next: Record<string, WorkflowDetailUIState> = {
         ...workflowDetailUIRef.current,
-        [workflowName]: { showWorkflowJson: showWorkflow, showParamsJson: showParams },
+        [workflowName]: {
+          ...current,
+          showWorkflowJson: showWorkflow,
+          showParamsJson: showParams,
+        },
       }
       workflowDetailUIRef.current = next
       updatePreferences({ workflowDetailUI: next }).catch(() => {})
     },
     []
   )
+
+  const persistLastRun = useCallback(
+    (workflowName: string, type: 'test' | 'audit', timestamp: string, status?: LastRunStatus) => {
+      const current = workflowDetailUIRef.current[workflowName] ?? {}
+      const next: Record<string, WorkflowDetailUIState> = {
+        ...workflowDetailUIRef.current,
+        [workflowName]: {
+          ...current,
+          ...(type === 'test'
+            ? { lastTestRun: timestamp, lastTestRunStatus: status }
+            : { lastAuditRun: timestamp, lastAuditRunStatus: status }),
+        },
+      }
+      workflowDetailUIRef.current = next
+      if (type === 'test') {
+        setLastTestRun(timestamp)
+        setLastTestRunStatus(status ?? null)
+      } else {
+        setLastAuditRun(timestamp)
+        setLastAuditRunStatus(status ?? null)
+      }
+      updatePreferences({ workflowDetailUI: next }).catch(() => {})
+    },
+    []
+  )
+
+  // Persist last test run when test completes or errors
+  useEffect(() => {
+    const phase = testWorkflowHook.state.phase
+    const prev = testPhasePrevRef.current
+    testPhasePrevRef.current = phase
+    if (
+      name &&
+      (phase === 'completed' || phase === 'error') &&
+      prev !== 'completed' &&
+      prev !== 'error'
+    ) {
+      persistLastRun(name, 'test', new Date().toISOString(), phase === 'completed' ? 'ok' : 'nok')
+    }
+  }, [name, testWorkflowHook.state.phase, persistLastRun])
 
   useEffect(() => {
     if (workflowScrollRef && workflowHighlightRef) {
@@ -759,9 +820,29 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <>
             {/* General Info Section */}
             <div className="detail-section">
-              <div className="section-header">
-                <Info size={20} />
-                <h2>General Info</h2>
+              <div className="section-header section-header-with-badges">
+                <div className="section-header-title">
+                  <Info size={20} />
+                  <h2>General Info</h2>
+                </div>
+                <div className="general-info-badges">
+                  <span
+                    className={`general-info-badge general-info-badge-test status-${lastTestRun != null && lastTestRunStatus != null ? lastTestRunStatus : 'unknown'}`}
+                    title={lastTestRun ? `Last run (test): ${formatDateTimeShort(lastTestRun)}` : 'Not run yet'}
+                  >
+                    {lastTestRun != null && lastTestRunStatus != null
+                      ? (lastTestRunStatus === 'ok' ? 'TEST PASSING' : 'TEST NOK')
+                      : 'TEST UNKNOWN'}
+                  </span>
+                  <span
+                    className={`general-info-badge general-info-badge-audit status-${lastAuditRun != null && lastAuditRunStatus != null ? lastAuditRunStatus : 'unknown'}`}
+                    title={lastAuditRun ? `Last run (audit): ${formatDateTimeShort(lastAuditRun)}` : 'Not run yet'}
+                  >
+                    {lastAuditRun != null && lastAuditRunStatus != null
+                      ? (lastAuditRunStatus === 'ok' ? 'AUDIT OK' : 'AUDIT NOK')
+                      : 'AUDIT UNKNOWN'}
+                  </span>
+                </div>
               </div>
               <div className="general-info-content">
                 {(params.icon || !iconError) && (
@@ -1870,7 +1951,12 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           workflowJson={workflowJson}
           serverUrls={getServerUrls(params.comfyui_config.serverUrl)}
           cached={dependencyAuditCache}
-          onCacheUpdate={setDependencyAuditCache}
+          onCacheUpdate={(cache) => {
+            setDependencyAuditCache(cache)
+            if (name && cache?.timestamp) {
+              persistLastRun(name, 'audit', cache.timestamp, cache.error ? 'nok' : 'ok')
+            }
+          }}
           onClose={() => setShowDependencyAudit(false)}
         />
       )}

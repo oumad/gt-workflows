@@ -1,27 +1,11 @@
-.test-wf-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
+@import '../ui/Modal.css';
+@import '../ui/SpinnerIcon.css';
+@import '../ui/Buttons.css';
 
 .test-wf-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   width: 90%;
   max-width: 680px;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .test-wf-modal-header {
@@ -118,13 +102,6 @@
 .test-wf-status-banner.cancelled {
   background: rgba(239, 68, 68, 0.1);
   color: var(--error);
-}
-
-/* Content area */
-.test-wf-modal-content {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
 }
 
 /* Action buttons */
@@ -389,103 +366,9 @@
 
 .test-wf-logs-toolbar {
   display: flex;
-  justify-content: flex-end;
-}
-
-.test-wf-logs-refresh {
-  display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.6rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.test-wf-logs-refresh:hover {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.test-wf-logs-refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Log table */
-.test-wf-log-list {
-  background: var(--bg-primary);
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  font-size: 0.78rem;
-  overflow: auto;
-  max-height: 350px;
-}
-
-.test-wf-log-head,
-.test-wf-log-row {
-  display: grid;
-  grid-template-columns: 11rem 1fr;
-  gap: 1rem;
-  padding: 0.3rem 0.75rem;
-  align-items: start;
-  min-width: min-content;
-}
-
-.test-wf-log-head {
-  position: sticky;
-  top: 0;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border);
-  font-weight: 600;
-  color: var(--text-secondary);
-  z-index: 1;
-}
-
-.test-wf-log-row {
-  border-bottom: 1px solid var(--border-subtle, var(--border));
-}
-
-.test-wf-log-row:last-child {
-  border-bottom: none;
-}
-
-.test-wf-log-col-time {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.test-wf-log-col-msg {
-  word-break: break-all;
-  white-space: pre-wrap;
-  color: var(--text-primary);
-}
-
-.test-wf-log-raw {
-  background: var(--bg-primary);
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  padding: 0.75rem;
-  font-size: 0.75rem;
-  max-height: 350px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.test-wf-log-empty {
-  color: var(--text-muted);
-  font-style: italic;
-  text-align: center;
-  padding: 1.5rem;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 /* Empty / idle state */
@@ -496,14 +379,9 @@
   font-size: 0.9rem;
 }
 
-/* Spinner animation for executing node icon */
-@keyframes test-wf-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
+/* Spinner animation for executing node icon (reuses shared keyframes) */
 .test-wf-node-item.executing .test-wf-node-icon svg {
-  animation: test-wf-spin 1s linear infinite;
+  animation: icon-spinner-spin 1s linear infinite;
 }
 
 /* Summary counts at top */

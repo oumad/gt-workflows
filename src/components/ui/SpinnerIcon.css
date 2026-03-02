@@ -1,0 +1,30 @@
+/**
+ * Shared styles for an icon wrapper that contains a spinner (e.g. Loader, RefreshCw).
+ * Use class "icon-spinner-wrap" on the wrapper and "spinner" on the icon when loading.
+ */
+.icon-spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+.icon-spinner-wrap .spinner {
+  display: block;
+  animation: icon-spinner-spin 0.8s linear infinite;
+}
+
+@keyframes icon-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Use on any element (e.g. svg inside a button) to show spinning animation */
+.spin,
+.spinner {
+  animation: icon-spinner-spin 0.8s linear infinite;
+}

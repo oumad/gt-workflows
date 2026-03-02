@@ -1,35 +1,11 @@
-.dep-audit-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
+@import '../ui/Modal.css';
+@import '../ui/SpinnerIcon.css';
+@import '../ui/Buttons.css';
 
 .dep-audit-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   width: 90%;
   max-width: 680px;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.dep-audit-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
 }
 
 .dep-audit-modal-title {
@@ -67,31 +43,6 @@
 .dep-audit-modal-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
-}
-
-.dep-audit-refresh-btn {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  transition: all 0.2s;
-}
-
-.dep-audit-refresh-btn:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.dep-audit-refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Tabs */
@@ -154,12 +105,6 @@
 .dep-audit-tab-badge.warn {
   background: rgba(234, 179, 8, 0.15);
   color: var(--warning, #eab308);
-}
-
-.dep-audit-modal-content {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
 }
 
 /* Hint text */
@@ -227,6 +172,7 @@
 .dep-audit-progress {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   margin-bottom: 1rem;
