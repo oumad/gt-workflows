@@ -154,6 +154,7 @@ export function createStatsRouter(config) {
 
       const byWorkflowName = {};
       const byServer = {};
+      const byServerWorkflow = {};
       const byUser = {};
       for (const job of jobs) {
         if (!job) continue;
@@ -186,6 +187,10 @@ export function createStatsRouter(config) {
         if (serverUrl && typeof serverUrl === 'string') {
           const normalized = serverUrl.replace(/\/$/, '');
           byServer[normalized] = (byServer[normalized] || 0) + 1;
+          if (wfName && typeof wfName === 'string') {
+            if (!byServerWorkflow[normalized]) byServerWorkflow[normalized] = {};
+            byServerWorkflow[normalized][wfName] = (byServerWorkflow[normalized][wfName] || 0) + 1;
+          }
         }
       }
       const workflowUsage = Object.entries(byWorkflowName)
@@ -194,6 +199,12 @@ export function createStatsRouter(config) {
       const serverUsage = Object.entries(byServer)
         .map(([server, count]) => ({ server, count }))
         .sort((a, b) => b.count - a.count);
+      const serverWorkflows = Object.entries(byServerWorkflow).map(([server, wfMap]) => ({
+        server,
+        workflows: Object.entries(wfMap)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count),
+      }));
       const userActivity = Object.entries(byUser)
         .map(([user, count]) => ({ user, count }))
         .sort((a, b) => b.count - a.count);
@@ -202,6 +213,7 @@ export function createStatsRouter(config) {
         configured: true,
         workflowUsage,
         serverUsage,
+        serverWorkflows,
         userActivity,
         jobsSampled: jobs.length,
       };

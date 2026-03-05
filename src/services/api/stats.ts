@@ -26,6 +26,16 @@ export interface ServerUsageItem {
   count: number
 }
 
+export interface ServerWorkflowItem {
+  name: string
+  count: number
+}
+
+export interface ServerWorkflowsEntry {
+  server: string
+  workflows: ServerWorkflowItem[]
+}
+
 export interface UserActivityItem {
   user: string
   count: number
@@ -36,6 +46,7 @@ export interface UsageStatsResponse {
   message?: string
   workflowUsage: WorkflowUsageItem[]
   serverUsage: ServerUsageItem[]
+  serverWorkflows?: ServerWorkflowsEntry[]
   userActivity: UserActivityItem[]
   jobsSampled?: number
   offset?: number
@@ -123,6 +134,22 @@ function mergeServerUsage(a: ServerUsageItem[], b: ServerUsageItem[]): ServerUsa
   return Array.from(map.entries(), ([server, count]) => ({ server, count })).sort((x, y) => y.count - x.count)
 }
 
+function mergeServerWorkflows(a: ServerWorkflowsEntry[], b: ServerWorkflowsEntry[]): ServerWorkflowsEntry[] {
+  const map = new Map<string, Map<string, number>>()
+  for (const entry of [...a, ...b]) {
+    let wfMap = map.get(entry.server)
+    if (!wfMap) { wfMap = new Map(); map.set(entry.server, wfMap) }
+    for (const wf of entry.workflows) {
+      wfMap.set(wf.name, (wfMap.get(wf.name) ?? 0) + wf.count)
+    }
+  }
+  return Array.from(map.entries(), ([server, wfMap]) => ({
+    server,
+    workflows: Array.from(wfMap.entries(), ([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count),
+  }))
+}
+
 function mergeUserActivity(a: UserActivityItem[], b: UserActivityItem[]): UserActivityItem[] {
   const map = new Map<string, number>()
   for (const item of a) map.set(item.user, (map.get(item.user) ?? 0) + item.count)
@@ -187,6 +214,7 @@ export async function getUsageStatsChunked(
   const merged = {
     workflowUsage: [] as WorkflowUsageItem[],
     serverUsage: [] as ServerUsageItem[],
+    serverWorkflows: [] as ServerWorkflowsEntry[],
     userActivity: [] as UserActivityItem[],
     jobsSampled: 0,
     configured: true as const,
@@ -198,6 +226,7 @@ export async function getUsageStatsChunked(
     if (!res.configured) return res
     merged.workflowUsage = mergeWorkflowUsage(merged.workflowUsage, res.workflowUsage ?? [])
     merged.serverUsage = mergeServerUsage(merged.serverUsage, res.serverUsage ?? [])
+    merged.serverWorkflows = mergeServerWorkflows(merged.serverWorkflows, res.serverWorkflows ?? [])
     merged.userActivity = mergeUserActivity(merged.userActivity, res.userActivity ?? [])
     merged.jobsSampled += res.jobsSampled ?? 0
     onProgress(Math.min(offset + limit, totalJobs), totalJobs)
@@ -221,6 +250,7 @@ export async function getUsageStatsTimeRangeChunked(
   const merged = {
     workflowUsage: [] as WorkflowUsageItem[],
     serverUsage: [] as ServerUsageItem[],
+    serverWorkflows: [] as ServerWorkflowsEntry[],
     userActivity: [] as UserActivityItem[],
     jobsSampled: 0,
     configured: true as const,
@@ -241,6 +271,7 @@ export async function getUsageStatsTimeRangeChunked(
     if (!res.configured) return res
     merged.workflowUsage = mergeWorkflowUsage(merged.workflowUsage, res.workflowUsage ?? [])
     merged.serverUsage = mergeServerUsage(merged.serverUsage, res.serverUsage ?? [])
+    merged.serverWorkflows = mergeServerWorkflows(merged.serverWorkflows, res.serverWorkflows ?? [])
     merged.userActivity = mergeUserActivity(merged.userActivity, res.userActivity ?? [])
     merged.jobsSampled += res.jobsSampled ?? 0
     onProgress(offset + limit, scanLimit)

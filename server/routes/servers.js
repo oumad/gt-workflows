@@ -131,7 +131,12 @@ export function createServersRouter() {
                 : {}),
             });
           }
-          lastError = `Server returned status ${response.status} from ${endpoint.name}`;
+          let errDetail = '';
+          try {
+            const bodyText = await response.text();
+            if (bodyText) errDetail = ` — ${bodyText.slice(0, 200)}`;
+          } catch { /* ignore */ }
+          lastError = `${endpoint.name} returned HTTP ${response.status}${errDetail}`;
         } catch (fetchError) {
           clearTimeout(timeoutId);
           if (fetchError.name === 'AbortError') {
@@ -197,7 +202,12 @@ export function createServersRouter() {
         if (response.ok) {
           objectInfo = await response.json();
         } else {
-          nodeError = `object_info returned ${response.status}`;
+          let errDetail = '';
+          try {
+            const bodyText = await response.text();
+            if (bodyText) errDetail = ` — ${bodyText.slice(0, 300)}`;
+          } catch { /* ignore */ }
+          nodeError = `object_info returned HTTP ${response.status}${errDetail}`;
         }
       } catch (err) {
         nodeError = err.name === 'AbortError' ? 'Timeout fetching object_info' : (err.message || 'Failed to fetch object_info');
@@ -370,7 +380,9 @@ export function createServersRouter() {
     ws.on('close', (code, reason) => {
       console.log(`[Test Workflow] WebSocket closed: code=${code} reason=${reason}`);
       if (!closed) {
-        sendSSE('error', { message: 'WebSocket connection closed unexpectedly' });
+        const reasonStr = reason?.toString?.() || '';
+        const detail = reasonStr ? `: ${reasonStr}` : code ? ` (code ${code})` : '';
+        sendSSE('error', { message: `WebSocket closed unexpectedly${detail}` });
         cleanup('ws closed');
       }
     });
@@ -417,8 +429,12 @@ export function createServersRouter() {
 
         if (result.node_errors && Object.keys(result.node_errors).length > 0) {
           console.error(`[Test Workflow] node_errors:`, JSON.stringify(result.node_errors));
+          const failedNodeIds = Object.keys(result.node_errors).join(', ');
+          const firstErr = Object.values(result.node_errors)[0];
+          const firstMsg = firstErr?.errors?.[0]?.message || firstErr?.message || null;
+          const detail = firstMsg ? `: ${firstMsg}` : ` (nodes: ${failedNodeIds})`;
           sendSSE('error', {
-            message: 'Workflow has node errors',
+            message: `Workflow validation failed${detail}`,
             node_errors: result.node_errors,
           });
           cleanup('node errors');

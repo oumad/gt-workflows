@@ -9,6 +9,7 @@ import type {
   QueueCounts,
   WorkflowUsageItem,
   ServerUsageItem,
+  ServerWorkflowsEntry,
   UserActivityItem,
   ActivityJob,
   UsageStatsResponse,
@@ -59,6 +60,7 @@ export interface UseJobStatsResult {
   queueCounts: QueueCounts | null
   workflowUsage: WorkflowUsageItem[]
   serverUsage: ServerUsageItem[]
+  serverWorkflows: ServerWorkflowsEntry[]
   userActivity: UserActivityItem[]
   jobsSampled: number | null
   timeRangeLabel: string | null
@@ -76,6 +78,7 @@ function applyUsageResponse(
   setState: {
     setWorkflowUsage: (v: WorkflowUsageItem[]) => void
     setServerUsage: (v: ServerUsageItem[]) => void
+    setServerWorkflows: (v: ServerWorkflowsEntry[]) => void
     setUserActivity: (v: UserActivityItem[]) => void
     setJobsSampled: (v: number | null) => void
     setTimeRangeLabel: (v: string | null) => void
@@ -85,6 +88,7 @@ function applyUsageResponse(
 ): void {
   if (res.workflowUsage) setState.setWorkflowUsage(res.workflowUsage)
   if (res.serverUsage) setState.setServerUsage(res.serverUsage)
+  if (res.serverWorkflows) setState.setServerWorkflows(res.serverWorkflows)
   if (!selectedUser && res.userActivity) setState.setUserActivity(res.userActivity)
   if (res.jobsSampled != null) setState.setJobsSampled(res.jobsSampled)
   const label =
@@ -101,6 +105,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
   const [workflowUsage, setWorkflowUsage] = useState<WorkflowUsageItem[]>([])
   const [serverUsage, setServerUsage] = useState<ServerUsageItem[]>([])
+  const [serverWorkflows, setServerWorkflows] = useState<ServerWorkflowsEntry[]>([])
   const [userActivity, setUserActivity] = useState<UserActivityItem[]>([])
   const [jobsSampled, setJobsSampled] = useState<number | null>(null)
   const [timeRangeLabel, setTimeRangeLabel] = useState<string | null>(null)
@@ -117,6 +122,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
   const setState = {
     setWorkflowUsage,
     setServerUsage,
+    setServerWorkflows,
     setUserActivity,
     setJobsSampled,
     setTimeRangeLabel,
@@ -190,6 +196,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
           {
             setWorkflowUsage,
             setServerUsage,
+            setServerWorkflows,
             setUserActivity,
             setJobsSampled,
             setTimeRangeLabel,
@@ -294,6 +301,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
     queueCounts,
     workflowUsage,
     serverUsage,
+    serverWorkflows,
     userActivity,
     jobsSampled,
     timeRangeLabel,

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { Workflow } from '@/types'
-import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Activity, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText, LayoutGrid } from 'lucide-react'
+import { RefreshCw, FileJson, Settings, Server, Clock, Code, Edit2, CheckSquare, X, Search, Download, ChevronDown, ChevronUp, Folder, GripVertical, Save, Copy, FileText, LayoutGrid, Play, ShieldCheck } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -23,17 +23,13 @@ import AuthImage from '@/components/ui/AuthImage'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
 import QuickEditModal from '@/components/modals/QuickEditModal'
 import BulkEditModal from '@/components/modals/BulkEditModal'
-import HealthCheckModal from '@/components/modals/HealthCheckModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
-import { useServerHealthCheck } from '@/hooks/useServerHealthCheck'
-import type { AppSettings } from '@/utils/settings'
 import { getPrimaryServerUrl, serverUrlDisplayLabel } from '@/utils/serverUrl'
-import { getSettings } from '@/utils/settings'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import type { WorkflowDetailUIState } from '@/services/api/preferences'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
-import type { ServerHealthStatus } from '@/hooks/useServerHealthCheck'
 import './WorkflowList.css'
 
 interface WorkflowListProps {
@@ -48,15 +44,13 @@ interface SortableWorkflowCardProps {
   isSelected: boolean
   selectionMode: boolean
   editMode: boolean
-  settings: AppSettings
-  getHealthStatus: (url: string) => ServerHealthStatus | undefined
-  monitoredServers: string[]
   editedParams: Partial<Workflow['params']>
   onToggleSelection: (name: string) => void
   onDownload: (name: string, e: React.MouseEvent) => void
   onDuplicate: (name: string, e: React.MouseEvent) => void
   onViewLogs?: (serverUrl: string) => void
   onFieldChange: (workflowName: string, field: string, value: string | string[] | number | boolean | undefined) => void
+  uiState?: WorkflowDetailUIState
 }
 
 function SortableWorkflowCard({
@@ -64,15 +58,13 @@ function SortableWorkflowCard({
   isSelected,
   selectionMode,
   editMode,
-  settings,
-  getHealthStatus,
-  monitoredServers: _monitoredServers, // Used in health status checks
   editedParams,
   onToggleSelection,
   onDownload,
   onDuplicate,
   onViewLogs,
   onFieldChange,
+  uiState,
 }: SortableWorkflowCardProps) {
   const comfyServerUrl = workflow.params?.parser === 'comfyui' ? getPrimaryServerUrl(workflow.params?.comfyui_config?.serverUrl) || undefined : undefined
   const {
@@ -180,13 +172,6 @@ function SortableWorkflowCard({
               const rawServerUrl = editedParams.comfyui_config?.serverUrl ?? workflow.params.comfyui_config!.serverUrl!
               const serverUrl = getPrimaryServerUrl(rawServerUrl)
               if (!serverUrl) return null
-              const normalizedServerUrl = serverUrl.replace(/\/$/, '')
-              const normalizedMonitoredServers = (settings.monitoredServers || []).map((s: string) => s.replace(/\/$/, ''))
-              const isMonitored = normalizedMonitoredServers.includes(normalizedServerUrl)
-              const healthStatus = isMonitored ? getHealthStatus(normalizedServerUrl) : null
-              const isHealthy = healthStatus?.healthy === true
-              const isUnhealthy = healthStatus?.healthy === false
-
               return (
                 <div className="quick-info-item">
                   <Server size={14} />
@@ -200,30 +185,6 @@ function SortableWorkflowCard({
                   ) : (
                     <span className="quick-info-value" title={serverUrl}>
                       {serverUrlDisplayLabel(rawServerUrl)}
-                    </span>
-                  )}
-                  {!editMode && isMonitored && healthStatus && (
-                    <span
-                      className={`server-health-indicator ${
-                        isHealthy ? 'healthy' :
-                        isUnhealthy ? 'unhealthy' :
-                        'checking'
-                      }`}
-                      title={
-                        isHealthy ? 'Server is healthy' :
-                        isUnhealthy ? `Server is unhealthy: ${healthStatus.error || 'Connection failed'}` :
-                        'Checking server health...'
-                      }
-                    >
-                      <Activity size={12} />
-                    </span>
-                  )}
-                  {!editMode && !isMonitored && (
-                    <span
-                      className="server-health-indicator not-monitored"
-                      title="This server is not in the monitored servers list. Add it in Settings to see health status."
-                    >
-                      <Activity size={12} />
                     </span>
                   )}
                 </div>
@@ -307,6 +268,28 @@ function SortableWorkflowCard({
               ))}
             </div>
           )}
+          {!editMode && (uiState?.lastTestRun || uiState?.lastAuditRun) && (
+            <div className="workflow-run-badges">
+              {uiState?.lastTestRun && (
+                <span
+                  className={`run-badge run-badge--${uiState.lastTestRunStatus ?? 'ok'}`}
+                  title={`Last tested: ${new Date(uiState.lastTestRun).toLocaleString()}`}
+                >
+                  <Play size={10} />
+                  Tested
+                </span>
+              )}
+              {uiState?.lastAuditRun && (
+                <span
+                  className={`run-badge run-badge--${uiState.lastAuditRunStatus ?? 'ok'}`}
+                  title={`Last audited: ${new Date(uiState.lastAuditRun).toLocaleString()}`}
+                >
+                  <ShieldCheck size={10} />
+                  Audited
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Link>
       {!selectionMode && (
@@ -365,10 +348,9 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [settings, setSettings] = useState<AppSettings>(getSettings())
-  const [monitoredServersFromPrefs, setMonitoredServersFromPrefs] = useState<string[] | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [serverAliasesFromPrefs, setServerAliasesFromPrefs] = useState<Record<string, string>>({})
-  const [showHealthCheckModal, setShowHealthCheckModal] = useState(false)
+  const [workflowDetailUI, setWorkflowDetailUI] = useState<Record<string, WorkflowDetailUIState>>({})
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<Workflow | null>(null)
   const [downloadingWorkflow, setDownloadingWorkflow] = useState<Workflow | null>(null)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
@@ -405,28 +387,13 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     })
   )
 
-  // Monitored servers: from file-based preferences first, then fallback to legacy settings
-  const monitoredServers = useMemo(() => {
-    const raw = monitoredServersFromPrefs !== null ? monitoredServersFromPrefs : settings.monitoredServers || []
-    return raw.filter((server: string) => server && server.trim().length > 0)
-  }, [monitoredServersFromPrefs, settings.monitoredServers])
-
-  const effectiveSettings = useMemo<AppSettings>(() => ({
-    ...settings,
-    monitoredServers: monitoredServersFromPrefs ?? settings.monitoredServers ?? [],
-  }), [settings, monitoredServersFromPrefs])
-
-  const { getHealthStatus, checkAllServers, isChecking, healthStatuses } = useServerHealthCheck(monitoredServers, {
-    enabled: true,
-  })
-
   // Load preferences (monitored servers + expanded categories) and listen for settings updates
   useEffect(() => {
     const load = () => {
       getPreferences()
         .then((prefs) => {
-          setMonitoredServersFromPrefs(prefs.monitoredServers != null ? prefs.monitoredServers : null)
           setServerAliasesFromPrefs(prefs.serverAliases ?? {})
+          setWorkflowDetailUI(prefs.workflowDetailUI ?? {})
           if (prefs.expandedCategories?.length > 0) {
             setExpandedCategories(new Set(prefs.expandedCategories))
             expandedCategoriesRestoredFromPrefs.current = true
@@ -440,27 +407,16 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
     return () => window.removeEventListener('settingsUpdated', load)
   }, [])
 
-  // Legacy: sync from localStorage when it changes (e.g. other tab)
-  useEffect(() => {
-    const handleStorageChange = () => setSettings(getSettings())
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
-  }, [])
-
   // Filter workflows based on search term
   const filteredWorkflows = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return workflows
-    }
-
     const term = searchTerm.toLowerCase().trim()
+    if (!term) return workflows
     return workflows.filter((workflow) => {
       const name = workflow.name.toLowerCase()
       const label = workflow.params.label?.toLowerCase() || ''
       const description = workflow.params.description?.toLowerCase() || ''
       const category = workflow.params.category?.toLowerCase() || ''
       const tags = workflow.params.tags?.map(t => t.toLowerCase()).join(' ') || ''
-      
       return (
         name.includes(term) ||
         label.includes(term) ||
@@ -711,14 +667,15 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
 
   const handleSaveEdits = async () => {
     try {
+      setSaveError(null)
       await Promise.all(
         Array.from(editedWorkflows.entries()).map(async ([workflowName, changes]) => {
           // Load full params from server to preserve all fields
           const fullParams = await getWorkflowParams(workflowName)
-          
+
           // Merge changes into full params
           const updatedParams = { ...fullParams, ...changes }
-          
+
           // Handle nested fields like comfyui_config.serverUrl
           if (changes.comfyui_config) {
             updatedParams.comfyui_config = {
@@ -726,15 +683,15 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               ...changes.comfyui_config,
             }
           }
-          
+
           await saveWorkflowParams(workflowName, updatedParams)
         })
       )
       setEditedWorkflows(new Map())
       setEditMode(false)
       onRefresh()
-    } catch {
-      alert('Failed to save changes. Please try again.')
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save changes. Please try again.')
     }
   }
 
@@ -766,6 +723,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
             <Search size={18} className="search-icon" />
             <input
               type="text"
+              aria-label="Search workflows"
               placeholder="Search workflows..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -785,30 +743,6 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
         <div className="header-actions">
           {!selectionMode ? (
             <>
-              {monitoredServers.length > 0 ? (
-                <button
-                  onClick={() => {
-                    setShowHealthCheckModal(true)
-                    // Start checks immediately
-                    checkAllServers()
-                  }}
-                  className="btn btn-secondary"
-                  disabled={isChecking}
-                  title={`Check health of ${monitoredServers.length} monitored server${monitoredServers.length !== 1 ? 's' : ''}`}
-                >
-                  <Activity size={16} className={isChecking ? 'spinner' : ''} />
-                  {isChecking ? 'Checking...' : 'Check Health'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowHealthCheckModal(true)}
-                  className="btn btn-secondary"
-                  title="No servers configured. Add servers in Settings."
-                >
-                  <Activity size={16} />
-                  Check Health
-                </button>
-              )}
               <button
                 onClick={() => setEditMode(!editMode)}
                 className={`btn ${editMode ? 'btn-primary' : 'btn-secondary'}`}
@@ -876,9 +810,9 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
         </div>
       ) : filteredWorkflows.length === 0 ? (
         <div className="empty-state">
-          <p>No workflows match your search "{searchTerm}"</p>
+          <p>No workflows match your search &ldquo;{searchTerm}&rdquo;</p>
           <button
-            onClick={() => setSearchTerm('')}
+            onClick={() => { setSearchTerm(''); setDebouncedSearchTerm('') }}
             className="btn btn-secondary"
           >
             Clear Search
@@ -893,9 +827,11 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               
               return (
                 <div key={category} className="workflow-category">
-                  <div 
+                  <button
                     className="workflow-category-header"
                     onClick={() => toggleCategory(category)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`category-${category}`}
                   >
                     <div className="workflow-category-title">
                       <Folder size={18} />
@@ -905,10 +841,10 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                     <div className="workflow-category-toggle">
                       {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </div>
-                  </div>
-                  
+                  </button>
+
                   {isExpanded && (
-                    <div className="workflow-category-content">
+                    <div id={`category-${category}`} className="workflow-category-content">
                       {editMode ? (
                         <DndContext
                           sensors={sensors}
@@ -930,15 +866,13 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                                     isSelected={isSelected}
                                     selectionMode={selectionMode}
                                     editMode={editMode}
-                                    settings={effectiveSettings}
-                                    getHealthStatus={getHealthStatus}
-                                    monitoredServers={monitoredServers}
                                     editedParams={editedParams}
                                     onToggleSelection={toggleSelection}
                                     onDownload={handleDownload}
                                     onDuplicate={handleDuplicate}
                                     onViewLogs={setLogsServerUrl}
                                     onFieldChange={handleFieldChange}
+                                    uiState={workflowDetailUI[workflow.name]}
                                   />
                                 )
                               })}
@@ -956,15 +890,13 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                                 isSelected={isSelected}
                                 selectionMode={selectionMode}
                                 editMode={editMode}
-                                settings={effectiveSettings}
-                                getHealthStatus={getHealthStatus}
-                                monitoredServers={monitoredServers}
                                 editedParams={{}}
                                 onToggleSelection={toggleSelection}
                                 onDownload={handleDownload}
                                 onDuplicate={handleDuplicate}
                                 onViewLogs={setLogsServerUrl}
                                 onFieldChange={handleFieldChange}
+                                uiState={workflowDetailUI[workflow.name]}
                               />
                             )
                           })}
@@ -1004,15 +936,6 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               }}
             />
           )}
-          {showHealthCheckModal && (
-            <HealthCheckModal
-              healthStatuses={healthStatuses}
-              isChecking={isChecking}
-              monitoredServers={monitoredServers}
-              serverAliases={serverAliasesFromPrefs}
-              onClose={() => setShowHealthCheckModal(false)}
-            />
-          )}
           {duplicatingWorkflow && (
             <DuplicateModal
               workflow={duplicatingWorkflow}
@@ -1041,6 +964,11 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
 
       {editMode && (
         <div className="edit-mode-footer">
+          {saveError && (
+            <div className="error-banner" role="alert" style={{ marginBottom: '8px' }}>
+              <p>{saveError}</p>
+            </div>
+          )}
           <div className="edit-mode-info">
             <span>Edit mode active. Drag cards to reorder, edit fields directly on cards.</span>
           </div>
@@ -1048,8 +976,8 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
             <button onClick={handleCancelEdit} className="btn btn-secondary">
               Cancel
             </button>
-            <button 
-              onClick={handleSaveEdits} 
+            <button
+              onClick={handleSaveEdits}
               className="btn btn-primary"
               disabled={editedWorkflows.size === 0}
             >

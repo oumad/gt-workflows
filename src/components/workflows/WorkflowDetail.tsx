@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useBeforeUnload } from 'react-router-dom'
 import type { WorkflowParams, IconBadge, WorkflowJson, SubgraphConfig } from '@/types'
 import {
   getWorkflowParams,
@@ -47,6 +47,7 @@ function SubgraphEditor({ nodeId, config, workflowJson, onUpdate, onDelete }: Su
   const [expanded, setExpanded] = useState(false)
   const [nodesOrder, setNodesOrder] = useState<string[]>(config.nodesOrder || [])
   const [newNodeId, setNewNodeId] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   // Get child nodes for this subgraph with their titles
   const childNodes = useMemo(() => {
@@ -123,18 +124,21 @@ function SubgraphEditor({ nodeId, config, workflowJson, onUpdate, onDelete }: Su
           <strong>Subgraph {nodeId}</strong>
           {config.label && <span style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>— {config.label}</span>}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            if (confirm(`Delete subgraph ${nodeId}?`)) {
-              onDelete()
-            }
-          }}
-          className="btn-icon-small"
-          title="Delete subgraph"
-        >
-          <Trash2 size={14} />
-        </button>
+        {confirmingDelete ? (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <span style={{ fontSize: '0.8em', color: 'var(--error)' }}>Delete?</span>
+            <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="btn-icon-small btn-danger-small" title="Confirm delete">Yes</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmingDelete(false) }} className="btn-icon-small" title="Cancel">No</button>
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirmingDelete(true) }}
+            className="btn-icon-small"
+            title="Delete subgraph"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
       {expanded && (
         <div className="subgraph-content">
@@ -441,6 +445,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     if (!name || !params || !originalParams) return
 
     const checkForExternalChanges = async () => {
+      if (document.hidden) return
       try {
         const currentFileParams = await getWorkflowParams(name)
         const currentFileStr = JSON.stringify(currentFileParams, null, 2)
@@ -489,7 +494,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         getWorkflowJson(name).catch(() => null),
       ])
       setParams(paramsData)
-      setOriginalParams(JSON.parse(JSON.stringify(paramsData))) // Deep clone
+      setOriginalParams(structuredClone(paramsData))
       setParamsText(JSON.stringify(paramsData, null, 2))
       setWorkflowJson(jsonData)
       setIconError(false)
@@ -503,30 +508,28 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
 
   const handleSaveClick = async () => {
     if (!name || !params) return
-    
-    // Check for external changes before showing modal
-    try {
-      const currentFileParams = await getWorkflowParams(name)
-      const currentFileStr = JSON.stringify(currentFileParams, null, 2)
-      const originalStr = JSON.stringify(originalParams, null, 2)
-      
-      if (currentFileStr !== originalStr) {
-        const currentParamsStr = JSON.stringify(params, null, 2)
-        if (currentFileStr !== currentParamsStr) {
+
+    // If nothing changed locally and no external changes detected, save directly without modal
+    if (!hasUnsavedChanges && !hasExternalChanges) {
+      await handleSaveConfirm()
+      return
+    }
+
+    // Only do a fresh external-change check when we have local changes and haven't detected conflicts yet
+    if (hasUnsavedChanges && !hasExternalChanges) {
+      try {
+        const currentFileParams = await getWorkflowParams(name)
+        const currentFileStr = JSON.stringify(currentFileParams, null, 2)
+        const originalStr = JSON.stringify(originalParams, null, 2)
+        if (currentFileStr !== originalStr && currentFileStr !== JSON.stringify(params, null, 2)) {
           setHasExternalChanges(true)
           setExternalParams(currentFileParams)
-        } else {
-          setHasExternalChanges(false)
-          setExternalParams(null)
         }
-      } else {
-        setHasExternalChanges(false)
-        setExternalParams(null)
+      } catch {
+        // ignore — proceed to modal with current state
       }
-    } catch {
-      setHasExternalChanges(false)
-      setExternalParams(null)
     }
+
     setShowSaveModal(true)
   }
 
@@ -546,12 +549,13 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       }
       await saveWorkflowParams(name, paramsToSave)
       // Update originalParams with the saved params (without temporary flags)
-      setOriginalParams(JSON.parse(JSON.stringify(paramsToSave))) // Update original
+      setOriginalParams(structuredClone(paramsToSave))
       // Also update current params to remove temporary flags
       setParams(paramsToSave)
       setHasExternalChanges(false)
       setExternalParams(null)
       setShowSaveModal(false)
+      setError(null)
       setShowSuccessMessage(true)
       onUpdate()
       
@@ -575,7 +579,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setEditParamsJson(false)
       const freshParams = await getWorkflowParams(name)
       setParams(freshParams)
-      setOriginalParams(JSON.parse(JSON.stringify(freshParams))) // Deep clone
+      setOriginalParams(structuredClone(freshParams))
       setParamsText(JSON.stringify(freshParams, null, 2))
       setHasExternalChanges(false)
       setExternalParams(null)
@@ -605,9 +609,10 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         if (currentFileStr !== originalStr) {
           const parsedStr = JSON.stringify(parsedParams, null, 2)
           if (currentFileStr !== parsedStr) {
-            if (!confirm('Warning: params.json has been modified externally. Saving will overwrite those changes. Continue?')) {
-              return
-            }
+            setHasExternalChanges(true)
+            setExternalParams(currentFileParams)
+            setError('External changes detected in params.json. Use the Apply button in the header to resolve the conflict with the diff view.')
+            return
           }
         }
       } catch {
@@ -617,7 +622,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       setError(null)
       await saveWorkflowParams(name, parsedParams)
       setParams(parsedParams)
-      setOriginalParams(JSON.parse(JSON.stringify(parsedParams))) // Deep clone
+      setOriginalParams(structuredClone(parsedParams)) // Deep clone
       setEditParamsJson(false)
       setParamsText(JSON.stringify(parsedParams, null, 2))
       setHasExternalChanges(false)
@@ -657,6 +662,18 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     return JSON.stringify(originalParams, null, 2) !== JSON.stringify(params, null, 2)
   }, [originalParams, params])
 
+  // Guard browser-level unload (tab close / refresh) when there are unsaved changes
+  useBeforeUnload(
+    useCallback(
+      (e: BeforeUnloadEvent) => {
+        if (hasUnsavedChanges) {
+          e.preventDefault()
+        }
+      },
+      [hasUnsavedChanges]
+    )
+  )
+
   // Check if a specific field has changed
   const isFieldChanged = (fieldPath: string): boolean => {
     if (!originalParams || !params) return false
@@ -688,23 +705,9 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
   }
 
   const handleResetConfirm = async () => {
-    if (!name) return
-    try {
-      setLoading(true)
-      setError(null)
-      const freshParams = await getWorkflowParams(name)
-      setParams(freshParams)
-      setOriginalParams(JSON.parse(JSON.stringify(freshParams))) // Deep clone
-      setParamsText(JSON.stringify(freshParams, null, 2))
-      setHasExternalChanges(false)
-      setExternalParams(null)
-      setFileParams(null)
-      setShowResetModal(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset workflow')
-    } finally {
-      setLoading(false)
-    }
+    await handleReload()
+    setFileParams(null)
+    setShowResetModal(false)
   }
 
   const handleDownload = () => {
@@ -810,7 +813,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       </div>
 
       {error && (
-        <div className="error-banner">
+        <div className="error-banner" role="alert">
           <p>{error}</p>
         </div>
       )}
@@ -1157,7 +1160,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 setIconError(false); // Reset error state in case it was set
                                 // Don't auto-save - user must click Apply
                               } catch (error) {
-                                alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                setError('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
                               }
                             }
                           }}
@@ -1184,7 +1187,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 setIconError(false); // Reset error state in case it was set
                                 // Don't auto-save - user must click Apply
                               } catch (error) {
-                                alert('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                setError('Failed to upload icon: ' + (error instanceof Error ? error.message : 'Unknown error'));
                               }
                               }
                             }}
@@ -1462,7 +1465,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                 // Note: We don't update originalParams here - that happens when user clicks Apply
                                 // This ensures the workflow file change is detected as an unsaved change
                               } catch (error) {
-                                alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                setError('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
                               }
                             }
                           }}
@@ -1492,7 +1495,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
                                   // Note: We don't update originalParams here - that happens when user clicks Apply
                                   // This ensures the workflow file change is detected as an unsaved change
                                 } catch (error) {
-                                  alert('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                                  setError('Failed to upload workflow file: ' + (error instanceof Error ? error.message : 'Unknown error'));
                                 }
                               }
                             }}
@@ -1986,6 +1989,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           </button>
         </div>
       )}
+
     </div>
   )
 }

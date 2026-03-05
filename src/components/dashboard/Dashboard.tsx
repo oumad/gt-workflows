@@ -38,11 +38,23 @@ export function Dashboard(): React.ReactElement {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
   const [anonymiseUsers, setAnonymiseUsers] = useState(role === 'guest')
   const [workflowSearch, setWorkflowSearch] = useState('')
+  const [workflowSortMode, setWorkflowSortMode] = useState<'usage' | 'users'>('usage')
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+
+  const toggleServerDetail = useCallback((server: string) => {
+    setExpandedServers(prev => {
+      const next = new Set(prev)
+      if (next.has(server)) next.delete(server)
+      else next.add(server)
+      return next
+    })
+  }, [])
 
   const {
     queueCounts,
     workflowUsage,
     serverUsage,
+    serverWorkflows,
     userActivity,
     jobsSampled,
     timeRangeLabel,
@@ -69,7 +81,7 @@ export function Dashboard(): React.ReactElement {
         setUserDetailsOpen(prefs.userDetailsOpen)
       })
       .catch(() => {})
-    loadStatsRef.current(true)
+    loadStatsRef.current()
   }, [username, role])
 
   const filteredWorkflowUsage = useMemo(() => {
@@ -78,9 +90,21 @@ export function Dashboard(): React.ReactElement {
     return workflowUsage.filter((item) => item.name.toLowerCase().includes(q))
   }, [workflowUsage, workflowSearch])
 
-  const maxWorkflow = filteredWorkflowUsage.length ? Math.max(...filteredWorkflowUsage.map((u) => u.count)) : 1
+  const workflowDisplayList = useMemo(() => {
+    if (workflowSortMode === 'usage') return filteredWorkflowUsage
+    return [...filteredWorkflowUsage].sort((a, b) => (b.users?.length ?? 0) - (a.users?.length ?? 0))
+  }, [filteredWorkflowUsage, workflowSortMode])
+
+  const maxWorkflow = workflowDisplayList.length ? Math.max(...workflowDisplayList.map((u) => u.count)) : 1
+  const maxWorkflowByUsers = Math.max(1, ...workflowDisplayList.map((u) => u.users?.length ?? 0))
   const maxServer = serverUsage.length ? Math.max(...serverUsage.map((u) => u.count)) : 1
   const maxUser = userActivity.length ? Math.max(...userActivity.map((u) => u.count)) : 1
+
+  const serverWorkflowsMap = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }[]>()
+    for (const entry of serverWorkflows) map.set(entry.server, entry.workflows)
+    return map
+  }, [serverWorkflows])
 
   const getDisplayName = useCallback(
     (userId: string | null): string => {
@@ -292,13 +316,35 @@ export function Dashboard(): React.ReactElement {
             {/* Right: Workflows — same size as Who's using */}
             <section className="dashboard-workflows">
             <div className="dashboard-workflows-header">
-              <h2 className="dashboard-workflows-title">
-                {selectedUser ? (
-                  <>Workflows used by <strong>{getDisplayName(selectedUser)}</strong></>
-                ) : (
-                  'Most used workflows'
+              <div className="dashboard-workflows-header-left">
+                <h2 className="dashboard-workflows-title">
+                  {selectedUser ? (
+                    <>Workflows used by <strong>{getDisplayName(selectedUser)}</strong></>
+                  ) : (
+                    'Most used workflows'
+                  )}
+                </h2>
+                {!selectedUser && (
+                  <div className="dashboard-wf-sort-toggle">
+                    <button
+                      type="button"
+                      className={`dashboard-wf-sort-btn${workflowSortMode === 'usage' ? ' active' : ''}`}
+                      onClick={() => setWorkflowSortMode('usage')}
+                      title="Sort by total job runs"
+                    >
+                      By usage
+                    </button>
+                    <button
+                      type="button"
+                      className={`dashboard-wf-sort-btn${workflowSortMode === 'users' ? ' active' : ''}`}
+                      onClick={() => setWorkflowSortMode('users')}
+                      title="Sort by unique users"
+                    >
+                      By users
+                    </button>
+                  </div>
                 )}
-              </h2>
+              </div>
               <div className="dashboard-workflows-search-wrap">
                 <Search size={14} className="dashboard-workflows-search-icon" aria-hidden />
                 <input
@@ -310,7 +356,7 @@ export function Dashboard(): React.ReactElement {
                   aria-label="Search workflows"
                 />
               </div>
-            </div>
+            </div> {/* dashboard-workflows-header */}
             <div className="dashboard-workflows-inner">
             {loading ? (
               <div className="dashboard-workflows-loading" aria-busy="true">
@@ -327,25 +373,41 @@ export function Dashboard(): React.ReactElement {
               <p className="dashboard-empty">No matching workflows.</p>
             ) : (
               <div className="dashboard-workflow-list">
-                {filteredWorkflowUsage.map((item, index) => {
+                {workflowDisplayList.map((item, index) => {
                   const userCount = item.users?.length ?? 0
+                  const byUsers = workflowSortMode === 'users'
+                  const barPct = byUsers
+                    ? (userCount / maxWorkflowByUsers) * 100
+                    : (item.count / maxWorkflow) * 100
                   return (
-                    <div key={item.name} className="dashboard-workflow-row">
+                    <div key={item.name} className={`dashboard-workflow-row${byUsers ? ' dashboard-workflow-row--users' : ''}`}>
                       <span className="dashboard-workflow-name" title={item.name}>
                         {item.name}{index === 0 ? ' 🏆' : ''}
                       </span>
-                      {userCount > 0 && (
-                        <span className="dashboard-workflow-users" title="Users who used this workflow">
-                          {userCount} user{userCount !== 1 ? 's' : ''}
+                      {byUsers ? (
+                        <span className="dashboard-workflow-users" title="Total runs">
+                          {item.count} run{item.count !== 1 ? 's' : ''}
                         </span>
+                      ) : (
+                        userCount > 0 && (
+                          <span className="dashboard-workflow-users" title="Users who used this workflow">
+                            {userCount} user{userCount !== 1 ? 's' : ''}
+                          </span>
+                        )
                       )}
                       <div className="dashboard-workflow-bar-wrap">
                         <div
-                          className="dashboard-workflow-bar"
-                          style={{ width: `${(item.count / maxWorkflow) * 100}%` }}
+                          className={`dashboard-workflow-bar${byUsers ? ' dashboard-workflow-bar--users' : ''}`}
+                          style={{ width: `${barPct}%` }}
                         />
                       </div>
-                      <span className="dashboard-workflow-count">{item.count}</span>
+                      {byUsers ? (
+                        <span className="dashboard-workflow-count dashboard-workflow-count--users">
+                          {userCount}
+                        </span>
+                      ) : (
+                        <span className="dashboard-workflow-count">{item.count}</span>
+                      )}
                     </div>
                   )
                 })}
@@ -462,18 +524,53 @@ export function Dashboard(): React.ReactElement {
                 Servers
               </h2>
               <div className="dashboard-servers-list">
-                {serverUsage.map((item) => (
-                  <div key={item.server} className="dashboard-server-row">
-                    <span className="dashboard-server-name" title={item.server}>{item.server}</span>
-                    <div className="dashboard-server-bar-wrap">
-                      <div
-                        className="dashboard-server-bar"
-                        style={{ width: `${(item.count / maxServer) * 100}%` }}
-                      />
-                    </div>
-                    <span className="dashboard-server-count">{item.count}</span>
-                  </div>
-                ))}
+                {serverUsage.map((item) => {
+                  const isExpanded = expandedServers.has(item.server)
+                  const wfs = serverWorkflowsMap.get(item.server) ?? []
+                  const maxWf = wfs.length ? Math.max(...wfs.map((w) => w.count)) : 1
+                  return (
+                    <Fragment key={item.server}>
+                      <div className="dashboard-server-row">
+                        <span className="dashboard-server-name" title={item.server}>{item.server}</span>
+                        <div className="dashboard-server-bar-wrap">
+                          <div
+                            className="dashboard-server-bar"
+                            style={{ width: `${(item.count / maxServer) * 100}%` }}
+                          />
+                        </div>
+                        <span className="dashboard-server-count">{item.count}</span>
+                        {wfs.length > 0 && (
+                          <button
+                            type="button"
+                            className={`dashboard-server-detail-btn${isExpanded ? ' open' : ''}`}
+                            onClick={() => toggleServerDetail(item.server)}
+                            aria-expanded={isExpanded}
+                            title={isExpanded ? 'Hide workflow breakdown' : 'Show workflow breakdown'}
+                          >
+                            <ChevronRight size={13} />
+                          </button>
+                        )}
+                      </div>
+                      {isExpanded && wfs.length > 0 && (
+                        <div className="dashboard-server-wf-list">
+                          {wfs.map((wf) => (
+                            <div key={wf.name} className="dashboard-server-wf-row">
+                              <span className="dashboard-server-name dashboard-server-wf-name" title={wf.name}>{wf.name}</span>
+                              <div className="dashboard-server-bar-wrap">
+                                <div
+                                  className="dashboard-server-bar dashboard-server-wf-bar"
+                                  style={{ width: `${(wf.count / maxWf) * 100}%` }}
+                                />
+                              </div>
+                              <span className="dashboard-server-count">{wf.count}</span>
+                              <span />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </div>
             </section>
           )}

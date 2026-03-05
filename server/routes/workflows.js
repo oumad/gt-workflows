@@ -8,7 +8,7 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
   const router = Router();
   const admin = requireAdmin || ((_req, _res, next) => next());
 
-  router.get('/workflows/list', async (_req, res) => {
+  router.get('/workflows/list', async (req, res) => {
     try {
       const root = path.resolve(workflowsPath);
       const entries = await fs.readdir(workflowsPath, { withFileTypes: true });
@@ -33,7 +33,13 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
           }
         }
       }
-      res.json(workflows);
+      const total = workflows.length;
+      // limitNum=0 means no pagination (return all), max 500 per page
+      const limitNum = Math.min(Math.max(0, parseInt(req.query.limit, 10) || 0), 500);
+      const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const paged = limitNum > 0 ? workflows.slice((pageNum - 1) * limitNum, pageNum * limitNum) : workflows;
+      const pages = limitNum > 0 ? Math.ceil(total / limitNum) : 1;
+      res.json({ workflows: paged, total, page: pageNum, limit: limitNum, pages });
     } catch (error) {
       console.error('Error listing workflows:', error);
       res.status(500).json({ error: error.message });
@@ -330,7 +336,7 @@ export function createWorkflowsRouter({ workflowsPath, readParamsJson, findWorkf
     }
   });
 
-  router.get('/workflows/:name/download', async (req, res) => {
+  router.get('/workflows/:name/download', admin, async (req, res) => {
     let archive = null;
     try {
       const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
