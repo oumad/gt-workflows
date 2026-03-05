@@ -1,24 +1,10 @@
-.job-logs-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
+@import '../ui/Modal.css';
+@import '../ui/Buttons.css';
+@import '../ui/SpinnerIcon.css';
 
 .job-logs-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  width: 100%;
   max-width: 700px;
   max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px var(--shadow);
 }
 
 .job-logs-header {
@@ -56,38 +42,6 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.job-logs-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.job-logs-refresh:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.job-logs-refresh:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.job-logs-refresh .spin {
-  animation: job-logs-spin 0.8s linear infinite;
-}
-
-@keyframes job-logs-spin {
-  to { transform: rotate(360deg); }
 }
 
 .job-logs-close {

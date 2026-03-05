@@ -48,16 +48,16 @@ export default function AddServerModal({
   }
 
   return (
-    <div className="add-server-overlay" onClick={onCancel}>
-      <div className="add-server-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="add-server-header">
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content add-server-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div className="add-server-title">
             <Server size={20} />
             <span>Add monitored server</span>
           </div>
           <button
             type="button"
-            className="add-server-close"
+            className="modal-close"
             onClick={onCancel}
             aria-label="Close"
           >

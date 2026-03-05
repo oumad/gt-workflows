@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { X, RotateCcw, AlertTriangle, FileDiff } from 'lucide-react'
 import type { WorkflowParams } from '@/types'
+import {
+  detectParamsChanges,
+  formatValueForDisplay,
+  type ParamsChangeItem,
+  type ParamsChangeType,
+} from '@/utils/paramsDiff'
 import './SaveConfirmationModal.css'
 
 interface ResetConfirmationModalProps {
@@ -11,13 +17,6 @@ interface ResetConfirmationModalProps {
   onCancel: () => void
 }
 
-interface ChangeItem {
-  path: string
-  oldValue: any
-  newValue: any
-  type: 'added' | 'removed' | 'modified'
-}
-
 export default function ResetConfirmationModal({
   currentParams,
   fileParams,
@@ -25,113 +24,19 @@ export default function ResetConfirmationModal({
   onReset,
   onCancel,
 }: ResetConfirmationModalProps) {
-  const [changes, setChanges] = useState<ChangeItem[]>([])
+  const [changes, setChanges] = useState<ParamsChangeItem[]>([])
   const [showDiff, setShowDiff] = useState(false)
   const [hasMismatch, setHasMismatch] = useState(false)
 
   useEffect(() => {
     if (currentParams && fileParams) {
-      const detectedChanges = detectChanges(currentParams, fileParams)
-      setChanges(detectedChanges)
-      setHasMismatch(detectedChanges.length > 0)
+      const detected = detectParamsChanges(currentParams, fileParams)
+      setChanges(detected)
+      setHasMismatch(detected.length > 0)
     }
   }, [currentParams, fileParams])
 
-  const detectChanges = (current: any, file: any, path = ''): ChangeItem[] => {
-    const changes: ChangeItem[] = []
-    
-    if (current === null || current === undefined) {
-      if (file !== null && file !== undefined) {
-        changes.push({
-          path: path || 'root',
-          oldValue: null,
-          newValue: file,
-          type: 'added'
-        })
-      }
-      return changes
-    }
-    
-    if (file === null || file === undefined) {
-      changes.push({
-        path: path || 'root',
-        oldValue: current,
-        newValue: null,
-        type: 'removed'
-      })
-      return changes
-    }
-
-    // Handle arrays
-    if (Array.isArray(current) || Array.isArray(file)) {
-      const currentArr = Array.isArray(current) ? current : []
-      const fileArr = Array.isArray(file) ? file : []
-      
-      if (JSON.stringify(currentArr) !== JSON.stringify(fileArr)) {
-        changes.push({
-          path: path || 'root',
-          oldValue: currentArr,
-          newValue: fileArr,
-          type: 'modified'
-        })
-      }
-      return changes
-    }
-
-    // Handle objects
-    if (typeof current === 'object' && typeof file === 'object') {
-      const allKeys = new Set([...Object.keys(current), ...Object.keys(file)])
-      
-      for (const key of allKeys) {
-        const newPath = path ? `${path}.${key}` : key
-        const currentVal = current[key]
-        const fileVal = file[key]
-        
-        if (!(key in current)) {
-          changes.push({
-            path: newPath,
-            oldValue: undefined,
-            newValue: fileVal,
-            type: 'added'
-          })
-        } else if (!(key in file)) {
-          changes.push({
-            path: newPath,
-            oldValue: currentVal,
-            newValue: undefined,
-            type: 'removed'
-          })
-        } else {
-          const nestedChanges = detectChanges(currentVal, fileVal, newPath)
-          changes.push(...nestedChanges)
-        }
-      }
-      return changes
-    }
-
-    // Primitive values
-    if (JSON.stringify(current) !== JSON.stringify(file)) {
-      changes.push({
-        path: path || 'root',
-        oldValue: current,
-        newValue: file,
-        type: 'modified'
-      })
-    }
-
-    return changes
-  }
-
-  const formatValue = (value: any): string => {
-    if (value === null) return 'null'
-    if (value === undefined) return 'undefined'
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2)
-    }
-    return String(value)
-  }
-
-  const getChangeTypeColor = (type: ChangeItem['type']) => {
+  const getChangeTypeColor = (type: ParamsChangeType) => {
     switch (type) {
       case 'added':
         return 'var(--success)'
@@ -144,7 +49,7 @@ export default function ResetConfirmationModal({
     }
   }
 
-  const getChangeTypeLabel = (type: ChangeItem['type']) => {
+  const getChangeTypeLabel = (type: ParamsChangeType) => {
     switch (type) {
       case 'added':
         return 'Will be added'
@@ -228,7 +133,7 @@ export default function ResetConfirmationModal({
               </div>
 
               <div className="changes-list">
-                {changes.slice(0, showDiff ? undefined : 10).map((change, index) => (
+                {changes.slice(0, showDiff ? undefined : 10).map((change: ParamsChangeItem, index: number) => (
                   <div key={index} className="change-item">
                     <div className="change-header">
                       <span
@@ -242,24 +147,24 @@ export default function ResetConfirmationModal({
                     {change.type === 'removed' && (
                       <div className="change-value removed">
                         <strong>Current view:</strong>
-                        <pre>{formatValue(change.oldValue)}</pre>
+                        <pre>{formatValueForDisplay(change.oldValue)}</pre>
                       </div>
                     )}
                     {change.type === 'added' && (
                       <div className="change-value added">
                         <strong>File has:</strong>
-                        <pre>{formatValue(change.newValue)}</pre>
+                        <pre>{formatValueForDisplay(change.newValue)}</pre>
                       </div>
                     )}
                     {change.type === 'modified' && (
                       <>
                         <div className="change-value removed">
                           <strong>Current view:</strong>
-                          <pre>{formatValue(change.oldValue)}</pre>
+                          <pre>{formatValueForDisplay(change.oldValue)}</pre>
                         </div>
                         <div className="change-value added">
                           <strong>File has:</strong>
-                          <pre>{formatValue(change.newValue)}</pre>
+                          <pre>{formatValueForDisplay(change.newValue)}</pre>
                         </div>
                       </>
                     )}

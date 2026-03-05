@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { X, Save, AlertTriangle, RefreshCw, FileDiff } from 'lucide-react'
 import type { WorkflowParams } from '@/types'
+import {
+  detectParamsChanges,
+  formatValueForDisplay,
+  type ParamsChangeItem,
+  type ParamsChangeType,
+} from '@/utils/paramsDiff'
 import './SaveConfirmationModal.css'
 
 interface SaveConfirmationModalProps {
@@ -14,13 +20,6 @@ interface SaveConfirmationModalProps {
   onOverwrite: () => void
 }
 
-interface ChangeItem {
-  path: string
-  oldValue: any
-  newValue: any
-  type: 'added' | 'removed' | 'modified'
-}
-
 export default function SaveConfirmationModal({
   originalParams,
   currentParams,
@@ -31,116 +30,16 @@ export default function SaveConfirmationModal({
   onReload,
   onOverwrite,
 }: SaveConfirmationModalProps) {
-  const [changes, setChanges] = useState<ChangeItem[]>([])
+  const [changes, setChanges] = useState<ParamsChangeItem[]>([])
   const [showDiff, setShowDiff] = useState(false)
 
   useEffect(() => {
     if (originalParams && currentParams) {
-      const detectedChanges = detectChanges(originalParams, currentParams)
-      setChanges(detectedChanges)
+      setChanges(detectParamsChanges(originalParams, currentParams))
     }
   }, [originalParams, currentParams])
 
-  const detectChanges = (old: any, current: any, path = ''): ChangeItem[] => {
-    const changes: ChangeItem[] = []
-    
-    if (old === null || old === undefined) {
-      if (current !== null && current !== undefined) {
-        changes.push({
-          path: path || 'root',
-          oldValue: null,
-          newValue: current,
-          type: 'added'
-        })
-      }
-      return changes
-    }
-    
-    if (current === null || current === undefined) {
-      changes.push({
-        path: path || 'root',
-        oldValue: old,
-        newValue: null,
-        type: 'removed'
-      })
-      return changes
-    }
-
-    // Handle arrays
-    if (Array.isArray(old) || Array.isArray(current)) {
-      const oldArr = Array.isArray(old) ? old : []
-      const currentArr = Array.isArray(current) ? current : []
-      
-      if (JSON.stringify(oldArr) !== JSON.stringify(currentArr)) {
-        changes.push({
-          path: path || 'root',
-          oldValue: oldArr,
-          newValue: currentArr,
-          type: 'modified'
-        })
-      }
-      return changes
-    }
-
-    // Handle objects
-    if (typeof old === 'object' && typeof current === 'object') {
-      const allKeys = new Set([...Object.keys(old), ...Object.keys(current)])
-      
-      for (const key of allKeys) {
-        const newPath = path ? `${path}.${key}` : key
-        const oldVal = old[key]
-        const currentVal = current[key]
-        
-        if (!(key in old)) {
-          changes.push({
-            path: newPath,
-            oldValue: undefined,
-            newValue: currentVal,
-            type: 'added'
-          })
-        } else if (!(key in current)) {
-          changes.push({
-            path: newPath,
-            oldValue: oldVal,
-            newValue: undefined,
-            type: 'removed'
-          })
-        } else if (typeof oldVal === 'object' && typeof currentVal === 'object' && 
-                   oldVal !== null && currentVal !== null && 
-                   !Array.isArray(oldVal) && !Array.isArray(currentVal)) {
-          // Recursively check nested objects
-          changes.push(...detectChanges(oldVal, currentVal, newPath))
-        } else if (JSON.stringify(oldVal) !== JSON.stringify(currentVal)) {
-          changes.push({
-            path: newPath,
-            oldValue: oldVal,
-            newValue: currentVal,
-            type: 'modified'
-          })
-        }
-      }
-    } else if (old !== current) {
-      changes.push({
-        path: path || 'root',
-        oldValue: old,
-        newValue: current,
-        type: 'modified'
-      })
-    }
-
-    return changes
-  }
-
-  const formatValue = (value: any): string => {
-    if (value === null) return 'null'
-    if (value === undefined) return 'undefined'
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2)
-    }
-    return String(value)
-  }
-
-  const getChangeTypeColor = (type: ChangeItem['type']) => {
+  const getChangeTypeColor = (type: ParamsChangeType) => {
     switch (type) {
       case 'added':
         return 'var(--success)'
@@ -153,7 +52,7 @@ export default function SaveConfirmationModal({
     }
   }
 
-  const getChangeTypeLabel = (type: ChangeItem['type']) => {
+  const getChangeTypeLabel = (type: ParamsChangeType) => {
     switch (type) {
       case 'added':
         return 'Added'
@@ -235,7 +134,7 @@ export default function SaveConfirmationModal({
               </div>
 
               <div className="changes-list">
-                {changes.slice(0, showDiff ? undefined : 10).map((change, index) => (
+                {changes.slice(0, showDiff ? undefined : 10).map((change: ParamsChangeItem, index: number) => (
                   <div key={index} className="change-item">
                     <div className="change-header">
                       <span
@@ -249,24 +148,24 @@ export default function SaveConfirmationModal({
                     {change.type === 'removed' && (
                       <div className="change-value removed">
                         <strong>Removed:</strong>
-                        <pre>{formatValue(change.oldValue)}</pre>
+                        <pre>{formatValueForDisplay(change.oldValue)}</pre>
                       </div>
                     )}
                     {change.type === 'added' && (
                       <div className="change-value added">
                         <strong>Added:</strong>
-                        <pre>{formatValue(change.newValue)}</pre>
+                        <pre>{formatValueForDisplay(change.newValue)}</pre>
                       </div>
                     )}
                     {change.type === 'modified' && (
                       <>
                         <div className="change-value removed">
                           <strong>Old:</strong>
-                          <pre>{formatValue(change.oldValue)}</pre>
+                          <pre>{formatValueForDisplay(change.oldValue)}</pre>
                         </div>
                         <div className="change-value added">
                           <strong>New:</strong>
-                          <pre>{formatValue(change.newValue)}</pre>
+                          <pre>{formatValueForDisplay(change.newValue)}</pre>
                         </div>
                       </>
                     )}

@@ -39,8 +39,8 @@ export default function JobLogsModal({ jobId, onClose }: JobLogsModalProps) {
   const logText = logs.length > 0 ? logs.join('\n') : 'No log entries.'
 
   return (
-    <div className="job-logs-overlay" onClick={onClose}>
-      <div className="job-logs-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content job-logs-modal" onClick={(e) => e.stopPropagation()}>
         <div className="job-logs-header">
           <div className="job-logs-title">
             <FileText size={20} />
@@ -50,7 +50,7 @@ export default function JobLogsModal({ jobId, onClose }: JobLogsModalProps) {
           <div className="job-logs-actions">
             <button
               type="button"
-              className="job-logs-refresh"
+              className="btn btn-toolbar"
               onClick={load}
               disabled={loading}
               title="Refresh"

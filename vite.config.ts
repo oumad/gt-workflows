@@ -20,6 +20,27 @@ export default defineConfig({
     open: true,
     allowedHosts: true, // Allow all hosts (e.g. when accessing via IP or custom hostname)
     proxy: {
+      // SSE endpoint needs selfHandleResponse to prevent http-proxy from buffering the stream
+      '/api/servers/test-workflow': {
+        target: 'http://127.0.0.1:3011',
+        changeOrigin: true,
+        secure: false,
+        selfHandleResponse: true,
+        timeout: 300000,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes, _req, res) => {
+            res.writeHead(proxyRes.statusCode!, proxyRes.headers);
+            proxyRes.on('data', (chunk: Buffer) => res.write(chunk));
+            proxyRes.on('end', () => res.end());
+          });
+          proxy.on('error', (err, _req, res) => {
+            if (res && !('headersSent' in res && res.headersSent)) {
+              (res as import('http').ServerResponse).writeHead(503, { 'Content-Type': 'application/json' });
+              (res as import('http').ServerResponse).end(JSON.stringify({ error: 'Backend server unavailable' }));
+            }
+          });
+        },
+      },
       '/api': {
         target: 'http://127.0.0.1:3011',
         changeOrigin: true,

@@ -34,19 +34,19 @@ export default function HealthCheckModal({ healthStatuses, isChecking, monitored
   }
 
   return (
-    <div className="health-check-modal-overlay" onClick={onClose}>
-      <div className="health-check-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="health-check-modal-header">
+    <div className="modal-overlay modal-overlay--blur" onClick={onClose}>
+      <div className="modal-content health-check-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div className="health-check-modal-title">
             <Activity size={20} />
             <h2>Server Health Status</h2>
           </div>
-          <button className="health-check-modal-close" onClick={onClose}>
+          <button className="modal-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
 
-        <div className="health-check-modal-content">
+        <div className="modal-body">
           {monitoredServers.length === 0 && (
             <div className="health-check-status-message">
               <p>No servers configured.</p>

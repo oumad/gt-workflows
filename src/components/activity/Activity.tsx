@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { RefreshCw, Activity as ActivityIcon } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
+import { formatDateTimeMedium } from '@/utils/dateFormat'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import './Activity.css'
 
@@ -25,12 +26,7 @@ function formatProcessedOn(processedOn: number | null | undefined): { text: stri
   if (!Number.isFinite(ms)) return { text: '—', title: '' }
   const d = new Date(ms)
   if (Number.isNaN(d.getTime())) return { text: '—', title: '' }
-  const text = d.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-  })
-  const title = d.toISOString()
-  return { text, title }
+  return { text: formatDateTimeMedium(ms), title: d.toISOString() }
 }
 
 function JobCard({
@@ -231,7 +227,7 @@ export function Activity() {
         <div className="activity-toolbar-controls">
         <button
           type="button"
-          className="activity-refresh-btn"
+          className="btn btn-toolbar"
           onClick={load}
           disabled={loading}
           title="Refresh"

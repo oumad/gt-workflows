@@ -1,3 +1,6 @@
+@import '../ui/Buttons.css';
+@import '../ui/SpinnerIcon.css';
+
 .activity-page {
   width: 100%;
   max-width: 1400px;
@@ -32,7 +35,7 @@
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: activity-spin 0.8s linear infinite;
+  animation: icon-spinner-spin 0.8s linear infinite;
   flex-shrink: 0;
 }
 
@@ -40,11 +43,6 @@
   width: 18px;
   height: 18px;
   border-width: 2px;
-}
-
-@keyframes activity-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* ----- Not configured ----- */
@@ -75,35 +73,6 @@
 /* ----- Toolbar (when used as page-toolbar, layout from App.css) ----- */
 .activity-toolbar {
   margin-bottom: 1.5rem;
-}
-
-.activity-refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.activity-refresh-btn:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.activity-refresh-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.activity-refresh-btn .spin {
-  animation: activity-spin 0.8s linear infinite;
 }
 
 .activity-autorefresh-label {

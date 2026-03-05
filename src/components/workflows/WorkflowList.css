@@ -1,3 +1,6 @@
+@import '../ui/Buttons.css';
+@import '../ui/SpinnerIcon.css';
+
 .workflow-list {
   width: 100%;
 }
@@ -142,23 +145,13 @@
   color: var(--text-secondary);
 }
 
-.spinner {
-  animation: spin 1s linear infinite;
+.workflow-list .spinner {
   margin-bottom: 1rem;
 }
 
-.btn .spinner {
+.workflow-list .btn .spinner {
   margin-bottom: 0;
   margin-right: 0;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .error-message {
@@ -590,7 +583,7 @@
 }
 
 .server-health-indicator.checking svg {
-  animation: spin 1s linear infinite;
+  animation: icon-spinner-spin 1s linear infinite;
 }
 
 .server-health-indicator.not-monitored {
@@ -751,39 +744,6 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-  text-decoration: none;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
-}
-
 
 .edit-mode-footer {
   position: sticky;

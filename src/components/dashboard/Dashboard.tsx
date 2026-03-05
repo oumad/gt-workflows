@@ -7,11 +7,12 @@ import { useJobStats, JOBS_LIMIT_OPTIONS, TIME_RANGES, type TimeRangeId } from '
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import type { ActivityJob } from '@/services/api/stats'
 import { anonymiseUserName } from '@/utils/anonymise'
+import { formatDateShortTimeMedium } from '@/utils/dateFormat'
 import './Dashboard.css'
 
 function formatJobTime(ms: number | null | undefined): string {
   if (ms == null || !Number.isFinite(ms)) return '—'
-  return new Date(ms).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' })
+  return formatDateShortTimeMedium(ms)
 }
 
 function formatDuration(processedOn: number | undefined, finishedOn: number | undefined): string {
@@ -162,7 +163,7 @@ export function Dashboard(): React.ReactElement {
             )}
             <button
               type="button"
-              className="refresh-btn"
+              className="btn btn-toolbar"
               onClick={() => loadStats(true)}
               disabled={loading}
               title="Refresh stats"
@@ -170,7 +171,7 @@ export function Dashboard(): React.ReactElement {
               <RefreshCw size={18} className={loading ? 'spin' : ''} />
               Refresh
             </button>
-            <Link to={ROUTES.jobStatsTimeView} className="dashboard-timeview-btn">
+            <Link to={ROUTES.jobStatsTimeView} className="btn btn-toolbar">
               Time View
             </Link>
           </div>
