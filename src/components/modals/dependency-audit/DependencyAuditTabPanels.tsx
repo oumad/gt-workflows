@@ -67,6 +67,7 @@ function ModelsTabInner({ displayResults, phase, loading, collapsedServers, onTo
             showHeader={multiServer}
           >
             <>
+              {result.nodeError && <div className="dep-audit-error">{result.nodeError}</div>}
               {modelCategories.map(([category, items]) => {
                 const sorted = phase === 'done' ? sortMissingFirst(items) : items
                 return (
@@ -112,6 +113,7 @@ function InputsTabInner({ displayResults, phase, loading, collapsedServers, onTo
             showHeader={multiServer}
           >
             <>
+              {result.nodeError && <div className="dep-audit-error">{result.nodeError}</div>}
               {result.files.length > 0 ? (
                 <div className="dep-audit-list">
                   {files.map((file) => (

@@ -7,8 +7,8 @@ import { createBasicAuthMiddleware, createBlockGuestExceptStatsMiddleware, creat
 import { createUploadMiddleware } from './middleware/upload.js';
 import { readParamsJson, findWorkflowJson } from './services/workflowFs.js';
 import { createPingRouter } from './routes/ping.js';
-import { createServersRouter } from './routes/servers.js';
-import { createWorkflowsRouter } from './routes/workflows.js';
+import { createServersRouter } from './routes/servers/index.js';
+import { createWorkflowsRouter } from './routes/workflows/index.js';
 import { createStatsRouter } from './routes/stats.js';
 import { createPreferencesRouter } from './routes/preferences.js';
 
