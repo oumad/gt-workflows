@@ -1,6 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
 import type { Workflow } from '@/types'
 import { listWorkflows } from '@/services/api/workflows'
+
+export const WORKFLOWS_QUERY_KEY = ['workflows'] as const
 
 export interface UseWorkflowsResult {
   workflows: Workflow[]
@@ -10,30 +14,27 @@ export interface UseWorkflowsResult {
 }
 
 export function useWorkflows(): UseWorkflowsResult {
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const loadingRef = useRef(false)
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: WORKFLOWS_QUERY_KEY,
+    queryFn: listWorkflows,
+  })
 
   const loadWorkflows = useCallback(async (): Promise<void> => {
-    if (loadingRef.current) return
-    try {
-      loadingRef.current = true
-      setLoading(true)
-      setError(null)
-      const data = await listWorkflows()
-      setWorkflows(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workflows')
-    } finally {
-      setLoading(false)
-      loadingRef.current = false
-    }
-  }, [])
+    await queryClient.invalidateQueries({ queryKey: WORKFLOWS_QUERY_KEY })
+  }, [queryClient])
 
-  useEffect(() => {
-    loadWorkflows()
-  }, [loadWorkflows])
+  const error =
+    query.error instanceof Error
+      ? query.error.message
+      : query.error
+        ? String(query.error)
+        : null
 
-  return { workflows, loading, error, loadWorkflows }
+  return {
+    workflows: query.data ?? [],
+    loading: query.isLoading,
+    error,
+    loadWorkflows,
+  }
 }

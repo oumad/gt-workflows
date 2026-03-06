@@ -3,9 +3,10 @@
 @import '../ui/Buttons.css';
 
 .dep-audit-modal {
-  width: 90%;
-  max-width: 680px;
-  max-height: 80vh;
+  max-width: min(860px, 94vw);
+  width: min(860px, 94vw);
+  height: min(82vh, 800px);
+  max-height: 82vh;
 }
 
 .dep-audit-modal-title {

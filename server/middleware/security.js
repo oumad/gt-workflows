@@ -1,7 +1,7 @@
 /**
- * Security middleware and utilities to reduce exposure of credentials and mitigate common attacks.
+ * Security utilities to reduce exposure of credentials and mitigate common attacks.
  * - Never log Authorization header or any credential.
- * - Apply security-related response headers when possible.
+ * - Security response headers are set by helmet in app.js.
  */
 
 const SENSITIVE_HEADERS = new Set(['authorization', 'cookie', 'proxy-authorization']);
@@ -18,16 +18,4 @@ export function redactHeaders(headers) {
     out[key] = SENSITIVE_HEADERS.has(lower) ? '[REDACTED]' : value;
   }
   return out;
-}
-
-/**
- * Security-related response headers. Use behind HTTPS in production for full effect.
- * HSTS is not set here so the app can run over HTTP in development; set it at the reverse proxy when using HTTPS.
- */
-export function securityHeadersMiddleware(_req, res, next) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  next();
 }

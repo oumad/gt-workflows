@@ -35,7 +35,7 @@ export function TestWorkflowModal({
   serverUrls,
   onClose,
 }: TestWorkflowModalProps): React.ReactElement {
-  const { phase, nodes, executionOrder, errorInfo, selectedServer } = state
+  const { phase, nodes, executionOrder, errorInfo, selectedServer, retryAttempt, retryTotal } = state
   const { startTest, cancelTest, setSelectedServer } = actions
   const [activeTab, setActiveTab] = useState<Tab>(TAB_NODES)
 
@@ -117,6 +117,8 @@ export function TestWorkflowModal({
           selectedServer={selectedServer}
           doneCount={counts.done + counts.cached}
           totalCount={counts.total}
+          retryAttempt={retryAttempt}
+          retryTotal={retryTotal}
         />
 
         <div className="modal-body test-wf-modal-content">

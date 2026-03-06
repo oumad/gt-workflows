@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { fetchWithAuth } from '@/utils/auth'
 
 export interface ServerHealthStatus {
@@ -13,14 +13,26 @@ interface UseServerHealthCheckOptions {
   enabled?: boolean;
 }
 
+// Module-level cache — survives component unmount/remount (tab switches)
+const healthStatusCache = new Map<string, ServerHealthStatus>()
+
 export function useServerHealthCheck(
   serverUrls: string[],
   options: UseServerHealthCheckOptions = {}
 ) {
   const { enabled = true } = options;
-  const [healthStatuses, setHealthStatuses] = useState<Map<string, ServerHealthStatus>>(new Map());
+  const [healthStatuses, setHealthStatuses] = useState<Map<string, ServerHealthStatus>>(
+    () => new Map(healthStatusCache)
+  );
   const [isChecking, setIsChecking] = useState(false);
   const checkingServersRef = useRef<Set<string>>(new Set());
+
+  // Keep module-level cache in sync with state
+  useEffect(() => {
+    for (const [k, v] of healthStatuses) {
+      healthStatusCache.set(k, v)
+    }
+  }, [healthStatuses])
 
   // Check health of a single server
   const checkServerHealth = useCallback(async (serverUrl: string): Promise<ServerHealthStatus> => {
@@ -138,11 +150,29 @@ export function useServerHealthCheck(
     [healthStatuses]
   );
 
+  const checkServer = useCallback(async (serverUrl: string): Promise<void> => {
+    if (checkingServersRef.current.has(serverUrl)) return
+    checkingServersRef.current.add(serverUrl)
+    setHealthStatuses((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(serverUrl, { serverUrl, healthy: null })
+      return newMap
+    })
+    const result = await checkServerHealth(serverUrl)
+    checkingServersRef.current.delete(serverUrl)
+    setHealthStatuses((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(serverUrl, result)
+      return newMap
+    })
+  }, [checkServerHealth])
+
   return {
     healthStatuses: Array.from(healthStatuses.values()),
     getHealthStatus,
     isChecking,
     checkAllServers,
+    checkServer,
   };
 }
 

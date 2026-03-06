@@ -17,10 +17,11 @@ export default function BulkEditModal({
   onSave,
 }: BulkEditModalProps) {
   const [serverUrl, setServerUrl] = useState<string | string[] | undefined>(undefined)
-  const [timeout, setTimeout] = useState<number | undefined>(undefined)
+  const [timeoutSec, setTimeoutSec] = useState<number | undefined>(undefined)
   const [devMode, setDevMode] = useState<boolean | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedWorkflows, setFailedWorkflows] = useState<string[]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
   // Determine which fields are applicable
@@ -33,7 +34,10 @@ export default function BulkEditModal({
     try {
       setSaving(true)
       setError(null)
+      setFailedWorkflows([])
       setProgress({ current: 0, total: workflows.length })
+
+      const failed: string[] = []
 
       // Save all workflows
       for (let i = 0; i < workflows.length; i++) {
@@ -58,9 +62,9 @@ export default function BulkEditModal({
           }
 
           // Update timeout
-          if (timeout !== undefined) {
-            if (timeout > 0) {
-              updatedParams.timeout = timeout
+          if (timeoutSec !== undefined) {
+            if (timeoutSec > 0) {
+              updatedParams.timeout = timeoutSec
             } else {
               delete updatedParams.timeout
             }
@@ -75,8 +79,15 @@ export default function BulkEditModal({
           setProgress({ current: i + 1, total: workflows.length })
         } catch (err) {
           console.error(`Failed to save ${workflow.name}:`, err)
-          // Continue with other workflows even if one fails
+          failed.push(workflow.name)
         }
+      }
+
+      if (failed.length > 0) {
+        setFailedWorkflows(failed)
+        setError(`Failed to save ${failed.length} workflow${failed.length !== 1 ? 's' : ''}`)
+        setSaving(false)
+        return
       }
 
       onSave()
@@ -110,6 +121,13 @@ export default function BulkEditModal({
           {error && (
             <div className="error-banner">
               <p>{error}</p>
+              {failedWorkflows.length > 0 && (
+                <ul style={{ margin: '8px 0 0', paddingLeft: '20px', fontSize: '0.875em' }}>
+                  {failedWorkflows.map((name) => (
+                    <li key={name}>{name}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -164,9 +182,9 @@ export default function BulkEditModal({
             <input
               id="bulk-timeout"
               type="number"
-              value={timeout || ''}
+              value={timeoutSec || ''}
               onChange={(e) =>
-                setTimeout(e.target.value ? parseInt(e.target.value) : undefined)
+                setTimeoutSec(e.target.value ? parseInt(e.target.value) : undefined)
               }
               placeholder="Leave empty to keep current values"
               min="0"
@@ -178,11 +196,11 @@ export default function BulkEditModal({
           </div>
 
           <div className="form-group checkbox-group">
-            <label htmlFor="bulk-devMode">
+            <span id="bulk-devMode-label" className="form-label">
               <Code size={16} />
               <span>Dev Mode</span>
-            </label>
-            <div className="checkbox-options">
+            </span>
+            <div className="checkbox-options" role="group" aria-labelledby="bulk-devMode-label">
               <label className="checkbox-option">
                 <input
                   type="radio"
