@@ -75,6 +75,8 @@ interface TestWorkflowStatusBannerProps {
   selectedServer: string
   doneCount: number
   totalCount: number
+  retryAttempt: number | null
+  retryTotal: number
 }
 
 export function TestWorkflowStatusBanner({
@@ -84,11 +86,15 @@ export function TestWorkflowStatusBanner({
   selectedServer,
   doneCount,
   totalCount,
+  retryAttempt,
+  retryTotal,
 }: TestWorkflowStatusBannerProps): React.ReactElement {
   const label =
     phase === 'executing'
       ? `${PHASE_LABELS[phase]} (${doneCount}/${totalCount})`
-      : PHASE_LABELS[phase]
+      : phase === 'connecting' && retryAttempt != null
+        ? `Retrying connection (${retryAttempt}/${retryTotal})...`
+        : PHASE_LABELS[phase]
   return (
     <div className={`test-wf-status-banner ${phase}`}>
       {isRunning && (

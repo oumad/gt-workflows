@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { createWorkflow } from '@/services/api/workflows'
 import type { WorkflowParams } from '@/types'
 import { Plus } from 'lucide-react'
+import { useWorkflows } from '@/hooks/useWorkflows'
 import './WorkflowCreate.css'
 
 interface WorkflowCreateProps {
@@ -11,6 +12,7 @@ interface WorkflowCreateProps {
 
 export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
   const navigate = useNavigate()
+  const { workflows } = useWorkflows()
   const [workflowName, setWorkflowName] = useState('')
   const [parserType, setParserType] = useState<'comfyui' | 'default'>('comfyui')
   const [label, setLabel] = useState('')
@@ -20,8 +22,17 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!workflowName.trim()) {
+    const trimmedName = workflowName.trim()
+    if (!trimmedName) {
       setError('Workflow name is required')
+      return
+    }
+
+    const isDuplicate = workflows.some(
+      (w) => w.name.toLowerCase() === trimmedName.toLowerCase()
+    )
+    if (isDuplicate) {
+      setError(`A workflow named "${trimmedName}" already exists`)
       return
     }
 
@@ -50,9 +61,9 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
         params.use = {}
       }
 
-      await createWorkflow(workflowName.trim(), params)
+      await createWorkflow(trimmedName, params)
       onCreated()
-      navigate(`/workflows/workflow/${encodeURIComponent(workflowName.trim())}`)
+      navigate(`/workflows/workflow/${encodeURIComponent(trimmedName)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workflow')
     } finally {

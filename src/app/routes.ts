@@ -9,6 +9,6 @@ export const ROUTES = {
   workflowsNew: '/workflows/new',
   workflow: (name: string): string => `/workflows/workflow/${encodeURIComponent(name)}`,
   activity: '/activity',
-  settings: '/settings',
+  servers: '/servers',
   login: '/login',
 } as const

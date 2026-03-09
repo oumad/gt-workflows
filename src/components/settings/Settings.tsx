@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Settings as SettingsIcon, Activity, Plus, X, Server, ListPlus, FileText } from 'lucide-react'
+import { Save, Server, Plus, X, ListPlus, FileText, Check } from 'lucide-react'
 import { getSettings } from '@/utils/settings'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
@@ -36,7 +36,7 @@ export function Settings() {
 
   useEffect(() => {
     if (saved) {
-      const timer = setTimeout(() => setSaved(false), 2000)
+      const timer = setTimeout(() => setSaved(false), 2500)
       return () => clearTimeout(timer)
     }
   }, [saved])
@@ -123,133 +123,143 @@ export function Settings() {
     }
   }
 
+  const handleServerAliasChange = (url: string, alias: string) => {
+    setServerAliases((prev) => {
+      const next = { ...prev }
+      if (alias.trim()) {
+        next[url] = alias
+      } else {
+        delete next[url]
+      }
+      return next
+    })
+  }
+
+  const displayServers = !prefsLoaded ? getSettings().monitoredServers : monitoredServers
+
   return (
-    <div className="settings-page">
-      <header className="settings-header">
-        <h1 className="page-title">
-          <SettingsIcon size={24} />
-          Settings
-        </h1>
-      </header>
-
-      <div className="settings-content">
-        <div className="settings-section settings-section-health">
-          <div className="section-header">
-            <Activity size={20} aria-hidden />
-            <h2>Server Health Checks</h2>
-          </div>
-          <p className="section-description">
-            Configure ComfyUI servers to monitor. Health status is checked on demand from the Workflows tab via &quot;Check Health&quot;.
+    <div className="servers-page">
+      <header className="servers-header">
+        <div className="servers-header-title">
+          <h1 className="page-title">
+            <Server size={24} />
+            Servers
+          </h1>
+          <p className="servers-description">
+            ComfyUI servers to monitor. Health status appears on workflow cards after running &quot;Check Health&quot; from the Workflows tab.
           </p>
-
-          <div className="settings-group health-panel">
-            <div className="setting-item setting-item-full health-servers-block">
-              <label>
-                <span className="label-text">Monitored Servers</span>
-                <span className="label-description">
-                  Add ComfyUI server URLs. Workflow cards will show connection status when you run a health check.
-                </span>
-              </label>
-              <div className="setting-control servers-list">
-                <div className="servers-list-items">
-                  {(!prefsLoaded ? getSettings().monitoredServers : monitoredServers).map((server, index) => (
-                    <div key={index} className="server-item">
-                      <Server size={16} />
-                      <div className="server-item-fields">
-                        <input
-                          type="text"
-                          value={server}
-                          onChange={(e) => handleServerUrlChange(index, e.target.value)}
-                          placeholder="http://127.0.0.1:8188"
-                          className="server-url-input"
-                        />
-                        {serverAliases[server] && (
-                          <span className="server-item-name" title={serverAliases[server]}>
-                            {serverAliases[server]}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setLogsServerUrl(server)}
-                        className="server-logs-btn"
-                        title="View server logs"
-                      >
-                        <FileText size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveServer(index)}
-                        className="remove-server-btn"
-                        title="Remove server"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="server-add-buttons">
-                  <button
-                    type="button"
-                    onClick={() => setAddServerOpen(true)}
-                    className="add-server-btn"
-                  >
-                    <Plus size={16} />
-                    Add Server
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBulkOpen((o) => !o)}
-                    className="add-server-btn add-server-btn-bulk"
-                  >
-                    <ListPlus size={16} />
-                    Add multiple
-                  </button>
-                </div>
-                {bulkOpen && (
-                  <div className="server-bulk-wrap">
-                    <p className="server-bulk-hint">
-                      One entry per line. Use <code>url</code> or <code>url,name</code> (optional display name after comma).
-                    </p>
-                    <textarea
-                      className="server-bulk-textarea"
-                      placeholder="http://127.0.0.1:8188&#10;http://x1254718:8199,Production&#10;http://x1313257:8188,Staging"
-                      value={bulkText}
-                      onChange={(e) => setBulkText(e.target.value)}
-                      rows={5}
-                    />
-                    <div className="server-bulk-actions">
-                      <button type="button" onClick={handleBulkAdd} className="btn btn-primary">
-                        Add servers
-                      </button>
-                      <button type="button" onClick={() => { setBulkOpen(false); setBulkText(''); }} className="btn btn-secondary">
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {monitoredServers.length === 0 && prefsLoaded && (
-                  <p className="health-empty-hint">
-                    No servers configured. Add at least one ComfyUI server URL above to use health checks from the Workflows tab.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
-
-        <div className="settings-actions">
+        <div className="servers-header-actions">
           <button onClick={handleSave} className="btn btn-primary">
             <Save size={16} />
-            Save Settings
+            Save
           </button>
           {saved && (
             <span className="save-message">
-              Settings saved!
+              <Check size={14} /> Saved
             </span>
           )}
         </div>
+      </header>
+
+      <div className="servers-list-wrap">
+        {displayServers.length > 0 ? (
+          <div className="servers-list-rows">
+            <div className="servers-list-columns-header">
+              <span className="servers-col-label">URL</span>
+              <span className="servers-col-label">Display name</span>
+            </div>
+            {displayServers.map((server, index) => (
+              <div key={index} className="server-row">
+                <Server size={15} className="server-row-icon" aria-hidden />
+                <input
+                  type="text"
+                  value={server}
+                  onChange={(e) => handleServerUrlChange(index, e.target.value)}
+                  placeholder="http://127.0.0.1:8188"
+                  className="server-row-url"
+                  aria-label="Server URL"
+                />
+                <input
+                  type="text"
+                  value={serverAliases[server] || ''}
+                  onChange={(e) => handleServerAliasChange(server, e.target.value)}
+                  placeholder="Optional name…"
+                  className="server-row-alias"
+                  aria-label="Display name"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLogsServerUrl(server)}
+                  className="server-action-btn"
+                  title="View server logs"
+                >
+                  <FileText size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveServer(index)}
+                  className="server-action-btn server-action-remove"
+                  title="Remove server"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          prefsLoaded && (
+            <div className="servers-empty">
+              <Server size={36} />
+              <p>No servers yet</p>
+              <p className="servers-empty-sub">Add a ComfyUI server URL to monitor its health from the Workflows tab.</p>
+            </div>
+          )
+        )}
+
+        <div className="servers-add-row">
+          <button type="button" onClick={() => setAddServerOpen(true)} className="btn btn-secondary">
+            <Plus size={16} />
+            Add Server
+          </button>
+          <button
+            type="button"
+            onClick={() => setBulkOpen((o) => !o)}
+            className="btn btn-secondary"
+          >
+            <ListPlus size={16} />
+            Add Multiple
+          </button>
+        </div>
+
+        {bulkOpen && (
+          <div className="servers-bulk-panel">
+            <p className="servers-bulk-hint">
+              One entry per line — <code>url</code> or <code>url, display name</code>
+            </p>
+            <textarea
+              className="servers-bulk-textarea"
+              placeholder={`http://127.0.0.1:8188\nhttp://server2:8188, Production\nhttp://server3:8188, Staging`}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              rows={5}
+            />
+            <div className="servers-bulk-actions">
+              <button type="button" onClick={handleBulkAdd} className="btn btn-primary">
+                Add servers
+              </button>
+              <button
+                type="button"
+                onClick={() => { setBulkOpen(false); setBulkText('') }}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
       {logsServerUrl && (
         <ServerLogsModal
           serverUrl={logsServerUrl}
@@ -267,4 +277,3 @@ export function Settings() {
     </div>
   )
 }
-

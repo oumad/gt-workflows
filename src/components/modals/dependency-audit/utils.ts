@@ -60,14 +60,11 @@ export function countTotalItems(result: DependencyAuditResult): number {
   return count
 }
 
-export function countItems(items: Array<{ available: boolean | null }>): TabCounts {
-  const c: TabCounts = { available: 0, missing: 0, unknown: 0, total: items.length }
-  for (const i of items) {
-    if (i.available === true) c.available++
-    else if (i.available === false) c.missing++
-    else c.unknown++
-  }
-  return c
+/** Worst-case status across multiple servers: missing > unknown > available. */
+function worstStatus(statuses: Array<boolean | null>): boolean | null {
+  if (statuses.some((s) => s === false)) return false
+  if (statuses.some((s) => s === null)) return null
+  return true
 }
 
 export function statusClass(available: ItemStatus): string {
@@ -87,25 +84,53 @@ export function sortMissingFirst<T extends { available: ItemStatus }>(
   })
 }
 
-function addCounts(acc: TabCounts, c: TabCounts): void {
-  acc.available += c.available
-  acc.missing += c.missing
-  acc.unknown += c.unknown
-  acc.total += c.total
+function buildUniqueCountMap(results: DependencyAuditResult[], extract: (r: DependencyAuditResult) => Array<{ name: string; available: boolean | null }>): Map<string, (boolean | null)[]> {
+  const map = new Map<string, (boolean | null)[]>()
+  for (const r of results) {
+    for (const item of extract(r)) {
+      const existing = map.get(item.name)
+      if (existing) existing.push(item.available)
+      else map.set(item.name, [item.available])
+    }
+  }
+  return map
+}
+
+function tabCountsFromUniqueMap(map: Map<string, (boolean | null)[]>): TabCounts {
+  const c: TabCounts = { available: 0, missing: 0, unknown: 0, total: map.size }
+  for (const statuses of map.values()) {
+    const w = worstStatus(statuses)
+    if (w === true) c.available++
+    else if (w === false) c.missing++
+    else c.unknown++
+  }
+  return c
 }
 
 export function aggregateTabCounts(
   results: DependencyAuditResult[]
 ): { nodes: TabCounts; models: TabCounts; inputs: TabCounts } {
-  const nodes: TabCounts = { available: 0, missing: 0, unknown: 0, total: 0 }
-  const models: TabCounts = { available: 0, missing: 0, unknown: 0, total: 0 }
-  const inputs: TabCounts = { available: 0, missing: 0, unknown: 0, total: 0 }
-  for (const r of results) {
-    addCounts(nodes, countItems(r.nodes))
-    for (const items of Object.values(r.models)) {
-      addCounts(models, countItems(items))
-    }
-    if (r.files) addCounts(inputs, countItems(r.files))
+  if (results.length === 0) {
+    const zero: TabCounts = { available: 0, missing: 0, unknown: 0, total: 0 }
+    return { nodes: zero, models: { ...zero }, inputs: { ...zero } }
   }
-  return { nodes, models, inputs }
+
+  const nodeMap = buildUniqueCountMap(results, (r) => r.nodes)
+  const fileMap = buildUniqueCountMap(results, (r) => r.files ?? [])
+  const modelMapFull = new Map<string, (boolean | null)[]>()
+  for (const r of results) {
+    for (const items of Object.values(r.models)) {
+      for (const item of items) {
+        const existing = modelMapFull.get(item.name)
+        if (existing) existing.push(item.available)
+        else modelMapFull.set(item.name, [item.available])
+      }
+    }
+  }
+
+  return {
+    nodes: tabCountsFromUniqueMap(nodeMap),
+    models: tabCountsFromUniqueMap(modelMapFull),
+    inputs: tabCountsFromUniqueMap(fileMap),
+  }
 }

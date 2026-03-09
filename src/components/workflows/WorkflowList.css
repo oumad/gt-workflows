@@ -179,6 +179,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: 0.5rem 0.75rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -187,6 +188,11 @@
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
+  /* reset <button> defaults */
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .workflow-category-header:hover {
@@ -251,6 +257,8 @@
 
 .workflow-card-wrapper {
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .workflow-card-wrapper.dragging {
@@ -342,6 +350,7 @@
   flex-direction: column;
   gap: 0.5rem;
   position: relative;
+  flex: 1; /* stretch to fill the grid cell so all cards in the same column are the same height */
 }
 
 .edit-mode .workflow-card {
@@ -743,6 +752,37 @@
   border-radius: 4px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.workflow-run-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.run-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.run-badge--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.run-badge--nok {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .edit-mode-footer {

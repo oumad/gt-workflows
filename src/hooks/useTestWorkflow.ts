@@ -29,6 +29,8 @@ export interface TestWorkflowState {
   executionOrder: string[]
   errorInfo: ErrorInfo | null
   selectedServer: string
+  retryAttempt: number | null
+  retryTotal: number
 }
 
 export interface TestWorkflowActions {
@@ -46,6 +48,8 @@ export function useTestWorkflow(
   const [executionOrder, setExecutionOrder] = useState<string[]>([])
   const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null)
   const [selectedServer, setSelectedServer] = useState(serverUrls[0] || '')
+  const [retryAttempt, setRetryAttempt] = useState<number | null>(null)
+  const [retryTotal, setRetryTotal] = useState(3)
   const abortRef = useRef<AbortController | null>(null)
   const orderCounterRef = useRef(0)
 
@@ -88,7 +92,14 @@ export function useTestWorkflow(
     const { type, data } = event
 
     switch (type) {
+      case 'status':
+        if (typeof data.retrying === 'number') {
+          setRetryAttempt(data.retrying)
+          if (typeof data.total === 'number') setRetryTotal(data.total)
+        }
+        break
       case 'connected':
+        setRetryAttempt(null)
         setPhase('submitting')
         break
       case 'queued':
@@ -201,8 +212,10 @@ export function useTestWorkflow(
 
   const startTest = useCallback(async () => {
     if (!workflowJson) return
+    abortRef.current?.abort()
     setPhase('connecting')
     setErrorInfo(null)
+    setRetryAttempt(null)
     initializeNodes()
 
     const controller = new AbortController()
@@ -233,7 +246,7 @@ export function useTestWorkflow(
 
   const isRunning = phase === 'connecting' || phase === 'submitting' || phase === 'queued' || phase === 'executing'
 
-  const state: TestWorkflowState = { phase, nodes, executionOrder, errorInfo, selectedServer }
+  const state: TestWorkflowState = { phase, nodes, executionOrder, errorInfo, selectedServer, retryAttempt, retryTotal }
   const actions: TestWorkflowActions = { startTest, cancelTest, setSelectedServer }
 
   return { state, actions, isRunning, workflowNodeCount: workflowNodes.size }

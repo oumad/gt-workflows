@@ -1,4 +1,5 @@
 import type { Workflow } from '@/types'
+import { AppPreferencesSchema } from '@/lib/schemas'
 import { fetchWithAuth } from '@/utils/auth'
 
 export type LastRunStatus = 'ok' | 'nok'
@@ -48,28 +49,13 @@ export async function getPreferences(): Promise<AppPreferences> {
   try {
     const res = await fetchWithAuth('/api/preferences')
     if (!res.ok) return { ...DEFAULT_PREFERENCES }
-    const data = await res.json()
-    const workflowDetailUI =
-      data.workflowDetailUI && typeof data.workflowDetailUI === 'object' && !Array.isArray(data.workflowDetailUI)
-        ? data.workflowDetailUI
-        : {}
-    const workflowsInfo = Array.isArray(data.workflowsInfo)
-      ? (data.workflowsInfo as Workflow[])
-      : []
-    const serverAliases =
-      data.serverAliases && typeof data.serverAliases === 'object' && !Array.isArray(data.serverAliases)
-        ? data.serverAliases
-        : {}
-    return {
-      anonymiseUsers: Boolean(data.anonymiseUsers),
-      serversOpen: Boolean(data.serversOpen),
-      userDetailsOpen: Boolean(data.userDetailsOpen),
-      monitoredServers: Array.isArray(data.monitoredServers) ? data.monitoredServers : [],
-      expandedCategories: Array.isArray(data.expandedCategories) ? data.expandedCategories : [],
-      workflowDetailUI,
-      workflowsInfo,
-      serverAliases,
+    const raw: unknown = await res.json()
+    const parsed = AppPreferencesSchema.safeParse(raw)
+    if (!parsed.success) {
+      console.warn('Preferences response validation failed:', parsed.error.issues)
+      return { ...DEFAULT_PREFERENCES }
     }
+    return parsed.data as AppPreferences
   } catch {
     return { ...DEFAULT_PREFERENCES }
   }
@@ -85,24 +71,11 @@ export async function updatePreferences(prefs: Partial<AppPreferences>): Promise
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error((err as { error?: string }).error ?? 'Failed to save preferences')
   }
-  const data = await res.json()
-  const workflowDetailUI =
-    data.workflowDetailUI && typeof data.workflowDetailUI === 'object' && !Array.isArray(data.workflowDetailUI)
-      ? data.workflowDetailUI
-      : {}
-  const workflowsInfo = Array.isArray(data.workflowsInfo) ? (data.workflowsInfo as Workflow[]) : []
-  const serverAliases =
-    data.serverAliases && typeof data.serverAliases === 'object' && !Array.isArray(data.serverAliases)
-      ? data.serverAliases
-      : {}
-  return {
-    anonymiseUsers: Boolean(data.anonymiseUsers),
-    serversOpen: Boolean(data.serversOpen),
-    userDetailsOpen: Boolean(data.userDetailsOpen),
-    monitoredServers: Array.isArray(data.monitoredServers) ? data.monitoredServers : [],
-    expandedCategories: Array.isArray(data.expandedCategories) ? data.expandedCategories : [],
-    workflowDetailUI,
-    workflowsInfo,
-    serverAliases,
+  const raw: unknown = await res.json()
+  const parsed = AppPreferencesSchema.safeParse(raw)
+  if (!parsed.success) {
+    console.warn('Preferences response validation failed:', parsed.error.issues)
+    return { ...DEFAULT_PREFERENCES }
   }
+  return parsed.data as AppPreferences
 }

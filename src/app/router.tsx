@@ -6,7 +6,7 @@ import { LogOut } from 'lucide-react'
 import { useAuth, Login, clearStoredAuth } from '@/features/auth'
 import { useWorkflows } from '@/features/workflows'
 import { WorkflowList, WorkflowDetail, WorkflowCreate } from '@/features/workflows'
-import { Settings } from '@/features/settings'
+import { Servers } from '@/features/servers'
 import { Dashboard, DashboardTimeView } from '@/features/dashboard'
 import { Activity } from '@/features/activity'
 import '@/App.css'
@@ -116,7 +116,7 @@ function MainLayoutWithData(): React.ReactElement {
     create: path === '/workflows/new',
     activity: path.startsWith('/activity'),
     dashboard: path.startsWith(ROUTES.jobStats),
-    settings: path.startsWith('/settings'),
+    servers: path.startsWith('/servers'),
   }
   const { workflows, loading, error, loadWorkflows } = useWorkflows()
 
@@ -133,7 +133,7 @@ function MainLayoutWithData(): React.ReactElement {
                   <Link to="/workflows/new" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
                   <Link to="/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
                   <Link to={ROUTES.jobStats} className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
-                  <Link to="/settings" className={`nav-link${navActive.settings ? ' nav-link--active' : ''}`}>Settings</Link>
+                  <Link to="/servers" className={`nav-link${navActive.servers ? ' nav-link--active' : ''}`}>Servers</Link>
                 </>
               )}
             </nav>
@@ -201,7 +201,7 @@ export function AppRoutes(): React.ReactElement {
           <Route index element={<Dashboard />} />
           <Route path="timeview" element={<DashboardTimeView />} />
         </Route>
-        <Route path="settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
+        <Route path="servers" element={<RequireAdmin><Servers /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<CatchAllRedirect />} />
     </Routes>

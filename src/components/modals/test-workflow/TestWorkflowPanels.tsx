@@ -89,9 +89,9 @@ export function TestWorkflowErrorPanel({
         </div>
       )}
       {details != null && (
-        <div className="test-wf-error-node" style={ERROR_DETAILS_STYLE}>
-          {typeof details === 'string' ? details : JSON.stringify(details, null, 2)}
-        </div>
+        typeof details === 'string'
+          ? <div className="test-wf-error-node" style={ERROR_DETAILS_STYLE}>{details}</div>
+          : <div className="test-wf-error-traceback" style={ERROR_DETAILS_STYLE}>{JSON.stringify(details, null, 2)}</div>
       )}
       {tracebackText && (
         <>

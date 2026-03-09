@@ -60,7 +60,7 @@ export default function ServerLogsModal({
   }, [autoRefresh, autoRefreshInterval, load]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay server-logs-overlay" onClick={onClose}>
       <div className="modal-content server-logs-modal" onClick={(e) => e.stopPropagation()}>
         <div className="server-logs-header">
           <div className="server-logs-title">

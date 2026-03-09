@@ -2,10 +2,12 @@
 @import '../ui/SpinnerIcon.css';
 @import '../ui/Buttons.css';
 
-.test-wf-modal {
-  width: 90%;
-  max-width: 680px;
-  max-height: 80vh;
+/* Use double-class to beat .modal-content { max-width: 500px } regardless of import order */
+.modal-content.test-wf-modal {
+  max-width: min(760px, 96vw);
+  width: min(760px, 96vw);
+  height: min(82vh, 800px);
+  max-height: 82vh;
 }
 
 .test-wf-modal-header {
