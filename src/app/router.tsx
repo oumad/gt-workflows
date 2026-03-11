@@ -9,6 +9,7 @@ import { WorkflowList, WorkflowDetail, WorkflowCreate } from '@/features/workflo
 import { Servers } from '@/features/servers'
 import { Dashboard, DashboardTimeView } from '@/features/dashboard'
 import { Activity } from '@/features/activity'
+import { Doctor } from '@/features/doctor'
 import '@/App.css'
 
 export interface MainOutletContext {
@@ -116,6 +117,7 @@ function MainLayoutWithData(): React.ReactElement {
     create: path === '/workflows/new',
     activity: path.startsWith('/activity'),
     dashboard: path.startsWith(ROUTES.jobStats),
+    doctor: path.startsWith(ROUTES.doctor),
     servers: path.startsWith('/servers'),
   }
   const { workflows, loading, error, loadWorkflows } = useWorkflows()
@@ -133,6 +135,7 @@ function MainLayoutWithData(): React.ReactElement {
                   <Link to="/workflows/new" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
                   <Link to="/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
                   <Link to={ROUTES.jobStats} className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
+                  <Link to={ROUTES.doctor} className={`nav-link${navActive.doctor ? ' nav-link--active' : ''}`}>Doctor</Link>
                   <Link to="/servers" className={`nav-link${navActive.servers ? ' nav-link--active' : ''}`}>Servers</Link>
                 </>
               )}
@@ -201,6 +204,7 @@ export function AppRoutes(): React.ReactElement {
           <Route index element={<Dashboard />} />
           <Route path="timeview" element={<DashboardTimeView />} />
         </Route>
+        <Route path="doctor" element={<RequireAdmin><Doctor /></RequireAdmin>} />
         <Route path="servers" element={<RequireAdmin><Servers /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<CatchAllRedirect />} />

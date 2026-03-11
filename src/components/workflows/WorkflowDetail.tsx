@@ -54,16 +54,37 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <h1 className="page-title"><FileJson size={24} />{params?.label || name}</h1>
         </div>
         <div className="header-actions">
-          {params?.parser === 'comfyui' && workflowJson && params.comfyui_config?.serverUrl && (
-            <>
-              <button onClick={() => setShowTestWorkflow(true)} disabled={loading} className="btn btn-secondary" title="Test-execute workflow on ComfyUI server">
-                <Play size={16} /> Test
-              </button>
-              <button onClick={() => setShowDependencyAudit(true)} disabled={loading} className="btn btn-secondary" title="Audit workflow dependencies against ComfyUI server(s)">
-                <Package size={16} /> Audit
-              </button>
-            </>
-          )}
+          {params?.parser === 'comfyui' && (() => {
+            const missingServer = !params.comfyui_config?.serverUrl
+            const missingWorkflow = !workflowJson
+            const disabledReason = missingServer && missingWorkflow
+              ? 'Requires a ComfyUI server URL and workflow file'
+              : missingServer
+                ? 'Requires a ComfyUI server URL'
+                : missingWorkflow
+                  ? 'Requires a workflow file (.json)'
+                  : null
+            return (
+              <>
+                <button
+                  onClick={() => setShowTestWorkflow(true)}
+                  disabled={loading || !!disabledReason}
+                  className="btn btn-secondary"
+                  title={disabledReason ?? 'Test-execute workflow on ComfyUI server'}
+                >
+                  <Play size={16} /> Test
+                </button>
+                <button
+                  onClick={() => setShowDependencyAudit(true)}
+                  disabled={loading || !!disabledReason}
+                  className="btn btn-secondary"
+                  title={disabledReason ?? 'Audit workflow dependencies against ComfyUI server(s)'}
+                >
+                  <Package size={16} /> Audit
+                </button>
+              </>
+            )
+          })()}
           <button onClick={() => setShowDuplicateModal(true)} disabled={loading} className="btn btn-secondary" title="Duplicate workflow">
             <Copy size={16} /> Duplicate
           </button>
@@ -73,23 +94,24 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           <button onClick={handleResetClick} disabled={loading || saving} className="btn btn-secondary" title="Reset to saved version">
             <RotateCcw size={16} /> Reset
           </button>
-          {hasExternalChanges && (
-            <div className="external-changes-indicator" title="params.json has been modified externally">
-              <AlertCircle size={16} />
-              <span>External Changes</span>
-            </div>
-          )}
           <button
             onClick={handleSaveClick}
             disabled={saving}
             className={`btn btn-primary ${hasUnsavedChanges ? 'has-changes' : ''}`}
-            title={hasUnsavedChanges ? 'Apply changes' : 'View current state and apply'}
+            title={hasUnsavedChanges ? 'Save changes' : 'Save'}
           >
-            <Save size={16} /> {saving ? 'Applying...' : 'Apply'}
+            <Save size={16} /> {saving ? 'Saving...' : 'Save'}
             {hasUnsavedChanges && <span className="unsaved-indicator" />}
           </button>
         </div>
       </div>
+
+      {hasExternalChanges && (
+        <div className="external-changes-banner" role="alert">
+          <AlertCircle size={16} />
+          <span><strong>File changed externally.</strong> params.json was modified outside the editor — reload to use the new version or save to overwrite.</span>
+        </div>
+      )}
 
       {error && <div className="error-banner" role="alert"><p>{error}</p></div>}
 
@@ -146,45 +168,45 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
             )}
 
             {/* Use/Selectors Section */}
-            {(params.use || params.parser !== 'comfyui') && (
+            {(params.selectors || params.parser !== 'comfyui') && (
               <div className="detail-section">
                 <div className="section-header">
                   <Settings size={20} />
                   <h2>Data Selectors</h2>
-                  {!params.use && (
+                  {!params.selectors && (
                     <button onClick={() => handleParamsUpdate({ ...params, use: {} })} className="btn btn-secondary" style={{ marginLeft: 'auto' }}>
                       Add Selectors
                     </button>
                   )}
                 </div>
-                {params.use && (
+                {params.selectors && (
                   <>
                     <div className="info-grid">
                       <div className="info-item">
                         <label>Current Project</label>
                         <label className="checkbox-label">
-                          <input type="checkbox" checked={!!params.use.currentProject} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.use || {}), currentProject: e.target.checked ? (typeof params.use?.currentProject === 'object' ? params.use.currentProject : true) : undefined } })} />
+                          <input type="checkbox" checked={!!params.selectors.currentProject} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.selectors || {}), currentProject: e.target.checked ? (typeof params.selectors?.currentProject === 'object' ? params.selectors.currentProject : true) : undefined } })} />
                           <span>Enable</span>
                         </label>
                       </div>
                       <div className="info-item">
                         <label>App Config</label>
                         <label className="checkbox-label">
-                          <input type="checkbox" checked={!!params.use.appConfig} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.use || {}), appConfig: e.target.checked ? (typeof params.use?.appConfig === 'object' ? params.use.appConfig : true) : undefined } })} />
+                          <input type="checkbox" checked={!!params.selectors.appConfig} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.selectors || {}), appConfig: e.target.checked ? (typeof params.selectors?.appConfig === 'object' ? params.selectors.appConfig : true) : undefined } })} />
                           <span>Enable</span>
                         </label>
                       </div>
                       <div className="info-item">
                         <label>Items</label>
                         <label className="checkbox-label">
-                          <input type="checkbox" checked={!!params.use.items} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.use || {}), items: e.target.checked ? (typeof params.use?.items === 'object' ? params.use.items : true) : undefined } })} />
+                          <input type="checkbox" checked={!!params.selectors.items} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.selectors || {}), items: e.target.checked ? (typeof params.selectors?.items === 'object' ? params.selectors.items : true) : undefined } })} />
                           <span>Enable</span>
                         </label>
                       </div>
                       <div className="info-item">
                         <label>Selected Images</label>
                         <label className="checkbox-label">
-                          <input type="checkbox" checked={!!params.use.selectedImages} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.use || {}), selectedImages: e.target.checked ? (typeof params.use?.selectedImages === 'object' ? params.use.selectedImages : true) : undefined } })} />
+                          <input type="checkbox" checked={!!params.selectors.selectedImages} onChange={(e) => handleParamsUpdate({ ...params, use: { ...(params.selectors || {}), selectedImages: e.target.checked ? (typeof params.selectors?.selectedImages === 'object' ? params.selectors.selectedImages : true) : undefined } })} />
                           <span>Enable</span>
                         </label>
                       </div>
@@ -356,8 +378,8 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
       {hasUnsavedChanges && (
         <div className="floating-apply-bar">
           <span className="floating-apply-bar-label">You have unsaved changes</span>
-          <button onClick={handleSaveClick} disabled={saving} className="btn btn-primary floating-apply-btn" title="Apply changes">
-            <Save size={16} /> {saving ? 'Applying...' : 'Apply'}
+          <button onClick={handleSaveClick} disabled={saving} className="btn btn-primary floating-apply-btn" title="Save changes">
+            <Save size={16} /> {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
       )}

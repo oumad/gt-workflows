@@ -18,7 +18,8 @@ export interface SortableWorkflowCardProps {
   onDownload: (name: string, e: React.MouseEvent) => void
   onDuplicate: (name: string, e: React.MouseEvent) => void
   onViewLogs?: (serverUrl: string) => void
-  onFieldChange: (workflowName: string, field: string, value: string | string[] | number | boolean | undefined) => void
+  onFieldChange: (workflowName: string, field: string, value: string | number | boolean | undefined) => void
+  onComfyServerChange: (workflowName: string, serverUrl: string | string[] | undefined) => void
   uiState?: WorkflowDetailUIState
 }
 
@@ -29,14 +30,14 @@ export function SortableWorkflowCard({
   const comfyServerUrl = workflow.params?.parser === 'comfyui'
     ? getPrimaryServerUrl(workflow.params?.comfyui_config?.serverUrl) || undefined
     : undefined
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: workflow.name })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: workflow.name })
   const style = { transform: CSS.Transform.toString(transform), transition: isDragging ? 'none' : transition, opacity: isDragging ? 0.5 : 1 }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`workflow-card-wrapper ${isSelected ? 'selected' : ''} ${selectionMode ? 'selection-mode' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`workflow-card-wrapper ${isSelected ? 'selected' : ''} ${selectionMode ? 'selection-mode' : ''} ${isDragging ? 'dragging' : ''} ${isOver && !isDragging ? 'drop-target' : ''}`}
       onClick={() => { if (selectionMode) onToggleSelection(workflow.name) }}
     >
       {selectionMode && isSelected && <div className="selection-indicator"><CheckSquare size={20} /></div>}
@@ -49,7 +50,7 @@ export function SortableWorkflowCard({
         to={editMode ? '#' : `/workflows/workflow/${encodeURIComponent(workflow.name)}`}
         className={`workflow-card${editMode ? ' workflow-card-no-link' : ''}`}
         onClick={(e) => {
-          if (selectionMode) { e.preventDefault(); onToggleSelection(workflow.name) }
+          if (selectionMode) { e.preventDefault() }
           else if (editMode) { const el = e.target as HTMLElement; if (!(el instanceof HTMLInputElement)) e.preventDefault() }
         }}
       >
@@ -97,7 +98,7 @@ export function SortableWorkflowCard({
                 <Server size={14} />
                 <span className="quick-info-label">Server:</span>
                 {editMode ? (
-                  <ServerUrlEditor compact value={rawServerUrl} onChange={(v) => onFieldChange(workflow.name, 'comfyui_config.serverUrl', v)} />
+                  <ServerUrlEditor compact value={rawServerUrl} onChange={(v) => onComfyServerChange(workflow.name, v)} />
                 ) : (
                   <span className="quick-info-value" title={serverUrl}>{serverUrlDisplayLabel(rawServerUrl)}</span>
                 )}
@@ -151,12 +152,12 @@ export function SortableWorkflowCard({
           {!editMode && (uiState?.lastTestRun || uiState?.lastAuditRun) && (
             <div className="workflow-run-badges">
               {uiState?.lastTestRun && (
-                <span className={`run-badge run-badge--${uiState.lastTestRunStatus ?? 'ok'}`} title={`Last tested: ${new Date(uiState.lastTestRun).toLocaleString()}`}>
+                <span className={`run-badge run-badge--${uiState.lastTestRunStatus ?? 'passed'}`} title={`Last tested: ${new Date(uiState.lastTestRun).toLocaleString()}`}>
                   <Play size={10} /> Tested
                 </span>
               )}
               {uiState?.lastAuditRun && (
-                <span className={`run-badge run-badge--${uiState.lastAuditRunStatus ?? 'ok'}`} title={`Last audited: ${new Date(uiState.lastAuditRun).toLocaleString()}`}>
+                <span className={`run-badge run-badge--${uiState.lastAuditRunStatus ?? 'passed'}`} title={`Last audited: ${new Date(uiState.lastAuditRun).toLocaleString()}`}>
                   <ShieldCheck size={10} /> Audited
                 </span>
               )}

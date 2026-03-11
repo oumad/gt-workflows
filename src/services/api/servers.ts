@@ -28,7 +28,7 @@ export interface DependencyAuditResult {
   nodes: DependencyAuditItem[]
   models: Record<string, DependencyAuditItem[]>
   files: DependencyAuditItem[]
-  nodeError?: string
+  serverError?: string
 }
 
 export async function auditWorkflowDependencies(

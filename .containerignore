@@ -1,0 +1,8 @@
+node_modules
+gt-workflows-manager-e2e
+.desloppify
+.claude
+.git
+*.png
+scorecard.png
+data

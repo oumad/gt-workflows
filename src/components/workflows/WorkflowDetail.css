@@ -49,27 +49,18 @@
   gap: 0.75rem;
 }
 
-.external-changes-indicator {
+.external-changes-banner {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(251, 191, 36, 0.1);
+  gap: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  background: rgba(251, 191, 36, 0.08);
   border: 1px solid var(--warning);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--warning);
-  font-size: 13px;
-  font-weight: 500;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
+  font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
 .error-banner {
@@ -254,12 +245,12 @@
   letter-spacing: 0.02em;
 }
 
-.general-info-badge.status-ok {
+.general-info-badge.status-passed {
   background: rgba(34, 197, 94, 0.15);
   color: var(--success, #22c55e);
 }
 
-.general-info-badge.status-nok {
+.general-info-badge.status-failed {
   background: rgba(239, 68, 68, 0.15);
   color: var(--error, #ef4444);
 }

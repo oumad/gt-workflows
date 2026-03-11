@@ -74,3 +74,31 @@ export async function writePreferences(preferencesPath, userId, partial) {
     return merged;
   });
 }
+
+/**
+ * Atomically patch a single workflow's entry in workflowDetailUI preferences.
+ * Merges `patch` into the existing entry for `workflowName` without touching other workflows.
+ */
+export async function patchWorkflowDetailUIEntry(preferencesPath, userId, workflowName, patch) {
+  const dir = preferencesPath;
+  const file = path.join(dir, `${sanitizeUserId(userId)}.json`);
+  await fs.mkdir(dir, { recursive: true });
+
+  return withFileLock(file, async () => {
+    const existing = await readPreferences(preferencesPath, userId);
+    const existingUI = (existing.workflowDetailUI && typeof existing.workflowDetailUI === 'object') ? existing.workflowDetailUI : {};
+    const existingEntry = (existingUI[workflowName] && typeof existingUI[workflowName] === 'object') ? existingUI[workflowName] : {};
+    const merged = {
+      ...existing,
+      workflowDetailUI: { ...existingUI, [workflowName]: { ...existingEntry, ...patch } },
+    };
+    const tmpFile = `${file}.tmp`;
+    try {
+      await fs.writeFile(tmpFile, JSON.stringify(merged, null, 2), 'utf8');
+      await fs.rename(tmpFile, file);
+    } finally {
+      try { await fs.unlink(tmpFile); } catch { /* ignore */ }
+    }
+    return merged;
+  });
+}

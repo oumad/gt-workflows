@@ -80,9 +80,9 @@ export function useWorkflowDetail(onUpdate: () => void) {
           if (typeof ui.showWorkflowJson === 'boolean') setShowWorkflowJson(ui.showWorkflowJson)
           if (typeof ui.showParamsJson === 'boolean') setShowParamsJson(ui.showParamsJson)
           setLastTestRun(typeof ui.lastTestRun === 'string' ? ui.lastTestRun : null)
-          setLastTestRunStatus(ui.lastTestRunStatus === 'ok' || ui.lastTestRunStatus === 'nok' ? ui.lastTestRunStatus : null)
+          setLastTestRunStatus(ui.lastTestRunStatus === 'passed' || ui.lastTestRunStatus === 'failed' ? ui.lastTestRunStatus : null)
           setLastAuditRun(typeof ui.lastAuditRun === 'string' ? ui.lastAuditRun : null)
-          setLastAuditRunStatus(ui.lastAuditRunStatus === 'ok' || ui.lastAuditRunStatus === 'nok' ? ui.lastAuditRunStatus : null)
+          setLastAuditRunStatus(ui.lastAuditRunStatus === 'passed' || ui.lastAuditRunStatus === 'failed' ? ui.lastAuditRunStatus : null)
         } else {
           setShowWorkflowJson(false)
           setShowParamsJson(false)
@@ -132,8 +132,8 @@ export function useWorkflowDetail(onUpdate: () => void) {
     const phase = testWorkflowHook.state.phase
     const prev = testPhasePrevRef.current
     testPhasePrevRef.current = phase
-    if (name && (phase === 'completed' || phase === 'error') && prev !== 'completed' && prev !== 'error') {
-      persistLastRun(name, 'test', new Date().toISOString(), phase === 'completed' ? 'ok' : 'nok')
+    if (name && (phase === 'done' || phase === 'error') && prev !== 'done' && prev !== 'error') {
+      persistLastRun(name, 'test', new Date().toISOString(), phase === 'done' ? 'passed' : 'failed')
     }
   }, [name, testWorkflowHook.state.phase, persistLastRun])
 
@@ -241,12 +241,6 @@ export function useWorkflowDetail(onUpdate: () => void) {
       setSaving(true)
       setError(null)
       const paramsToSave: WorkflowParams = { ...params }
-      if ((paramsToSave.comfyui_config as Record<string, unknown>)?._workflowUploaded) {
-        const cfg = { ...paramsToSave.comfyui_config } as Record<string, unknown>
-        delete cfg._workflowUploaded
-        paramsToSave.comfyui_config = cfg as typeof paramsToSave.comfyui_config
-      }
-      if (paramsToSave._iconUploaded !== undefined) delete paramsToSave._iconUploaded
       await saveWorkflowParams(name, paramsToSave)
       setOriginalParams(structuredClone(paramsToSave))
       setParams(paramsToSave)
@@ -381,7 +375,7 @@ export function useWorkflowDetail(onUpdate: () => void) {
     try {
       const compressedFile = await compressImage(file, 800, 0.85)
       const result = await uploadFile(name, compressedFile)
-      handleParamsUpdate({ ...params, icon: result.relativePath, _iconUploaded: Date.now() })
+      handleParamsUpdate({ ...params, icon: result.relativePath })
       setIconVersion(Date.now())
       setIconError(false)
     } catch (err) {
@@ -395,7 +389,7 @@ export function useWorkflowDetail(onUpdate: () => void) {
       const result = await uploadFile(name, file)
       handleParamsUpdate({
         ...params,
-        comfyui_config: { ...(params.comfyui_config || {}), workflow: result.relativePath, _workflowUploaded: Date.now() } as WorkflowParams['comfyui_config'],
+        comfyui_config: { ...(params.comfyui_config || {}), workflow: result.relativePath } as WorkflowParams['comfyui_config'],
       })
       const jsonData = await getWorkflowJson(name)
       setWorkflowJson(jsonData)

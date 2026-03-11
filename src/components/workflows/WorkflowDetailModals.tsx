@@ -166,8 +166,8 @@ export function WorkflowDetailModals({
           onCacheUpdate={(cache) => {
             setDependencyAuditCache(cache)
             if (name && cache?.timestamp) {
-              const hasServerError = cache.results.some((r) => r.nodeError)
-              persistLastRun(name, 'audit', cache.timestamp, (cache.error || hasServerError) ? 'nok' : 'ok')
+              const hasServerError = cache.results.some((r) => r.serverError)
+              persistLastRun(name, 'audit', cache.timestamp, (cache.error || hasServerError) ? 'failed' : 'passed')
             }
           }}
           onClose={() => setShowDependencyAudit(false)}

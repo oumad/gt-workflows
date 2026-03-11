@@ -3,7 +3,7 @@ import type { WorkflowJson } from '@/types'
 import { testWorkflow, cancelTestWorkflow } from '@/services/api/servers'
 import type { TestWorkflowEvent } from '@/services/api/servers'
 
-export type Phase = 'idle' | 'connecting' | 'submitting' | 'queued' | 'executing' | 'completed' | 'error' | 'cancelled'
+export type Phase = 'idle' | 'connecting' | 'submitting' | 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 
 export type NodeStatus = 'pending' | 'cached' | 'executing' | 'done' | 'error'
 
@@ -107,7 +107,7 @@ export function useTestWorkflow(
         break
       case 'executing': {
         const nodeId = data.node as string
-        setPhase('executing')
+        setPhase('running')
         setNodes(prev => {
           const next = new Map(prev)
           const existing = next.get(nodeId)
@@ -180,7 +180,7 @@ export function useTestWorkflow(
           }
           return next
         })
-        setPhase('completed')
+        setPhase('done')
         break
       case 'error': {
         const errMsg = data.message as string
@@ -223,7 +223,7 @@ export function useTestWorkflow(
 
     try {
       await testWorkflow(selectedServer, workflowJson, handleEvent, controller.signal)
-      setPhase(prev => (prev === 'executing' || prev === 'queued') ? 'completed' : prev)
+      setPhase(prev => (prev === 'running' || prev === 'queued') ? 'done' : prev)
     } catch (err) {
       if (controller.signal.aborted) {
         setPhase('cancelled')
@@ -244,7 +244,7 @@ export function useTestWorkflow(
     setPhase('cancelled')
   }, [selectedServer])
 
-  const isRunning = phase === 'connecting' || phase === 'submitting' || phase === 'queued' || phase === 'executing'
+  const isRunning = phase === 'connecting' || phase === 'submitting' || phase === 'queued' || phase === 'running'
 
   const state: TestWorkflowState = { phase, nodes, executionOrder, errorInfo, selectedServer, retryAttempt, retryTotal }
   const actions: TestWorkflowActions = { startTest, cancelTest, setSelectedServer }

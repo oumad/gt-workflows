@@ -124,11 +124,10 @@
   font-size: 0.9rem;
 }
 
-/* Timestamp */
-.dep-audit-timestamp {
-  font-size: 0.8rem;
+.dep-audit-header-timestamp {
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-bottom: 0.75rem;
+  font-family: 'Courier New', monospace;
 }
 
 /* Summary bar */

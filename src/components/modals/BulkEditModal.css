@@ -4,6 +4,16 @@
   max-width: 600px;
 }
 
+.bulk-edit-warning {
+  margin: 0 1.5rem 0.75rem;
+  padding: 0.6rem 0.9rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--warning);
+}
+
 .modal-subtitle {
   font-size: 0.9rem;
   color: var(--text-muted);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Server, Clock, Code } from 'lucide-react'
+import { X, Save, Server, Clock, Code, Loader } from 'lucide-react'
 import type { WorkflowParams } from '@/types'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
@@ -122,7 +122,10 @@ export default function QuickEditModal({
             </button>
           </div>
           <div className="modal-body">
-            <p>Loading workflow parameters...</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+              <Loader size={16} className="spinner" />
+              <span>Loading workflow parameters...</span>
+            </div>
           </div>
         </div>
       </div>

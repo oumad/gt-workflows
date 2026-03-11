@@ -1,0 +1,150 @@
+@import '../ui/Modal.css';
+@import '../ui/Buttons.css';
+@import '../ui/SpinnerIcon.css';
+
+.failed-job-modal {
+  max-width: 780px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.failed-job-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.failed-job-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.failed-job-modal-id {
+  font-size: 0.85rem;
+  font-weight: 400;
+  font-family: ui-monospace, monospace;
+  color: var(--text-muted);
+}
+
+.failed-job-modal-close {
+  display: inline-flex;
+  padding: 0.35rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.failed-job-modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.failed-job-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ---- Meta grid ---- */
+
+.failed-job-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.failed-job-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.failed-job-meta-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #888);
+}
+
+.failed-job-meta-value {
+  font-size: 0.88rem;
+  word-break: break-all;
+}
+
+/* ---- Sections ---- */
+
+.failed-job-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.failed-job-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.failed-job-section-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #888);
+  margin: 0;
+}
+
+.failed-job-details-summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.failed-job-pre {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--bg-primary, #141420);
+  border-radius: 8px;
+  border: 1px solid var(--border, #2e2e3e);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.failed-job-pre--error {
+  color: var(--color-error, #ef4444);
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.failed-job-logs-loading,
+.failed-job-logs-empty {
+  font-size: 0.84rem;
+  color: var(--text-muted, #666);
+  margin: 0;
+}
+
+.failed-job-logs-error {
+  font-size: 0.84rem;
+  color: var(--color-error, #ef4444);
+}

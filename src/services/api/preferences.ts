@@ -2,7 +2,7 @@ import type { Workflow } from '@/types'
 import { AppPreferencesSchema } from '@/lib/schemas'
 import { fetchWithAuth } from '@/utils/auth'
 
-export type LastRunStatus = 'ok' | 'nok'
+export type LastRunStatus = 'passed' | 'failed'
 
 export interface WorkflowDetailUIState {
   showWorkflowJson?: boolean

@@ -1,4 +1,5 @@
 @import '../ui/Modal.css';
+@import '../ui/SpinnerIcon.css';
 
 .modal-overlay {
   background: rgba(0, 0, 0, 0.7);

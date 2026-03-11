@@ -97,6 +97,57 @@ export interface JobLogsResponse {
   error?: string
 }
 
+export type DoctorPeriod = '1h' | '1d' | '1w' | '1m' | 'all'
+
+export interface DoctorRankItem {
+  name: string
+  count: number
+}
+
+export interface WeeklyHistoryItem {
+  label: string
+  count: number
+  total: number
+}
+
+export interface DoctorStatsResponse {
+  configured: boolean
+  totalFailed?: number
+  thisWeekFailed?: number
+  prevWeekFailed?: number
+  weeklyHistory?: WeeklyHistoryItem[]
+  topWorkflows?: DoctorRankItem[]
+  topServers?: DoctorRankItem[]
+  topUsers?: DoctorRankItem[]
+  topErrors?: DoctorRankItem[]
+  period?: string
+  message?: string
+  error?: string
+}
+
+export interface FailedJobSummary {
+  id: string
+  name: string
+  server: string
+  user: string
+  failedReason: string | null
+  stacktrace: string[]
+  timestamp: number | null
+  processedOn: number | null
+  finishedOn: number | null
+  attemptsMade: number
+  data: Record<string, unknown>
+}
+
+export interface FailedJobsResponse {
+  configured: boolean
+  jobs: FailedJobSummary[]
+  total: number
+  page: number
+  pageSize: number
+  error?: string
+}
+
 const STATS_REQUEST_TIMEOUT_MS = 120000
 
 function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
@@ -155,6 +206,29 @@ function mergeUserActivity(a: UserActivityItem[], b: UserActivityItem[]): UserAc
   for (const item of a) map.set(item.user, (map.get(item.user) ?? 0) + item.count)
   for (const item of b) map.set(item.user, (map.get(item.user) ?? 0) + item.count)
   return Array.from(map.entries(), ([user, count]) => ({ user, count })).sort((x, y) => y.count - x.count)
+}
+
+export async function getDoctorStats(period: DoctorPeriod = '1w'): Promise<DoctorStatsResponse> {
+  const response = await fetchWithTimeout(`/api/stats/doctor?period=${period}`, STATS_REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Doctor stats failed (${response.status}): ${body || response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function getFailedJobs(page = 1, pageSize = 25, search = ''): Promise<FailedJobsResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search) params.set('search', search)
+  const response = await fetchWithTimeout(
+    `/api/stats/doctor/failed-jobs?${params.toString()}`,
+    STATS_REQUEST_TIMEOUT_MS,
+  )
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Failed jobs fetch failed (${response.status}): ${body || response.statusText}`)
+  }
+  return response.json()
 }
 
 export async function getQueueStats(): Promise<QueueStatsResponse> {

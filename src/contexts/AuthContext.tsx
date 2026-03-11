@@ -11,6 +11,7 @@ interface AuthContextValue {
   authEnabled: boolean
   username: string | null
   role: UserRole
+  guestStatsEnabled: boolean
   setAuthStatus: (status: AuthStatus) => void
   setRole: (role: UserRole) => void
   setUsername: (username: string | null) => void
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authEnabled, setAuthEnabled] = useState<boolean>(true)
   const [username, setUsername] = useState<string | null>(null)
   const [role, setRole] = useState<UserRole>('guest')
+  const [guestStatsEnabled, setGuestStatsEnabled] = useState<boolean>(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const data = await res.json().catch(() => ({}))
           const enabled = data.authEnabled === true
           setAuthEnabled(enabled)
+          setGuestStatsEnabled(data.guestStatsEnabled === true)
           if (typeof data.username === 'string') setUsername(data.username)
           setRole(!enabled ? 'admin' : (data.role === 'admin' ? 'admin' : 'guest'))
           if (!enabled) {
@@ -124,6 +127,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     authEnabled,
     username,
     role,
+    guestStatsEnabled,
     setAuthStatus: setAuthStatusAndClearUser,
     setRole,
     setUsername,

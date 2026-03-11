@@ -14,10 +14,11 @@ export interface WorkflowParams {
   devMode?: boolean;
   forceLocal?: boolean;
   processArgs?: string[];
+  /** snake_case by convention: matches the on-disk params.json field name used by the plugin. */
   comfyui_config?: ComfyUIConfig;
   parameters?: Record<string, ParameterConfig>;
   ui?: UIConfig;
-  use?: UseConfig;
+  selectors?: UseConfig;
   dashboard?: DashboardConfig;
   iconBadge?: IconBadge;
   documentation?: string;
@@ -88,19 +89,19 @@ export interface InfoConfig {
   hidden?: ConditionConfig;
 }
 
-export interface UseConfig {
-  currentProject?: boolean | UseSelectorConfig;
-  appConfig?: boolean | UseSelectorConfig;
+export interface SelectorsConfig {
+  currentProject?: boolean | SelectorFieldConfig;
+  appConfig?: boolean | SelectorFieldConfig;
   items?: boolean | ItemsSelectorConfig;
-  selectedImages?: boolean | UseSelectorConfig;
+  selectedImages?: boolean | SelectorFieldConfig;
 }
 
-export interface UseSelectorConfig {
+export interface SelectorFieldConfig {
   fields?: string[];
   objectTypeFields?: Record<string, string[]>;
 }
 
-export interface ItemsSelectorConfig extends UseSelectorConfig {
+export interface ItemsSelectorConfig extends SelectorFieldConfig {
   scope?: string | string[];
   includesScenes?: boolean | string[];
 }

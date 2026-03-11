@@ -25,7 +25,7 @@ export const WorkflowParamsSchema = z
     comfyui_config: z.record(z.unknown()).optional(),
     parameters: z.record(z.unknown()).optional(),
     ui: z.record(z.unknown()).optional(),
-    use: z.record(z.unknown()).optional(),
+    selectors: z.record(z.unknown()).optional(),
     dashboard: z.record(z.unknown()).optional(),
     iconBadge: z.record(z.unknown()).optional(),
     documentation: z.string().optional(),
@@ -56,9 +56,9 @@ const WorkflowDetailUIStateSchema = z.object({
   showWorkflowJson: z.boolean().optional(),
   showParamsJson: z.boolean().optional(),
   lastTestRun: z.string().optional(),
-  lastTestRunStatus: z.enum(['ok', 'nok']).optional(),
+  lastTestRunStatus: z.enum(['passed', 'failed']).optional(),
   lastAuditRun: z.string().optional(),
-  lastAuditRunStatus: z.enum(['ok', 'nok']).optional(),
+  lastAuditRunStatus: z.enum(['passed', 'failed']).optional(),
 })
 
 export const AppPreferencesSchema = z.object({

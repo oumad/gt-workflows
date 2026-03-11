@@ -6,8 +6,8 @@ const PHASE_LABELS: Record<Phase, string> = {
   connecting: 'Connecting...',
   submitting: 'Submitting prompt...',
   queued: 'Queued',
-  executing: 'Executing',
-  completed: 'Completed',
+  running: 'Executing',
+  done: 'Completed',
   error: 'Error',
   cancelled: 'Cancelled',
 }
@@ -75,6 +75,7 @@ interface TestWorkflowStatusBannerProps {
   selectedServer: string
   doneCount: number
   totalCount: number
+  errorCount: number
   retryAttempt: number | null
   retryTotal: number
 }
@@ -86,15 +87,19 @@ export function TestWorkflowStatusBanner({
   selectedServer,
   doneCount,
   totalCount,
+  errorCount,
   retryAttempt,
   retryTotal,
 }: TestWorkflowStatusBannerProps): React.ReactElement {
-  const label =
-    phase === 'executing'
+  const baseLabel =
+    phase === 'running'
       ? `${PHASE_LABELS[phase]} (${doneCount}/${totalCount})`
       : phase === 'connecting' && retryAttempt != null
         ? `Retrying connection (${retryAttempt}/${retryTotal})...`
         : PHASE_LABELS[phase]
+  const label = phase === 'done' && errorCount > 0
+    ? `${baseLabel} — ${errorCount} node${errorCount !== 1 ? 's' : ''} failed`
+    : baseLabel
   return (
     <div className={`test-wf-status-banner ${phase}`}>
       {isRunning && (
@@ -102,7 +107,8 @@ export function TestWorkflowStatusBanner({
           <Loader size={14} className="spinner" />
         </span>
       )}
-      {phase === 'completed' && <CheckCircle size={14} />}
+      {phase === 'done' && errorCount === 0 && <CheckCircle size={14} />}
+      {phase === 'done' && errorCount > 0 && <XCircle size={14} />}
       {phase === 'error' && <XCircle size={14} />}
       <span>{label}</span>
       {serverUrls.length <= 1 && selectedServer && (

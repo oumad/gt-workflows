@@ -266,6 +266,11 @@
   z-index: 1000;
 }
 
+.workflow-card-wrapper.drop-target > .workflow-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(107, 155, 209, 0.3);
+}
+
 .workflow-drag-handle {
   position: absolute;
   left: 0.5rem;
@@ -294,15 +299,6 @@
   border-color: var(--accent);
 }
 
-.workflow-drag-handle:active {
-  cursor: grabbing;
-}
-
-.workflow-drag-handle:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-  border-color: var(--accent);
-}
 
 .workflow-card-wrapper.selection-mode {
   cursor: pointer;
@@ -773,13 +769,13 @@
   white-space: nowrap;
 }
 
-.run-badge--ok {
+.run-badge--passed {
   background: rgba(34, 197, 94, 0.12);
   color: var(--success);
   border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
-.run-badge--nok {
+.run-badge--failed {
   background: rgba(239, 68, 68, 0.1);
   color: var(--error);
   border: 1px solid rgba(239, 68, 68, 0.2);

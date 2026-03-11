@@ -2,8 +2,12 @@ import path from 'path';
 import fs from 'fs/promises';
 import { Router } from 'express';
 import { resolveWorkflowPath, validateWorkflowName } from '../../lib/workflowPath.js';
+import { extractWorkflowDependencies } from '../../lib/workflowDependencies.js';
+import { runDependencyAudit } from '../servers/dependencyAudit.js';
+import { handleTestWorkflow } from '../servers/testWorkflow.js';
+import { patchWorkflowDetailUIEntry } from '../../lib/preferencesFs.js';
 
-export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findWorkflowJson, admin }) {
+export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findWorkflowJson, admin, preferencesPath }) {
   const router = Router();
 
   router.get('/workflows/list', async (req, res) => {
@@ -140,6 +144,64 @@ export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findW
       console.error('Error duplicating workflow:', error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  router.post('/workflows/:name/audit', admin, async (req, res) => {
+    try {
+      const { serverUrl } = req.body;
+      if (!serverUrl || typeof serverUrl !== 'string') return res.status(400).json({ error: 'Server URL is required' });
+      const normalizedUrl = serverUrl.trim().replace(/\/$/, '');
+      if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+        return res.status(400).json({ error: 'Invalid server URL' });
+      }
+      const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+      if (!resolved.ok) return res.status(400).json({ error: resolved.error });
+      const workflowData = await findWorkflowJson(resolved.workflowPath);
+      if (!workflowData) return res.status(404).json({ error: 'Workflow JSON file not found' });
+      const { classTypes, modelInputs, fileInputs } = extractWorkflowDependencies(workflowData.content);
+      const result = await runDependencyAudit({ serverUrl: normalizedUrl, classTypes, modelInputs, fileInputs });
+      const allNodes = result.nodes ?? [];
+      const allModels = Object.values(result.models ?? {}).flat();
+      const allFiles = result.files ?? [];
+      const anyMissing = [...allNodes, ...allModels, ...allFiles].some((item) => item.available === false);
+      const status = (!result.nodeError && !anyMissing) ? 'ok' : 'nok';
+      if (preferencesPath) {
+        const userId = req.authUsername || 'default';
+        patchWorkflowDetailUIEntry(preferencesPath, userId, resolved.workflowName, {
+          lastAuditRun: result.timestamp,
+          lastAuditRunStatus: status,
+        }).catch((err) => console.error('Failed to save audit badge:', err.message));
+      }
+      res.json({ ...result, status });
+    } catch (error) {
+      console.error('Error running workflow audit:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/workflows/:name/test', admin, (req, res) => {
+    const { serverUrl } = req.body;
+    if (!serverUrl || typeof serverUrl !== 'string') return res.status(400).json({ error: 'Server URL is required' });
+    const normalizedUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      return res.status(400).json({ error: 'Invalid server URL' });
+    }
+    const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
+    if (!resolved.ok) return res.status(400).json({ error: resolved.error });
+    findWorkflowJson(resolved.workflowPath).then((workflowData) => {
+      if (!workflowData) return res.status(404).json({ error: 'Workflow JSON file not found' });
+      const onDone = preferencesPath ? (status) => {
+        const userId = req.authUsername || 'default';
+        patchWorkflowDetailUIEntry(preferencesPath, userId, resolved.workflowName, {
+          lastTestRun: new Date().toISOString(),
+          lastTestRunStatus: status,
+        }).catch((err) => console.error('Failed to save test badge:', err.message));
+      } : undefined;
+      handleTestWorkflow(res, normalizedUrl, workflowData.content, onDone);
+    }).catch((error) => {
+      console.error('Error loading workflow for test:', error);
+      res.status(500).json({ error: error.message });
+    });
   });
 
   router.delete('/workflows/:name', admin, async (req, res) => {

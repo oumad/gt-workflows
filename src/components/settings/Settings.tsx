@@ -17,7 +17,9 @@ export function Settings() {
   const [monitoredServers, setMonitoredServers] = useState<string[]>([])
   const [serverAliases, setServerAliases] = useState<Record<string, string>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
@@ -42,12 +44,14 @@ export function Settings() {
   }, [saved])
 
   const handleSave = async () => {
+    setSaveError(null)
     try {
       await updatePreferences({ monitoredServers, serverAliases })
       setSaved(true)
+      setHasChanges(false)
       window.dispatchEvent(new Event('settingsUpdated'))
-    } catch {
-      setSaved(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save settings')
     }
   }
 
@@ -58,6 +62,7 @@ export function Settings() {
       if (name) {
         setServerAliases((prev) => ({ ...prev, [url]: name }))
       }
+      setHasChanges(true)
     }
     setAddServerOpen(false)
   }
@@ -94,6 +99,7 @@ export function Settings() {
       if (Object.keys(newNames).length > 0) {
         setServerAliases((prev) => ({ ...prev, ...newNames }))
       }
+      setHasChanges(true)
     }
     setBulkText('')
     setBulkOpen(false)
@@ -107,6 +113,7 @@ export function Settings() {
       delete next[url]
       setServerAliases(next)
     }
+    setHasChanges(true)
   }
 
   const handleServerUrlChange = (index: number, newUrl: string) => {
@@ -121,6 +128,7 @@ export function Settings() {
       if (normalized) next[normalized] = serverAliases[oldUrl]
       setServerAliases(next)
     }
+    setHasChanges(true)
   }
 
   const handleServerAliasChange = (url: string, alias: string) => {
@@ -133,6 +141,7 @@ export function Settings() {
       }
       return next
     })
+    setHasChanges(true)
   }
 
   const displayServers = !prefsLoaded ? getSettings().monitoredServers : monitoredServers
@@ -150,13 +159,18 @@ export function Settings() {
           </p>
         </div>
         <div className="servers-header-actions">
-          <button onClick={handleSave} className="btn btn-primary">
+          <button onClick={handleSave} className="btn btn-primary" disabled={!hasChanges}>
             <Save size={16} />
             Save
           </button>
           {saved && (
             <span className="save-message">
               <Check size={14} /> Saved
+            </span>
+          )}
+          {saveError && (
+            <span className="save-error-message" role="alert">
+              {saveError}
             </span>
           )}
         </div>

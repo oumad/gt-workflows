@@ -30,7 +30,7 @@ function NodesTabInner({ displayResults, phase, loading, collapsedServers, onTog
             showHeader={multiServer}
           >
             <>
-              {result.nodeError && <div className="dep-audit-error">{result.nodeError}</div>}
+              {result.serverError && <div className="dep-audit-error">{result.serverError}</div>}
               {result.nodes.length > 0 && (
                 <div className="dep-audit-list">
                   {nodes.map((node) => (
@@ -67,7 +67,7 @@ function ModelsTabInner({ displayResults, phase, loading, collapsedServers, onTo
             showHeader={multiServer}
           >
             <>
-              {result.nodeError && <div className="dep-audit-error">{result.nodeError}</div>}
+              {result.serverError && <div className="dep-audit-error">{result.serverError}</div>}
               {modelCategories.map(([category, items]) => {
                 const sorted = phase === 'done' ? sortMissingFirst(items) : items
                 return (
@@ -113,7 +113,7 @@ function InputsTabInner({ displayResults, phase, loading, collapsedServers, onTo
             showHeader={multiServer}
           >
             <>
-              {result.nodeError && <div className="dep-audit-error">{result.nodeError}</div>}
+              {result.serverError && <div className="dep-audit-error">{result.serverError}</div>}
               {result.files.length > 0 ? (
                 <div className="dep-audit-list">
                   {files.map((file) => (
