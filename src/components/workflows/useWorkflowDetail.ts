@@ -11,9 +11,9 @@ import {
 import { compressImage } from '@/utils/imageCompression'
 import { useTestWorkflow } from '@/hooks/useTestWorkflow'
 import { getServerUrls } from '@/utils/serverUrl'
-import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import { getPreferences, updatePreferences, patchWorkflowDetailUI } from '@/services/api/preferences'
 import type { WorkflowDetailUIState, LastRunStatus } from '@/services/api/preferences'
-import type { DependencyAuditCache } from '@/components/modals/DependencyAuditModal'
+import type { DependencyAuditCache } from '@/components/modals/dependency-audit/types'
 
 export function useWorkflowDetail(onUpdate: () => void) {
   const { name } = useParams<{ name: string }>()
@@ -96,27 +96,22 @@ export function useWorkflowDetail(onUpdate: () => void) {
   }, [name])
 
   const persistWorkflowDetailUI = useCallback((workflowName: string, showWorkflow: boolean, showParams: boolean) => {
-    const current = workflowDetailUIRef.current[workflowName] ?? {}
-    const next: Record<string, WorkflowDetailUIState> = {
+    const patch = { showWorkflowJson: showWorkflow, showParamsJson: showParams }
+    workflowDetailUIRef.current = {
       ...workflowDetailUIRef.current,
-      [workflowName]: { ...current, showWorkflowJson: showWorkflow, showParamsJson: showParams },
+      [workflowName]: { ...(workflowDetailUIRef.current[workflowName] ?? {}), ...patch },
     }
-    workflowDetailUIRef.current = next
-    updatePreferences({ workflowDetailUI: next }).catch(() => {})
+    patchWorkflowDetailUI(workflowName, patch).catch(() => {})
   }, [])
 
   const persistLastRun = useCallback((workflowName: string, type: 'test' | 'audit', timestamp: string, status?: LastRunStatus) => {
-    const current = workflowDetailUIRef.current[workflowName] ?? {}
-    const next: Record<string, WorkflowDetailUIState> = {
+    const patch: Partial<WorkflowDetailUIState> = type === 'test'
+      ? { lastTestRun: timestamp, lastTestRunStatus: status }
+      : { lastAuditRun: timestamp, lastAuditRunStatus: status }
+    workflowDetailUIRef.current = {
       ...workflowDetailUIRef.current,
-      [workflowName]: {
-        ...current,
-        ...(type === 'test'
-          ? { lastTestRun: timestamp, lastTestRunStatus: status }
-          : { lastAuditRun: timestamp, lastAuditRunStatus: status }),
-      },
+      [workflowName]: { ...(workflowDetailUIRef.current[workflowName] ?? {}), ...patch },
     }
-    workflowDetailUIRef.current = next
     if (type === 'test') {
       setLastTestRun(timestamp)
       setLastTestRunStatus(status ?? null)
@@ -124,18 +119,20 @@ export function useWorkflowDetail(onUpdate: () => void) {
       setLastAuditRun(timestamp)
       setLastAuditRunStatus(status ?? null)
     }
-    updatePreferences({ workflowDetailUI: next }).catch(() => {})
+    patchWorkflowDetailUI(workflowName, patch).catch(() => {})
   }, [])
 
   // Persist last test run when test completes or errors
   useEffect(() => {
-    const phase = testWorkflowHook.state.phase
+    const { phase, nodes, errorInfo } = testWorkflowHook.state
     const prev = testPhasePrevRef.current
     testPhasePrevRef.current = phase
     if (name && (phase === 'done' || phase === 'error') && prev !== 'done' && prev !== 'error') {
-      persistLastRun(name, 'test', new Date().toISOString(), phase === 'done' ? 'passed' : 'failed')
+      const hasNodeError = Array.from(nodes.values()).some((n) => n.status === 'error')
+      const status = (phase === 'error' || hasNodeError || errorInfo != null) ? 'failed' : 'passed'
+      persistLastRun(name, 'test', new Date().toISOString(), status)
     }
-  }, [name, testWorkflowHook.state.phase, persistLastRun])
+  }, [name, testWorkflowHook.state, persistLastRun])
 
   // Sync scroll for workflow JSON viewer
   useEffect(() => {

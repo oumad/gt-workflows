@@ -31,9 +31,6 @@ export interface AppPreferences {
   serverAliases: Record<string, string>
 }
 
-/** @deprecated Use AppPreferences */
-export type DashboardPreferences = Pick<AppPreferences, 'anonymiseUsers' | 'serversOpen' | 'userDetailsOpen'>
-
 const DEFAULT_PREFERENCES: AppPreferences = {
   anonymiseUsers: false,
   serversOpen: false,
@@ -59,6 +56,30 @@ export async function getPreferences(): Promise<AppPreferences> {
   } catch {
     return { ...DEFAULT_PREFERENCES }
   }
+}
+
+/**
+ * Atomically patch a single workflow's UI state entry without replacing the entire workflowDetailUI map.
+ * Returns the updated workflowDetailUI record.
+ */
+export async function patchWorkflowDetailUI(
+  workflowName: string,
+  patch: Partial<WorkflowDetailUIState>
+): Promise<Record<string, WorkflowDetailUIState>> {
+  const res = await fetchWithAuth(
+    `/api/preferences/workflowDetailUI/${encodeURIComponent(workflowName)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error((err as { error?: string }).error ?? 'Failed to save preferences')
+  }
+  const raw = await res.json() as { workflowDetailUI?: Record<string, WorkflowDetailUIState> }
+  return raw.workflowDetailUI ?? {}
 }
 
 export async function updatePreferences(prefs: Partial<AppPreferences>): Promise<AppPreferences> {

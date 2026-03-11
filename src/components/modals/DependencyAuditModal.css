@@ -2,9 +2,9 @@
 @import '../ui/SpinnerIcon.css';
 @import '../ui/Buttons.css';
 
-.dep-audit-modal {
-  max-width: min(860px, 94vw);
-  width: min(860px, 94vw);
+.modal-content.dep-audit-modal {
+  max-width: min(1000px, 94vw);
+  width: min(1000px, 94vw);
   height: min(82vh, 800px);
   max-height: 82vh;
 }

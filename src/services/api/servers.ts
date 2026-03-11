@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/utils/auth'
+import { fetchWithAuth, extractApiError } from '@/utils/auth'
 import type { ModelInput } from '@/utils/workflowDependencies'
 import type { WorkflowJson } from '@/types'
 
@@ -11,8 +11,7 @@ export async function fetchServerLogs(serverUrl: string): Promise<ServerLogsResp
   const url = `/api/servers/logs?url=${encodeURIComponent(serverUrl)}`
   const response = await fetchWithAuth(url)
   if (!response.ok) {
-    const err = (await response.json().catch(() => ({ error: response.statusText }))) as { error?: string }
-    throw new Error(err.error ?? `Failed to load logs (${response.status})`)
+    throw new Error(await extractApiError(response, `Failed to load logs (${response.status})`))
   }
   return response.json()
 }
@@ -43,8 +42,7 @@ export async function auditWorkflowDependencies(
     body: JSON.stringify({ serverUrl, classTypes, modelInputs, fileInputs }),
   })
   if (!response.ok) {
-    const err = (await response.json().catch(() => ({ error: response.statusText }))) as { error?: string }
-    throw new Error(err.error ?? `Audit failed (${response.status})`)
+    throw new Error(await extractApiError(response, `Audit failed (${response.status})`))
   }
   return response.json()
 }
@@ -68,8 +66,7 @@ export async function testWorkflow(
   })
 
   if (!response.ok) {
-    const err = (await response.json().catch(() => ({ error: response.statusText }))) as { error?: string }
-    throw new Error(err.error ?? `Test failed (${response.status})`)
+    throw new Error(await extractApiError(response, `Test failed (${response.status})`))
   }
 
   const reader = response.body?.getReader()
