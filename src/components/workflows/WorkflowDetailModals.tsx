@@ -6,7 +6,7 @@ import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
-import type { DependencyAuditCache } from '@/components/modals/DependencyAuditModal'
+import type { DependencyAuditCache } from '@/components/modals/dependency-audit/types'
 import { TestWorkflowModal } from '@/components/modals/TestWorkflowModal'
 import type { useTestWorkflow } from '@/hooks/useTestWorkflow'
 import { getServerUrls } from '@/utils/serverUrl'
@@ -166,8 +166,13 @@ export function WorkflowDetailModals({
           onCacheUpdate={(cache) => {
             setDependencyAuditCache(cache)
             if (name && cache?.timestamp) {
-              const hasServerError = cache.results.some((r) => r.nodeError)
-              persistLastRun(name, 'audit', cache.timestamp, (cache.error || hasServerError) ? 'nok' : 'ok')
+              const hasServerError = cache.results.some((r) => r.serverError)
+              const hasMissing = cache.results.some((r) =>
+                r.nodes.some((n) => n.available === false) ||
+                Object.values(r.models).some((items) => items.some((m) => m.available === false)) ||
+                r.files.some((f) => f.available === false)
+              )
+              persistLastRun(name, 'audit', cache.timestamp, (cache.error || hasServerError || hasMissing) ? 'failed' : 'passed')
             }
           }}
           onClose={() => setShowDependencyAudit(false)}

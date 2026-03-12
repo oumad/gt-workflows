@@ -57,6 +57,7 @@ export function createApp() {
       findWorkflowJson,
       upload,
       requireAdmin,
+      preferencesPath: config.preferencesPath,
     })
   );
   app.use('/api', createStatsRouter(config));

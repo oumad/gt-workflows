@@ -232,6 +232,18 @@ export default function BulkEditModal({
           </div>
         </div>
 
+        {!saving && (devMode === false || timeoutSec === 0) && (
+          <div className="bulk-edit-warning">
+            <strong>Note:</strong>{' '}
+            {devMode === false && timeoutSec === 0
+              ? 'Dev mode will be disabled and timeout will be cleared'
+              : devMode === false
+                ? 'Dev mode will be disabled'
+                : 'Timeout will be cleared'}{' '}
+            on all {workflows.length} workflow{workflows.length !== 1 ? 's' : ''}.
+          </div>
+        )}
+
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-secondary" disabled={saving}>
             Cancel

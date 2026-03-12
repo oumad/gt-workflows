@@ -1,6 +1,6 @@
 import type { Workflow, WorkflowParams, WorkflowJson } from '@/types'
 import { WorkflowListResponseSchema } from '@/lib/schemas'
-import { fetchWithAuth } from '@/utils/auth'
+import { fetchWithAuth, extractApiError } from '@/utils/auth'
 
 /** Fetch the workflow list. Pass page/limit for pagination; omit (or limit=0) for all workflows. */
 export async function listWorkflows(page = 1, limit = 0): Promise<Workflow[]> {
@@ -75,8 +75,7 @@ export async function duplicateWorkflow(workflowName: string, newName: string): 
     body: JSON.stringify({ newName }),
   })
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({ error: 'Failed to duplicate workflow' }))) as { error?: string }
-    throw new Error(errorData.error ?? 'Failed to duplicate workflow')
+    throw new Error(await extractApiError(response, 'Failed to duplicate workflow'))
   }
 }
 

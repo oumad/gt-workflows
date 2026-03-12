@@ -8,7 +8,7 @@ export { JOBS_LIMIT_OPTIONS, TIME_RANGES }
 export type { TimeRangeId }
 
 export function useDashboard() {
-  const { role, username } = useAuth()
+  const { role, username, guestStatsEnabled } = useAuth()
   const isAdmin = role === 'admin'
   const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
@@ -96,8 +96,10 @@ export function useDashboard() {
     updatePreferences({ userDetailsOpen: next }).catch(() => setUserDetailsOpen(!next))
   }, [userDetailsOpen])
 
+  const isGuest = role === 'guest'
+
   return {
-    isAdmin, rangeMode, setRangeMode, jobsLimit, setJobsLimit, timeRangeId, setTimeRangeId,
+    isAdmin, isGuest, guestStatsEnabled, rangeMode, setRangeMode, jobsLimit, setJobsLimit, timeRangeId, setTimeRangeId,
     selectedUser, setSelectedUser, userDetailsOpen, toggleUserDetails,
     expandedJobId, setExpandedJobId, anonymiseUsers, toggleAnonymise,
     workflowSearch, setWorkflowSearch, workflowSortMode, setWorkflowSortMode,

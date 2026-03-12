@@ -101,6 +101,172 @@ export function createStatsRouter(config) {
     }
   });
 
+  router.get('/stats/doctor', async (req, res) => {
+    if (!queue) {
+      return res.json({ configured: false, message: 'Queue not configured.' });
+    }
+    try {
+      const counts = await queue.getJobCounts();
+      const totalFailed = counts.failed ?? 0;
+
+      const now = Date.now();
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+      const thisWeekStart = now - oneWeekMs;
+      const prevWeekStart = thisWeekStart - oneWeekMs;
+
+      const PERIOD_MS = {
+        '1h': 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '1w': 7 * 24 * 60 * 60 * 1000,
+        '1m': 30 * 24 * 60 * 60 * 1000,
+      };
+      const period = req.query.period || '1w';
+      const periodCutoff = period === 'all' ? 0 : now - (PERIOD_MS[period] ?? PERIOD_MS['1w']);
+
+      const WEEKLY_HISTORY_COUNT = 5;
+      const weekBuckets = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
+      const weekBucketsTotal = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
+
+      const [failedJobs, completedJobs] = await Promise.all([
+        queue.getJobs(['failed'], 0, 9999),
+        queue.getJobs(['completed'], 0, 9999),
+      ]);
+
+      for (const job of completedJobs) {
+        if (!job) continue;
+        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        if (ts == null) continue;
+        const weeksAgo = Math.floor((now - ts) / oneWeekMs);
+        if (weeksAgo >= 0 && weeksAgo < WEEKLY_HISTORY_COUNT) {
+          weekBucketsTotal[weeksAgo]++;
+        }
+      }
+
+      const byWorkflow = {};
+      const byServer = {};
+      const byUser = {};
+      const byError = {};
+
+      for (const job of failedJobs) {
+        if (!job) continue;
+        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        if (ts == null) continue;
+
+        const weeksAgo = Math.floor((now - ts) / oneWeekMs);
+        if (weeksAgo >= 0 && weeksAgo < WEEKLY_HISTORY_COUNT) {
+          weekBuckets[weeksAgo]++;
+        }
+
+        if (ts >= periodCutoff) {
+          const data = job.data || {};
+          const workflow = data.workflow || {};
+          const wfName = typeof workflow.name === 'string' ? workflow.name : null;
+          const serverUrl = workflow.config?.comfyui_config?.serverUrl;
+          const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : null;
+          const userObj = data.executionContext?.context?.user;
+          const userLabel = userObj ? (userObj.name || userObj.email || userObj.id || null) : null;
+
+          if (wfName) byWorkflow[wfName] = (byWorkflow[wfName] || 0) + 1;
+          if (server) byServer[server] = (byServer[server] || 0) + 1;
+          if (userLabel) byUser[String(userLabel)] = (byUser[String(userLabel)] || 0) + 1;
+
+          const reason = job.failedReason;
+          if (reason && typeof reason === 'string') {
+            const errorType = reason.split('\n')[0].trim().slice(0, 120) || 'Unknown error';
+            byError[errorType] = (byError[errorType] || 0) + 1;
+          }
+        }
+      }
+
+      const toSorted = (map) =>
+        Object.entries(map)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+
+      const weeklyHistory = weekBuckets.map((count, i) => ({
+        label: i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i} weeks ago`,
+        count,
+        total: count + weekBucketsTotal[i],
+      }));
+
+      res.json({
+        configured: true,
+        totalFailed,
+        thisWeekFailed: weekBuckets[0],
+        prevWeekFailed: weekBuckets[1],
+        weeklyHistory,
+        topWorkflows: toSorted(byWorkflow),
+        topServers: toSorted(byServer),
+        topUsers: toSorted(byUser),
+        topErrors: toSorted(byError),
+        period,
+      });
+    } catch (err) {
+      console.error('Error fetching doctor stats:', err);
+      res.status(500).json({ configured: true, error: err.message });
+    }
+  });
+
+  router.get('/stats/doctor/failed-jobs', async (req, res) => {
+    if (!queue) {
+      return res.json({ configured: false, jobs: [], total: 0 });
+    }
+    try {
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 5), 100);
+      const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+
+      const mapJob = (job) => {
+        const data = job.data || {};
+        const workflow = data.workflow || {};
+        const wfName = typeof workflow.name === 'string' ? workflow.name : '';
+        const serverUrl = workflow.config?.comfyui_config?.serverUrl;
+        const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : '';
+        const userObj = data.executionContext?.context?.user;
+        const user = userObj ? (userObj.name || userObj.email || userObj.id || '') : '';
+        return {
+          id: String(job.id),
+          name: wfName || job.name || '',
+          server: server || '—',
+          user: user ? String(user) : '—',
+          failedReason: job.failedReason || null,
+          stacktrace: Array.isArray(job.stacktrace) ? job.stacktrace : [],
+          timestamp: job.timestamp ?? null,
+          processedOn: job.processedOn ?? null,
+          finishedOn: job.finishedOn ?? null,
+          attemptsMade: job.attemptsMade ?? 0,
+          data: data,
+        };
+      };
+
+      if (search) {
+        const allRaw = await queue.getJobs(['failed'], 0, 9999);
+        const allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
+        const filtered = allMapped.filter((j) =>
+          j.id.toLowerCase().includes(search) ||
+          j.name.toLowerCase().includes(search) ||
+          j.server.toLowerCase().includes(search) ||
+          j.user.toLowerCase().includes(search) ||
+          (j.failedReason && j.failedReason.toLowerCase().includes(search))
+        );
+        const total = filtered.length;
+        const start = (page - 1) * pageSize;
+        const jobs = filtered.slice(start, start + pageSize);
+        res.json({ configured: true, jobs, total, page, pageSize });
+      } else {
+        const counts = await queue.getJobCounts();
+        const total = counts.failed ?? 0;
+        const start = (page - 1) * pageSize;
+        const raw = await queue.getJobs(['failed'], start, start + pageSize - 1);
+        const jobs = (raw || []).filter((j) => j != null).map(mapJob);
+        res.json({ configured: true, jobs, total, page, pageSize });
+      }
+    } catch (err) {
+      console.error('Error fetching failed jobs:', err);
+      res.status(500).json({ configured: true, error: err.message, jobs: [], total: 0 });
+    }
+  });
+
   router.get('/stats/usage', async (req, res) => {
     if (!queue) {
       return res.json({

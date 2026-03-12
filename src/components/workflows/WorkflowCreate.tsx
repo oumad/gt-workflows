@@ -58,7 +58,7 @@ export function WorkflowCreate({ onCreated }: WorkflowCreateProps) {
         params.main = 'main.py'
         params.parameters = {}
         params.ui = {}
-        params.use = {}
+        params.selectors = {}
       }
 
       await createWorkflow(trimmedName, params)

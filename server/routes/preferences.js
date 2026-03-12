@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readPreferences, writePreferences } from '../lib/preferencesFs.js';
+import { readPreferences, writePreferences, patchWorkflowDetailUIEntry } from '../lib/preferencesFs.js';
 
 export function createPreferencesRouter(config) {
   const { preferencesPath } = config;
@@ -59,9 +59,9 @@ export function createPreferencesRouter(config) {
           if (typeof val.showWorkflowJson === 'boolean') sanitized[wfName].showWorkflowJson = val.showWorkflowJson;
           if (typeof val.showParamsJson === 'boolean') sanitized[wfName].showParamsJson = val.showParamsJson;
           if (typeof val.lastTestRun === 'string' && val.lastTestRun.trim()) sanitized[wfName].lastTestRun = val.lastTestRun.trim();
-          if (val.lastTestRunStatus === 'ok' || val.lastTestRunStatus === 'nok') sanitized[wfName].lastTestRunStatus = val.lastTestRunStatus;
+          if (val.lastTestRunStatus === 'passed' || val.lastTestRunStatus === 'failed') sanitized[wfName].lastTestRunStatus = val.lastTestRunStatus;
           if (typeof val.lastAuditRun === 'string' && val.lastAuditRun.trim()) sanitized[wfName].lastAuditRun = val.lastAuditRun.trim();
-          if (val.lastAuditRunStatus === 'ok' || val.lastAuditRunStatus === 'nok') sanitized[wfName].lastAuditRunStatus = val.lastAuditRunStatus;
+          if (val.lastAuditRunStatus === 'passed' || val.lastAuditRunStatus === 'failed') sanitized[wfName].lastAuditRunStatus = val.lastAuditRunStatus;
         }
       }
       partial.workflowDetailUI = sanitized;
@@ -120,6 +120,32 @@ export function createPreferencesRouter(config) {
       });
     } catch (err) {
       console.error('Preferences write error:', err.message);
+      res.status(500).json({ error: 'Failed to save preferences' });
+    }
+  });
+
+  /**
+   * PATCH /api/preferences/workflowDetailUI/:workflowName
+   * Atomically merge body into a single workflow's UI state entry without touching other workflows.
+   */
+  router.patch('/preferences/workflowDetailUI/:workflowName', async (req, res) => {
+    const userId = req.authUsername || 'default';
+    const workflowName = req.params.workflowName;
+    const body = req.body || {};
+    const patch = {};
+    if (typeof body.showWorkflowJson === 'boolean') patch.showWorkflowJson = body.showWorkflowJson;
+    if (typeof body.showParamsJson === 'boolean') patch.showParamsJson = body.showParamsJson;
+    if (typeof body.lastTestRun === 'string' && body.lastTestRun.trim()) patch.lastTestRun = body.lastTestRun.trim();
+    if (body.lastTestRunStatus === 'passed' || body.lastTestRunStatus === 'failed') patch.lastTestRunStatus = body.lastTestRunStatus;
+    if (typeof body.lastAuditRun === 'string' && body.lastAuditRun.trim()) patch.lastAuditRun = body.lastAuditRun.trim();
+    if (body.lastAuditRunStatus === 'passed' || body.lastAuditRunStatus === 'failed') patch.lastAuditRunStatus = body.lastAuditRunStatus;
+    try {
+      const merged = await patchWorkflowDetailUIEntry(preferencesPath, userId, workflowName, patch);
+      const workflowDetailUI =
+        merged.workflowDetailUI && typeof merged.workflowDetailUI === 'object' ? merged.workflowDetailUI : {};
+      res.json({ workflowDetailUI });
+    } catch (err) {
+      console.error('Preferences workflowDetailUI patch error:', err.message);
       res.status(500).json({ error: 'Failed to save preferences' });
     }
   });

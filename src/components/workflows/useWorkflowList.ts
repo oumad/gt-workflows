@@ -45,6 +45,21 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
     }
   }, [workflows])
 
+  // Clean up orphaned workflowDetailUI entries for deleted workflows
+  useEffect(() => {
+    if (workflows.length === 0) return
+    const names = new Set(workflows.map(w => w.name))
+    const uiState = workflowDetailUI
+    const orphanKeys = Object.keys(uiState).filter(k => !names.has(k))
+    if (orphanKeys.length === 0) return
+    const cleaned: Record<string, WorkflowDetailUIState> = {}
+    for (const [k, v] of Object.entries(uiState)) {
+      if (names.has(k)) cleaned[k] = v
+    }
+    updatePreferences({ workflowDetailUI: cleaned }).catch(() => {})
+    setWorkflowDetailUI(cleaned)
+  }, [workflows]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -208,19 +223,28 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
     setLocalWorkflows(updatedWorkflows)
   }, [editMode, localWorkflows])
 
-  const handleFieldChange = useCallback((workflowName: string, field: string, value: string | string[] | number | boolean | undefined) => {
+  const handleFieldChange = useCallback((workflowName: string, field: string, value: string | number | boolean | undefined) => {
     setEditedWorkflows(prev => {
       const next = new Map(prev)
       const existing = next.get(workflowName) || {}
-      if (field.includes('.')) {
-        const [parent, child] = field.split('.')
-        next.set(workflowName, { ...existing, [parent]: { ...(existing[parent] || {}), [child]: value } })
-      } else {
-        next.set(workflowName, { ...existing, [field]: value })
-      }
+      next.set(workflowName, { ...existing, [field]: value })
       return next
     })
   }, [])
+
+  const handleComfyServerChange = useCallback((workflowName: string, serverUrl: string | string[] | undefined) => {
+    setEditedWorkflows(prev => {
+      const next = new Map(prev)
+      const existing = next.get(workflowName) || {}
+      next.set(workflowName, {
+        ...existing,
+        comfyui_config: { ...(existing.comfyui_config as Record<string, unknown> || {}), serverUrl },
+      })
+      return next
+    })
+  }, [])
+
+  const openServerLogs = useCallback((url: string) => setLogsServerUrl(url), [])
 
   const handleSaveEdits = useCallback(async () => {
     try {
@@ -277,6 +301,8 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
     handleDuplicate,
     handleDragEnd,
     handleFieldChange,
+    handleComfyServerChange,
+    openServerLogs,
     handleSaveEdits,
     handleCancelEdit,
   }

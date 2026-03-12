@@ -117,6 +117,7 @@ export function TestWorkflowModal({
           selectedServer={selectedServer}
           doneCount={counts.done + counts.cached}
           totalCount={counts.total}
+          errorCount={counts.errored}
           retryAttempt={retryAttempt}
           retryTotal={retryTotal}
         />
@@ -130,7 +131,7 @@ export function TestWorkflowModal({
                 onClick={startTest}
               >
                 <Play size={14} />
-                {phase === 'idle' ? 'Start Test' : 'Re-test'}
+                {phase === 'idle' ? 'Start Test' : 'Re-run'}
               </button>
             )}
             {isRunning && (

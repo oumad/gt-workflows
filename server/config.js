@@ -17,6 +17,8 @@ const GUEST_PASSWORD = process.env.GT_WF_GUEST_PASSWORD;
 /** When true (default), job-stats user names are anonymised for guest users. Set to false or 0 to disable. */
 const ANONYMIZE_JOB_STATS_USERS =
   process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS !== 'false' && process.env.GT_WF_ANONYMIZE_JOB_STATS_USERS !== '0';
+/** When true, guest users can access the job stats dashboard. Default false. Set GT_WF_GUEST_STATS=true to enable. */
+const GUEST_STATS = process.env.GT_WF_GUEST_STATS === 'true';
 
 const hasAdmin =
   typeof ADMIN_USER === 'string' &&
@@ -56,4 +58,5 @@ export const config = Object.freeze({
   sessionMaxTime: Math.max(60, parseInt(process.env.SESSION_MAX_TIME, 10) || 86400),
   guestUser: GUEST_USER || null,
   anonymiseJobStatsUsers: ANONYMIZE_JOB_STATS_USERS,
+  guestStats: GUEST_STATS,
 });

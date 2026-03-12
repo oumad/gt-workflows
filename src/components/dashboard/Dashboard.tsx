@@ -50,7 +50,7 @@ export function Dashboard(): React.ReactElement {
             <Link to={ROUTES.jobStatsTimeView} className="btn btn-toolbar">Time View</Link>
           </div>
         </div>
-        {d.configured && d.queueCounts && (
+        {d.configured && d.queueCounts && (!d.isGuest || d.guestStatsEnabled) && (
           <div className="queue-strip">
             <span className="queue-strip-label">Queue</span>
             <span className="queue-strip-item"><em>Waiting</em> {d.queueCounts.waiting}</span>

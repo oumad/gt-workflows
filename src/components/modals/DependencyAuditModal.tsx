@@ -56,6 +56,11 @@ export default function DependencyAuditModal({
             <h2>Dependency Audit</h2>
           </div>
           <div className="dep-audit-modal-actions">
+            {lastAuditTime && (
+              <span className="dep-audit-header-timestamp">
+                {formatDateTimeWithSeconds(lastAuditTime)}
+              </span>
+            )}
             <button
               className="btn btn-toolbar"
               onClick={runAudit}
@@ -117,12 +122,6 @@ export default function DependencyAuditModal({
                 <Loader size={14} className="spinner" />
               </span>
               <span>{revealProgress}</span>
-            </div>
-          )}
-
-          {showSummary && lastAuditTime && (
-            <div className="dep-audit-timestamp">
-              Last audited: {formatDateTimeWithSeconds(lastAuditTime)}
             </div>
           )}
 

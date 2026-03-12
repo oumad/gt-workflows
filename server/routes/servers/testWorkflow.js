@@ -80,19 +80,12 @@ function tryConnectAndSubmit(wsUrl, normalizedUrl, workflowJson, clientId, conne
   });
 }
 
-export function createTestWorkflowRouter() {
-  const router = Router();
-
-  router.post('/servers/test-workflow', async (req, res) => {
-    const { serverUrl, workflowJson } = req.body;
-    if (!serverUrl || typeof serverUrl !== 'string') return res.status(400).json({ error: 'Server URL is required' });
-    if (!workflowJson || typeof workflowJson !== 'object') return res.status(400).json({ error: 'workflowJson is required' });
-    const normalizedUrl = serverUrl.trim().replace(/\/$/, '');
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      return res.status(400).json({ error: 'Invalid server URL' });
-    }
-
-    res.setHeader('Content-Type', 'text/event-stream');
+/**
+ * Stream a test-workflow SSE session to res for the given serverUrl and workflowJson.
+ * Assumes res is a valid Express response object. Validation of inputs must be done before calling.
+ */
+export async function handleTestWorkflow(res, normalizedUrl, workflowJson, onDone) {
+  res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -114,6 +107,7 @@ export function createTestWorkflowRouter() {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (ws && ws.readyState <= WebSocket.OPEN) { try { ws.close(); } catch { /* ignore */ } }
       try { res.end(); } catch { /* ignore */ }
+      try { onDone?.(reason === 'completed' ? 'ok' : 'nok'); } catch { /* ignore */ }
     };
 
     timeoutTimer = setTimeout(() => { sendSSE('error', { message: 'Test execution timed out (120s)' }); cleanup('timeout'); }, TEST_WORKFLOW_TIMEOUT_MS);
@@ -192,6 +186,20 @@ export function createTestWorkflowRouter() {
           break;
       }
     });
+}
+
+export function createTestWorkflowRouter() {
+  const router = Router();
+
+  router.post('/servers/test-workflow', (req, res) => {
+    const { serverUrl, workflowJson } = req.body;
+    if (!serverUrl || typeof serverUrl !== 'string') return res.status(400).json({ error: 'Server URL is required' });
+    if (!workflowJson || typeof workflowJson !== 'object') return res.status(400).json({ error: 'workflowJson is required' });
+    const normalizedUrl = serverUrl.trim().replace(/\/$/, '');
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      return res.status(400).json({ error: 'Invalid server URL' });
+    }
+    handleTestWorkflow(res, normalizedUrl, workflowJson);
   });
 
   router.post('/servers/test-workflow/cancel', async (req, res) => {

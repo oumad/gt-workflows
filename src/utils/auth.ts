@@ -106,6 +106,15 @@ function refreshSessionTime(): void {
 }
 
 /**
+ * Extracts a human-readable error message from a failed API response.
+ * Tries to parse `{ error }` from JSON body; falls back to the provided fallback or statusText.
+ */
+export async function extractApiError(response: Response, fallback?: string): Promise<string> {
+  const err = await response.json().catch(() => null) as { error?: string } | null
+  return err?.error ?? fallback ?? response.statusText
+}
+
+/**
  * Same as fetch but adds Basic auth header from sessionStorage when present.
  * On 401, clears stored auth and dispatches authRequired so the app can show the login screen.
  * On success (2xx), refreshes session timestamp for idle timeout.

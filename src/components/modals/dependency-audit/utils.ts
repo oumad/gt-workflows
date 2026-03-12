@@ -50,7 +50,7 @@ export function mergeResultAtReveal(
     nodes,
     models,
     files,
-    nodeError: real.nodeError,
+    serverError: real.serverError,
   }
 }
 

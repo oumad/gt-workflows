@@ -16,9 +16,9 @@ interface WorkflowGeneralInfoProps {
   handleIconDelete: () => Promise<void>
   handleIconUpload: (file: File) => Promise<void>
   lastTestRun: string | null
-  lastTestRunStatus: 'ok' | 'nok' | null
+  lastTestRunStatus: 'passed' | 'failed' | null
   lastAuditRun: string | null
-  lastAuditRunStatus: 'ok' | 'nok' | null
+  lastAuditRunStatus: 'passed' | 'failed' | null
 }
 
 export function WorkflowGeneralInfo({
@@ -51,7 +51,7 @@ export function WorkflowGeneralInfo({
             title={lastTestRun ? `Last run (test): ${formatDateTimeShort(lastTestRun)}` : 'Not run yet'}
           >
             {lastTestRun != null && lastTestRunStatus != null
-              ? (lastTestRunStatus === 'ok' ? 'TEST PASSING' : 'TEST NOK')
+              ? (lastTestRunStatus === 'passed' ? 'TEST PASSING' : 'TEST FAILED')
               : 'TEST UNKNOWN'}
           </span>
           <span
@@ -59,7 +59,7 @@ export function WorkflowGeneralInfo({
             title={lastAuditRun ? `Last run (audit): ${formatDateTimeShort(lastAuditRun)}` : 'Not run yet'}
           >
             {lastAuditRun != null && lastAuditRunStatus != null
-              ? (lastAuditRunStatus === 'ok' ? 'AUDIT OK' : 'AUDIT NOK')
+              ? (lastAuditRunStatus === 'passed' ? 'AUDIT PASSING' : 'AUDIT FAILED')
               : 'AUDIT UNKNOWN'}
           </span>
         </div>

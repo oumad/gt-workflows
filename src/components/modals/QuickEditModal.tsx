@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Server, Clock, Code } from 'lucide-react'
+import { X, Save, Server, Clock, Code, Loader } from 'lucide-react'
 import type { WorkflowParams } from '@/types'
 import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
 import ServerUrlEditor from '@/components/ui/ServerUrlEditor'
@@ -28,40 +28,27 @@ export default function QuickEditModal({
 
   // Load full params from server when modal opens
   useEffect(() => {
+    const applyParams = (p: WorkflowParams) => {
+      if (p.comfyui_config?.serverUrl) setServerUrl(p.comfyui_config.serverUrl)
+      if (p.timeout !== undefined) setTimeout(p.timeout)
+      if (p.devMode !== undefined) setDevMode(p.devMode)
+    }
+
     const loadFullParams = async () => {
       try {
         setLoading(true)
         const loadedParams = await getWorkflowParams(workflowName)
         setFullParams(loadedParams)
-        
-        // Initialize form fields from loaded params
-        if (loadedParams.comfyui_config?.serverUrl) {
-          setServerUrl(loadedParams.comfyui_config.serverUrl)
-        }
-        if (loadedParams.timeout !== undefined) {
-          setTimeout(loadedParams.timeout)
-        }
-        if (loadedParams.devMode !== undefined) {
-          setDevMode(loadedParams.devMode)
-        }
+        applyParams(loadedParams)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load workflow params')
-        // Fallback to using passed params if loading fails
         setFullParams(params)
-        if (params.comfyui_config?.serverUrl) {
-          setServerUrl(params.comfyui_config.serverUrl)
-        }
-        if (params.timeout !== undefined) {
-          setTimeout(params.timeout)
-        }
-        if (params.devMode !== undefined) {
-          setDevMode(params.devMode)
-        }
+        applyParams(params)
       } finally {
         setLoading(false)
       }
     }
-    
+
     loadFullParams()
   }, [workflowName, params])
 
@@ -122,7 +109,10 @@ export default function QuickEditModal({
             </button>
           </div>
           <div className="modal-body">
-            <p>Loading workflow parameters...</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
+              <Loader size={16} className="spinner" />
+              <span>Loading workflow parameters...</span>
+            </div>
           </div>
         </div>
       </div>

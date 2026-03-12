@@ -45,7 +45,7 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
           <h1 className="page-title">
             <LayoutGrid size={24} />
             Workflows ({wl.filteredWorkflows.length}
-            {wl.searchTerm && wl.filteredWorkflows.length !== workflows.length && ` of ${workflows.length}`})
+            {wl.filteredWorkflows.length !== workflows.length && ` of ${workflows.length}`})
           </h1>
           {wl.selectionMode && (
             <span className="selection-mode-badge">
@@ -82,10 +82,10 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                 title={wl.editMode ? 'Exit edit mode' : 'Enter edit mode to reorder and edit workflows'}
               >
                 <Edit2 size={16} />
-                {wl.editMode ? 'Done Editing' : 'Edit Mode'}
+                {wl.editMode ? 'Done' : 'Edit Mode'}
               </button>
               <button onClick={wl.enterSelectionMode} className="btn btn-secondary">
-                <CheckSquare size={16} /> Bulk Edit
+                <CheckSquare size={16} /> Select
               </button>
               <button onClick={onRefresh} className="btn btn-secondary">
                 <RefreshCw size={16} /> Refresh
@@ -166,8 +166,9 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                                   onToggleSelection={wl.toggleSelection}
                                   onDownload={wl.handleDownload}
                                   onDuplicate={wl.handleDuplicate}
-                                  onViewLogs={wl.setLogsServerUrl}
+                                  onViewLogs={wl.openServerLogs}
                                   onFieldChange={wl.handleFieldChange}
+                                  onComfyServerChange={wl.handleComfyServerChange}
                                   uiState={wl.workflowDetailUI[workflow.name]}
                                 />
                               ))}
@@ -187,8 +188,9 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
                               onToggleSelection={wl.toggleSelection}
                               onDownload={wl.handleDownload}
                               onDuplicate={wl.handleDuplicate}
-                              onViewLogs={wl.setLogsServerUrl}
+                              onViewLogs={wl.openServerLogs}
                               onFieldChange={wl.handleFieldChange}
+                              onComfyServerChange={wl.handleComfyServerChange}
                               uiState={wl.workflowDetailUI[workflow.name]}
                             />
                           ))}
@@ -233,7 +235,10 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
             </div>
           )}
           <div className="edit-mode-info">
-            <span>Edit mode active. Drag cards to reorder, edit fields directly on cards.</span>
+            {wl.editedWorkflows.size === 0
+              ? <span>No changes yet — drag cards to reorder or edit fields directly.</span>
+              : <span>{wl.editedWorkflows.size} workflow{wl.editedWorkflows.size !== 1 ? 's' : ''} modified.</span>
+            }
           </div>
           <div className="edit-mode-actions">
             <button onClick={wl.handleCancelEdit} className="btn btn-secondary">Cancel</button>

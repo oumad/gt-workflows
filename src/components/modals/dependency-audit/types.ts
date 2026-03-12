@@ -23,7 +23,7 @@ export interface DisplayResult {
   nodes: DisplayItem[]
   models: Record<string, DisplayItem[]>
   files: DisplayItem[]
-  nodeError?: string
+  serverError?: string
 }
 
 export interface TabCounts {

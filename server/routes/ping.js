@@ -2,10 +2,10 @@ import { Router } from 'express';
 
 export function createPingRouter(config) {
   const router = Router();
-  const { auth, sessionMaxTime, adminUser } = config;
+  const { auth, sessionMaxTime, adminUser, guestStats } = config;
 
   router.get('/ping', (req, res) => {
-    const payload = { ok: true, authEnabled: auth.enabled };
+    const payload = { ok: true, authEnabled: auth.enabled, guestStatsEnabled: guestStats };
     if (auth.enabled) {
       payload.sessionMaxTime = sessionMaxTime;
       if (req.authUsername) {

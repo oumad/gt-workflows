@@ -49,7 +49,7 @@ export function useDependencyAudit({
   cached,
   onCacheUpdate,
 }: UseDependencyAuditParams): UseDependencyAuditResult {
-  const [realResults, setRealResults] = useState<DependencyAuditResult[]>(cached?.results ?? [])
+  const [fetchedResults, setRealResults] = useState<DependencyAuditResult[]>(cached?.results ?? [])
   const [displayResults, setDisplayResults] = useState<DisplayResult[]>([])
   const [loading, setLoading] = useState(false)
   const [phase, setPhase] = useState<AuditPhase>('idle')
@@ -62,8 +62,8 @@ export function useDependencyAudit({
   const abortRef = useRef(false)
 
   const tabCounts = useMemo(
-    () => aggregateTabCounts(realResults),
-    [realResults]
+    () => aggregateTabCounts(fetchedResults),
+    [fetchedResults]
   )
 
   useEffect(() => {
@@ -193,7 +193,7 @@ export function useDependencyAudit({
             nodes: deps.classTypes.map((name) => ({ name, available: null })),
             models: fallbackModels,
             files: deps.fileInputs.map((f) => ({ name: f.value, available: null })),
-            nodeError: err instanceof Error ? err.message : 'Failed to connect',
+            serverError: err instanceof Error ? err.message : 'Failed to connect',
           }
         }
 
@@ -245,7 +245,7 @@ export function useDependencyAudit({
     })
   }, [])
 
-  const showSummary = phase === 'done' && realResults.length > 0
+  const showSummary = phase === 'done' && fetchedResults.length > 0
 
   return {
     displayResults,

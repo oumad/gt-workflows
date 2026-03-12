@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, RefreshCw, FileText } from 'lucide-react'
+import { X, RefreshCw, FileText, Copy, Check } from 'lucide-react'
 import { getJobLogs } from '@/services/api/stats'
 import './JobLogsModal.css'
 
@@ -12,6 +12,7 @@ export default function JobLogsModal({ jobId, onClose }: JobLogsModalProps) {
   const [logs, setLogs] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,6 +39,13 @@ export default function JobLogsModal({ jobId, onClose }: JobLogsModalProps) {
 
   const logText = logs.length > 0 ? logs.join('\n') : 'No log entries.'
 
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(logText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
+  }, [logText])
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content job-logs-modal" onClick={(e) => e.stopPropagation()}>
@@ -48,6 +56,16 @@ export default function JobLogsModal({ jobId, onClose }: JobLogsModalProps) {
             <span className="job-logs-job-id" title={jobId}>{jobId}</span>
           </div>
           <div className="job-logs-actions">
+            <button
+              type="button"
+              className="btn btn-toolbar"
+              onClick={handleCopy}
+              disabled={loading || logs.length === 0}
+              title="Copy all logs"
+            >
+              {copied ? <Check size={18} /> : <Copy size={18} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
             <button
               type="button"
               className="btn btn-toolbar"
