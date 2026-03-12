@@ -68,7 +68,8 @@ export const AppPreferencesSchema = z.object({
   monitoredServers: z.array(z.string()),
   expandedCategories: z.array(z.string()),
   workflowDetailUI: z.record(WorkflowDetailUIStateSchema),
-  // Stored as the full Workflow shape; partial with required name for resilience against older stored data
-  workflowsInfo: z.array(WorkflowSchema.partial().extend({ name: z.string() })),
+  // Stored workflow cache — skip deep validation to avoid failures from null/unexpected
+  // param field values in older stored data. Runtime shape is still cast to Workflow[].
+  workflowsInfo: z.array(z.any()),
   serverAliases: z.record(z.string()),
 })

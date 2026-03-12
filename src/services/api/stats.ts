@@ -148,11 +148,19 @@ export interface FailedJobsResponse {
   error?: string
 }
 
-const STATS_REQUEST_TIMEOUT_MS = 120000
+const STATS_REQUEST_TIMEOUT_MS = 30_000
 
-function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+function fetchWithTimeout(url: string, timeoutMs: number, externalSignal?: AbortSignal): Promise<Response> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeoutId)
+      controller.abort()
+    } else {
+      externalSignal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+  }
   return fetchWithAuth(url, { signal: controller.signal }).finally(() => clearTimeout(timeoutId))
 }
 
@@ -208,8 +216,8 @@ function mergeUserActivity(a: UserActivityItem[], b: UserActivityItem[]): UserAc
   return Array.from(map.entries(), ([user, count]) => ({ user, count })).sort((x, y) => y.count - x.count)
 }
 
-export async function getDoctorStats(period: DoctorPeriod = '1w'): Promise<DoctorStatsResponse> {
-  const response = await fetchWithTimeout(`/api/stats/doctor?period=${period}`, STATS_REQUEST_TIMEOUT_MS)
+export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: AbortSignal): Promise<DoctorStatsResponse> {
+  const response = await fetchWithTimeout(`/api/stats/doctor?period=${period}`, STATS_REQUEST_TIMEOUT_MS, signal)
   if (!response.ok) {
     const body = await response.text()
     throw new Error(`Doctor stats failed (${response.status}): ${body || response.statusText}`)
@@ -217,12 +225,13 @@ export async function getDoctorStats(period: DoctorPeriod = '1w'): Promise<Docto
   return response.json()
 }
 
-export async function getFailedJobs(page = 1, pageSize = 25, search = ''): Promise<FailedJobsResponse> {
+export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal): Promise<FailedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
   const response = await fetchWithTimeout(
     `/api/stats/doctor/failed-jobs?${params.toString()}`,
     STATS_REQUEST_TIMEOUT_MS,
+    signal,
   )
   if (!response.ok) {
     const body = await response.text()

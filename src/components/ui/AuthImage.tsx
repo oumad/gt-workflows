@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchWithAuth } from '@/utils/auth'
+import { useAuth } from '@/features/auth'
 import './AuthImage.css'
+
+/** Module-level cache: url → blob URL. Entries persist for the lifetime of the page. */
+const imageCache = new Map<string, string>()
 
 interface AuthImageProps {
   workflowName: string
@@ -14,21 +18,33 @@ interface AuthImageProps {
 
 /**
  * Displays a workflow image (e.g. icon) by fetching it with auth and showing a blob URL.
+ * Uses a module-level cache to avoid re-fetching the same image on remount.
  * Use this instead of <img src="/data/..."> when auth is required, since img cannot send headers.
  */
 export default function AuthImage({ workflowName, iconPath, alt, className, version, onError }: AuthImageProps) {
-  const [src, setSrc] = useState<string | null>(null)
-  const [error, setError] = useState(false)
-  const blobUrlRef = useRef<string | null>(null)
-  const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
-
+  const { authStatus } = useAuth()
   const normalizedPath = iconPath.replace(/^\.\//, '')
   const url = `/api/workflows/${encodeURIComponent(workflowName)}/file/${encodeURIComponent(normalizedPath)}${version != null ? `?v=${version}` : ''}`
 
+  const [src, setSrc] = useState<string | null>(() => imageCache.get(url) ?? null)
+  const [error, setError] = useState(false)
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+
   useEffect(() => {
+    if (authStatus !== 'ok') return
+
+    const cached = imageCache.get(url)
+    if (cached) {
+      setSrc(cached)
+      setError(false)
+      return
+    }
+
     let cancelled = false
+    setSrc(null)
     setError(false)
+
     ;(async () => {
       try {
         const res = await fetchWithAuth(url)
@@ -41,7 +57,7 @@ export default function AuthImage({ workflowName, iconPath, alt, className, vers
         const blob = await res.blob()
         if (cancelled) return
         const blobUrl = URL.createObjectURL(blob)
-        blobUrlRef.current = blobUrl
+        imageCache.set(url, blobUrl)
         setSrc(blobUrl)
       } catch {
         if (!cancelled) {
@@ -50,15 +66,9 @@ export default function AuthImage({ workflowName, iconPath, alt, className, vers
         }
       }
     })()
-    return () => {
-      cancelled = true
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current)
-        blobUrlRef.current = null
-      }
-      setSrc(null)
-    }
-  }, [url])
+
+    return () => { cancelled = true }
+  }, [url, authStatus])
 
   if (error) {
     return null

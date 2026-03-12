@@ -53,6 +53,11 @@ export function useTestWorkflow(
   const abortRef = useRef<AbortController | null>(null)
   const orderCounterRef = useRef(0)
 
+  // Cancel the SSE connection when the component unmounts to free the HTTP connection slot
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
+
   // Sync selectedServer when serverUrls becomes available or changes
   useEffect(() => {
     if (serverUrls.length > 0 && (!selectedServer || !serverUrls.includes(selectedServer))) {

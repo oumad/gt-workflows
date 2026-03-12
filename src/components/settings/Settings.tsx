@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Save, Server, Plus, X, ListPlus, FileText, Check } from 'lucide-react'
 import { getSettings } from '@/utils/settings'
-import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import { updatePreferences } from '@/services/api/preferences'
+import { usePreferences } from '@/hooks/usePreferences'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import AddServerModal from '@/components/modals/AddServerModal'
 import './Settings.css'
@@ -14,6 +15,8 @@ function normalizeServerUrl(s: string): string {
 }
 
 export function Settings() {
+  const { preferences, invalidate: invalidatePreferences } = usePreferences()
+  const prefsInitialized = useRef(false)
   const [monitoredServers, setMonitoredServers] = useState<string[]>([])
   const [serverAliases, setServerAliases] = useState<Record<string, string>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
@@ -26,15 +29,12 @@ export function Settings() {
   const [addServerOpen, setAddServerOpen] = useState(false)
 
   useEffect(() => {
-    getPreferences()
-      .then((prefs) => {
-        const list = prefs.monitoredServers ?? getSettings().monitoredServers
-        setMonitoredServers(list)
-        setServerAliases(prefs.serverAliases ?? {})
-        setPrefsLoaded(true)
-      })
-      .catch(() => setPrefsLoaded(true))
-  }, [])
+    if (!preferences || prefsInitialized.current) return
+    prefsInitialized.current = true
+    setMonitoredServers(preferences.monitoredServers ?? getSettings().monitoredServers)
+    setServerAliases(preferences.serverAliases ?? {})
+    setPrefsLoaded(true)
+  }, [preferences])
 
   useEffect(() => {
     if (saved) {
@@ -49,6 +49,7 @@ export function Settings() {
       await updatePreferences({ monitoredServers, serverAliases })
       setSaved(true)
       setHasChanges(false)
+      invalidatePreferences()
       window.dispatchEvent(new Event('settingsUpdated'))
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save settings')

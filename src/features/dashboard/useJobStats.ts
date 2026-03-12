@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useAuth } from '@/features/auth'
 import {
   getQueueStats,
   getUsageStatsChunked,
@@ -54,6 +55,7 @@ export interface UseJobStatsParams {
   jobsLimit: number
   timeRangeId: TimeRangeId
   selectedUser: string | null
+  enabled?: boolean
 }
 
 export interface UseJobStatsResult {
@@ -99,7 +101,8 @@ function applyUsageResponse(
 }
 
 export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
-  const { rangeMode, jobsLimit, timeRangeId, selectedUser } = params
+  const { rangeMode, jobsLimit, timeRangeId, selectedUser, enabled = true } = params
+  const { authStatus } = useAuth()
   const cacheParams: JobStatsCacheParams = { rangeMode, jobsLimit, timeRangeId, selectedUser }
 
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null)
@@ -290,12 +293,13 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
 
   const prevParamsRef = useRef<string | null>(null)
   useEffect(() => {
+    if (!enabled || authStatus !== 'ok') return
     const key = JSON.stringify(cacheParams)
     if (prevParamsRef.current !== key) {
       prevParamsRef.current = key
       loadStats()
     }
-  }, [rangeMode, jobsLimit, timeRangeId, selectedUser, loadStats])
+  }, [rangeMode, jobsLimit, timeRangeId, selectedUser, loadStats, enabled, authStatus])
 
   return {
     queueCounts,
