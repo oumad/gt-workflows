@@ -48,8 +48,11 @@ export default function DownloadModal({
           break
 
         case 'params':
-          // Download params.json file only
+          // Download params.json file only (neutralize serverUrl for portability)
           const params = await getWorkflowParams(workflow.name)
+          if (params?.comfyui_config?.serverUrl) {
+            params.comfyui_config.serverUrl = 'http://127.0.0.1:8188'
+          }
           const paramsBlob = new Blob([JSON.stringify(params, null, 2)], {
             type: 'application/json',
           })

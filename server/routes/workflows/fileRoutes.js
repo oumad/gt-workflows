@@ -7,6 +7,58 @@ import { resolveWorkflowPath } from '../../lib/workflowPath.js';
 export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, upload, admin }) {
   const router = Router();
 
+  router.get('/workflows/download-all', admin, async (req, res) => {
+    let archive = null;
+    try {
+      const entries = await fs.readdir(workflowsPath, { withFileTypes: true });
+      const dirs = entries.filter(e => e.isDirectory());
+      if (dirs.length === 0) return res.status(400).json({ error: 'No workflows found' });
+
+      archive = archiver('zip', { zlib: { level: 9 } });
+      let errorSent = false;
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        if (!errorSent && !res.headersSent) { errorSent = true; res.status(500).json({ error: `Failed to create archive: ${err.message}` }); }
+      });
+      res.on('error', (err) => { console.error('Response error:', err); if (archive) archive.abort(); });
+      const archivePromise = new Promise((resolve, reject) => { archive.on('end', () => resolve(undefined)); archive.on('error', reject); });
+      res.attachment('all-workflows.zip');
+      res.type('application/zip');
+      archive.pipe(res);
+
+      for (const dir of dirs) {
+        const dirPath = path.join(workflowsPath, dir.name);
+        const files = await fs.readdir(dirPath, { withFileTypes: true });
+        for (const file of files) {
+          const filePath = path.join(dirPath, file.name);
+          try {
+            if (file.isFile()) {
+              if (file.name === 'params.json') {
+                const raw = await fs.readFile(filePath, 'utf-8');
+                const params = JSON.parse(raw);
+                if (params?.comfyui_config?.serverUrl) {
+                  params.comfyui_config.serverUrl = 'http://127.0.0.1:8188';
+                }
+                archive.append(JSON.stringify(params, null, 2), { name: `${dir.name}/${file.name}` });
+              } else {
+                archive.file(filePath, { name: `${dir.name}/${file.name}` });
+              }
+            } else if (file.isDirectory()) {
+              archive.directory(filePath, `${dir.name}/${file.name}`);
+            }
+          } catch (fileError) { console.error(`Error adding file ${dir.name}/${file.name} to archive:`, fileError); }
+        }
+      }
+
+      archive.finalize();
+      await archivePromise;
+    } catch (error) {
+      console.error('Error creating all-workflows zip:', error);
+      if (archive) archive.abort();
+      if (!res.headersSent) res.status(500).json({ error: error.message || 'Failed to create archive' });
+    }
+  });
+
   router.post('/workflows/:name/upload', admin, upload.single('file'), async (req, res) => {
     try {
       const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
@@ -106,7 +158,19 @@ export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, uploa
         const filePath = path.join(resolved.workflowPath, file.name);
         try {
           if (file.isFile()) {
-            try { await fs.access(filePath); archive.file(filePath, { name: file.name }); } catch (e) { console.warn(`File ${file.name} not accessible, skipping:`, e.message); }
+            try {
+              await fs.access(filePath);
+              if (file.name === 'params.json') {
+                const raw = await fs.readFile(filePath, 'utf-8');
+                const params = JSON.parse(raw);
+                if (params?.comfyui_config?.serverUrl) {
+                  params.comfyui_config.serverUrl = 'http://127.0.0.1:8188';
+                }
+                archive.append(JSON.stringify(params, null, 2), { name: file.name });
+              } else {
+                archive.file(filePath, { name: file.name });
+              }
+            } catch (e) { console.warn(`File ${file.name} not accessible, skipping:`, e.message); }
           } else if (file.isDirectory()) {
             archive.directory(filePath, file.name);
           }

@@ -101,6 +101,33 @@ export async function deleteWorkflowFile(workflowName: string, filename: string)
   if (!response.ok) throw new Error('Failed to delete file')
 }
 
+export async function downloadAllWorkflows(): Promise<void> {
+  const response = await fetchWithAuth('/api/workflows/download-all')
+  if (!response.ok) {
+    let errorMessage = `Failed to download workflows (${response.status} ${response.statusText})`
+    try {
+      const contentType = response.headers.get('content-type')
+      if (contentType?.includes('application/json')) {
+        const errorData = (await response.json()) as { error?: string }
+        errorMessage = errorData.error ?? errorMessage
+      }
+    } catch {
+      errorMessage = response.statusText || errorMessage
+    }
+    throw new Error(errorMessage)
+  }
+  const blob = await response.blob()
+  if (blob.size === 0) throw new Error('Downloaded file is empty')
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'all-workflows.zip'
+  document.body.appendChild(a)
+  a.click()
+  window.URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+}
+
 export async function downloadWorkflow(workflowName: string): Promise<void> {
   const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/download`)
   if (!response.ok) {

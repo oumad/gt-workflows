@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Workflow } from '@/types'
-import { RefreshCw, Edit2, CheckSquare, X, Search, ChevronDown, ChevronUp, Folder, Save, LayoutGrid } from 'lucide-react'
+import { RefreshCw, Edit2, CheckSquare, X, Search, ChevronDown, ChevronUp, Folder, Save, LayoutGrid, Download } from 'lucide-react'
 import { DndContext, closestCenter } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SortableWorkflowCard } from './SortableWorkflowCard'
@@ -89,6 +89,14 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               </button>
               <button onClick={onRefresh} className="btn btn-secondary">
                 <RefreshCw size={16} /> Refresh
+              </button>
+              <button
+                onClick={wl.handleDownloadAll}
+                className="btn btn-secondary"
+                disabled={wl.downloadingAll || workflows.length === 0}
+                title="Download all workflows as a single zip"
+              >
+                <Download size={16} /> {wl.downloadingAll ? 'Downloading...' : 'Download All'}
               </button>
             </>
           ) : (

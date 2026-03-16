@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable'
 import { getPreferences, updatePreferences } from '@/services/api/preferences'
 import type { WorkflowDetailUIState } from '@/services/api/preferences'
-import { getWorkflowParams, saveWorkflowParams } from '@/services/api/workflows'
+import { getWorkflowParams, saveWorkflowParams, downloadAllWorkflows } from '@/services/api/workflows'
 
 export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
@@ -34,6 +34,7 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
   const expandSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [editedWorkflows, setEditedWorkflows] = useState<Map<string, Partial<Workflow['params']>>>(new Map())
+  const [downloadingAll, setDownloadingAll] = useState(false)
 
   useEffect(() => {
     setLocalWorkflows(workflows)
@@ -273,6 +274,17 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
     setLocalWorkflows(workflows)
   }, [workflows])
 
+  const handleDownloadAll = useCallback(async () => {
+    try {
+      setDownloadingAll(true)
+      await downloadAllWorkflows()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to download all workflows')
+    } finally {
+      setDownloadingAll(false)
+    }
+  }, [])
+
   return {
     editingWorkflow, setEditingWorkflow,
     selectedWorkflows,
@@ -305,5 +317,7 @@ export function useWorkflowList(workflows: Workflow[], onRefresh: () => void) {
     openServerLogs,
     handleSaveEdits,
     handleCancelEdit,
+    downloadingAll,
+    handleDownloadAll,
   }
 }
