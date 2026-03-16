@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { RefreshCw, Activity as ActivityIcon } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
+import { useAuth } from '@/features/auth'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
 import { formatDateTimeMedium } from '@/utils/dateFormat'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
@@ -147,6 +148,7 @@ type ActivityData = {
 }
 
 export function Activity() {
+  const { authStatus } = useAuth()
   const [data, setData] = useState<ActivityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [hoverField, setHoverField] = useState<'name' | 'user' | 'server'>('server')
@@ -171,21 +173,22 @@ export function Activity() {
   }, [])
 
   useEffect(() => {
+    if (authStatus !== 'ok') return
     load()
-  }, [load])
+  }, [load, authStatus])
 
   useEffect(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
-    if (autoRefreshSeconds > 0) {
+    if (authStatus === 'ok' && autoRefreshSeconds > 0) {
       intervalRef.current = setInterval(load, autoRefreshSeconds * 1000)
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [autoRefreshSeconds, load])
+  }, [autoRefreshSeconds, load, authStatus])
 
   if (loading && !data) {
     return (

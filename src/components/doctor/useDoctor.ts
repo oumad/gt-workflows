@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useAuth } from '@/features/auth'
 import {
   getDoctorStats, getFailedJobs,
   type DoctorStatsResponse, type DoctorPeriod, type DoctorRankItem, type FailedJobSummary, type WeeklyHistoryItem,
@@ -40,12 +41,15 @@ export interface DoctorState {
 }
 
 export function useDoctor(): DoctorState {
+  const { authStatus } = useAuth()
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DoctorStatsResponse | null>(null)
   const [period, setPeriod] = useState<DoctorPeriod>('1w')
   const loadIdRef = useRef(0)
+  const statsAbortRef = useRef<AbortController | null>(null)
+  const failedJobsAbortRef = useRef<AbortController | null>(null)
 
   const [failedJobs, setFailedJobs] = useState<FailedJobSummary[]>([])
   const [failedJobsTotal, setFailedJobsTotal] = useState(0)
@@ -54,6 +58,14 @@ export function useDoctor(): DoctorState {
   const [failedJobsSearch, setFailedJobsSearchRaw] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cancel all in-flight requests on unmount
+  useEffect(() => {
+    return () => {
+      statsAbortRef.current?.abort()
+      failedJobsAbortRef.current?.abort()
+    }
+  }, [])
 
   const setFailedJobsSearch = useCallback((q: string) => {
     setFailedJobsSearchRaw(q)
@@ -65,41 +77,55 @@ export function useDoctor(): DoctorState {
   }, [])
 
   const load = useCallback(async (p: DoctorPeriod) => {
+    statsAbortRef.current?.abort()
+    const controller = new AbortController()
+    statsAbortRef.current = controller
+
     const id = ++loadIdRef.current
     setLoading(true)
     setError(null)
     try {
-      const res = await getDoctorStats(p)
-      if (id !== loadIdRef.current) return
+      const res = await getDoctorStats(p, controller.signal)
+      if (controller.signal.aborted || id !== loadIdRef.current) return
       setConfigured(res.configured)
       if (res.error) setError(res.error)
       else setData(res)
     } catch (err) {
-      if (id !== loadIdRef.current) return
+      if (controller.signal.aborted || id !== loadIdRef.current) return
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      if (id === loadIdRef.current) setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load(period) }, [period, load])
-
-  const loadFailedJobs = useCallback(async (page: number, search: string) => {
-    setFailedJobsLoading(true)
-    try {
-      const res = await getFailedJobs(page, FAILED_JOBS_PAGE_SIZE, search)
-      setFailedJobs(res.jobs ?? [])
-      setFailedJobsTotal(res.total ?? 0)
-    } catch {
-      setFailedJobs([])
-    } finally {
-      setFailedJobsLoading(false)
+      if (!controller.signal.aborted && id === loadIdRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    if (authStatus !== 'ok') return
+    load(period)
+  }, [period, load, authStatus])
+
+  const loadFailedJobs = useCallback(async (page: number, search: string) => {
+    failedJobsAbortRef.current?.abort()
+    const controller = new AbortController()
+    failedJobsAbortRef.current = controller
+
+    setFailedJobsLoading(true)
+    try {
+      const res = await getFailedJobs(page, FAILED_JOBS_PAGE_SIZE, search, controller.signal)
+      if (controller.signal.aborted) return
+      setFailedJobs(res.jobs ?? [])
+      setFailedJobsTotal(res.total ?? 0)
+    } catch {
+      if (controller.signal.aborted) return
+      setFailedJobs([])
+    } finally {
+      if (!controller.signal.aborted) setFailedJobsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authStatus !== 'ok' || configured !== true) return
     loadFailedJobs(failedJobsPage, debouncedSearch)
-  }, [failedJobsPage, debouncedSearch, loadFailedJobs])
+  }, [failedJobsPage, debouncedSearch, loadFailedJobs, authStatus, configured])
 
   const totalFailed = data?.totalFailed ?? 0
   const thisWeekFailed = data?.thisWeekFailed ?? 0

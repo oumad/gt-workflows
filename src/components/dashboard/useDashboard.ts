@@ -1,15 +1,17 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useAuth } from '@/features/auth'
 import { useJobStats, JOBS_LIMIT_OPTIONS, TIME_RANGES, type TimeRangeId } from '@/features/dashboard'
-import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import { usePreferences } from '@/hooks/usePreferences'
+import { updatePreferences } from '@/services/api/preferences'
 import { anonymiseUserName } from '@/utils/anonymise'
 
 export { JOBS_LIMIT_OPTIONS, TIME_RANGES }
 export type { TimeRangeId }
 
 export function useDashboard() {
-  const { role, username, guestStatsEnabled } = useAuth()
+  const { role, guestStatsEnabled } = useAuth()
   const isAdmin = role === 'admin'
+  const { preferences } = usePreferences()
   const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
   const [timeRangeId, setTimeRangeId] = useState<TimeRangeId>('7d')
@@ -30,26 +32,21 @@ export function useDashboard() {
     })
   }, [])
 
+  const statsEnabled = isAdmin || (role === 'guest' && guestStatsEnabled)
+
   const {
     queueCounts, workflowUsage, serverUsage, serverWorkflows, userActivity,
     jobsSampled, timeRangeLabel, configured, loading, error, progress,
     userJobs, userJobsLoading, loadStats,
-  } = useJobStats({ rangeMode, jobsLimit, timeRangeId, selectedUser })
-
-  const loadStatsRef = useRef(loadStats)
-  loadStatsRef.current = loadStats
+  } = useJobStats({ rangeMode, jobsLimit, timeRangeId, selectedUser, enabled: statsEnabled })
 
   useEffect(() => { setExpandedJobId(null) }, [selectedUser])
 
   useEffect(() => {
-    getPreferences()
-      .then((prefs) => {
-        setAnonymiseUsers(role === 'guest' ? (prefs.anonymiseUsers !== false) : prefs.anonymiseUsers)
-        setUserDetailsOpen(prefs.userDetailsOpen)
-      })
-      .catch(() => {})
-    loadStatsRef.current()
-  }, [username, role])
+    if (!preferences) return
+    setAnonymiseUsers(role === 'guest' ? (preferences.anonymiseUsers !== false) : preferences.anonymiseUsers)
+    setUserDetailsOpen(preferences.userDetailsOpen)
+  }, [preferences, role])
 
   const filteredWorkflowUsage = useMemo(() => {
     const q = workflowSearch.trim().toLowerCase()

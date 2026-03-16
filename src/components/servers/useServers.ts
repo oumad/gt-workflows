@@ -1,12 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { getSettings } from '@/utils/settings'
-import { getPreferences, updatePreferences } from '@/services/api/preferences'
+import { updatePreferences } from '@/services/api/preferences'
+import { usePreferences } from '@/hooks/usePreferences'
 import { useServerHealthCheck } from '@/hooks/useServerHealthCheck'
 import { useWorkflows } from '@/hooks/useWorkflows'
 import { getServerUrls } from '@/utils/serverUrl'
-
-// Module-level cache — survives component unmount/remount (tab switches)
-let serverPrefsCache: { monitoredServers: string[]; serverAliases: Record<string, string> } | null = null
 
 export function normalizeServerUrl(s: string): string {
   let u = s.trim()
@@ -16,11 +14,13 @@ export function normalizeServerUrl(s: string): string {
 }
 
 export function useServers() {
-  const [monitoredServers, setMonitoredServers] = useState<string[]>(serverPrefsCache?.monitoredServers ?? [])
-  const [serverAliases, setServerAliases] = useState<Record<string, string>>(serverPrefsCache?.serverAliases ?? {})
-  const [savedServers, setSavedServers] = useState<string[]>(serverPrefsCache?.monitoredServers ?? [])
-  const [savedAliases, setSavedAliases] = useState<Record<string, string>>(serverPrefsCache?.serverAliases ?? {})
-  const [prefsLoaded, setPrefsLoaded] = useState(serverPrefsCache !== null)
+  const { preferences, invalidate: invalidatePreferences } = usePreferences()
+  const prefsInitialized = useRef(false)
+  const [monitoredServers, setMonitoredServers] = useState<string[]>([])
+  const [serverAliases, setServerAliases] = useState<Record<string, string>>({})
+  const [savedServers, setSavedServers] = useState<string[]>([])
+  const [savedAliases, setSavedAliases] = useState<Record<string, string>>({})
+  const [prefsLoaded, setPrefsLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
@@ -40,19 +40,16 @@ export function useServers() {
   const { getHealthStatus, checkAllServers, checkServer, isChecking } = useServerHealthCheck(displayServers, { enabled: true })
 
   useEffect(() => {
-    getPreferences()
-      .then((prefs) => {
-        const list = prefs.monitoredServers ?? getSettings().monitoredServers
-        const aliases = prefs.serverAliases ?? {}
-        serverPrefsCache = { monitoredServers: list, serverAliases: aliases }
-        setMonitoredServers(list)
-        setServerAliases(aliases)
-        setSavedServers(list)
-        setSavedAliases(aliases)
-        setPrefsLoaded(true)
-      })
-      .catch(() => setPrefsLoaded(true))
-  }, [])
+    if (!preferences || prefsInitialized.current) return
+    prefsInitialized.current = true
+    const list = preferences.monitoredServers ?? getSettings().monitoredServers
+    const aliases = preferences.serverAliases ?? {}
+    setMonitoredServers(list)
+    setServerAliases(aliases)
+    setSavedServers(list)
+    setSavedAliases(aliases)
+    setPrefsLoaded(true)
+  }, [preferences])
 
   useEffect(() => {
     if (saved) {
@@ -67,10 +64,10 @@ export function useServers() {
   ) => {
     try {
       await updatePreferences({ monitoredServers: servers, serverAliases: aliases })
-      serverPrefsCache = { monitoredServers: servers, serverAliases: aliases }
       setSavedServers(servers)
       setSavedAliases(aliases)
       setSaved(true)
+      invalidatePreferences()
       window.dispatchEvent(new Event('settingsUpdated'))
     } catch {
       // leave saved baseline unchanged so the button stays enabled for retry

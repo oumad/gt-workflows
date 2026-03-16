@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { Workflow } from '@/types'
 import { listWorkflows } from '@/services/api/workflows'
+import { useAuth } from '@/features/auth'
 
 export const WORKFLOWS_QUERY_KEY = ['workflows'] as const
 
@@ -14,10 +15,12 @@ export interface UseWorkflowsResult {
 }
 
 export function useWorkflows(): UseWorkflowsResult {
+  const { authStatus } = useAuth()
   const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: WORKFLOWS_QUERY_KEY,
     queryFn: listWorkflows,
+    enabled: authStatus === 'ok',
   })
 
   const loadWorkflows = useCallback(async (): Promise<void> => {

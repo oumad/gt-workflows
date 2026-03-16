@@ -5,6 +5,33 @@ import { toActivityJob, jobMatchesUser, anonymiseUserName } from '../lib/statsHe
 const USAGE_LIMIT_MIN = 100;
 const USAGE_LIMIT_MAX = 2000;
 
+/**
+ * Fetch jobs in small batches, stopping early once a job's timestamp falls below cutoffMs.
+ * Jobs are returned newest-first by Bull, so the first job older than cutoff means all
+ * subsequent ones are also older — safe to abort.
+ * @param {import('bull').Queue} queue
+ * @param {string} type - 'failed' | 'completed'
+ * @param {number} cutoffMs - stop when job timestamp < this (0 = no early exit)
+ * @param {{ batchSize?: number, maxJobs?: number }} [opts]
+ */
+async function getJobsBatched(queue, type, cutoffMs, { batchSize = 200, maxJobs = 5000 } = {}) {
+  const result = [];
+  for (let start = 0; start < maxJobs; start += batchSize) {
+    const batch = await queue.getJobs([type], start, start + batchSize - 1);
+    if (!batch || batch.length === 0) break;
+    for (const job of batch) {
+      if (!job) continue;
+      if (cutoffMs > 0) {
+        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        if (ts != null && ts < cutoffMs) return result;
+      }
+      result.push(job);
+    }
+    if (batch.length < batchSize) break;
+  }
+  return result;
+}
+
 function shouldAnonymiseUsers(config, req) {
   return config.anonymiseJobStatsUsers && config.guestUser && req.authUsername === config.guestUser;
 }
@@ -127,9 +154,14 @@ export function createStatsRouter(config) {
       const weekBuckets = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
       const weekBucketsTotal = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
 
+      const fiveWeeksAgo = now - 5 * oneWeekMs;
+      // Early exit cutoff for failed jobs: stop fetching once jobs are older than the
+      // selected period (and older than 5 weeks, since history only goes back that far).
+      // For 'all' (periodCutoff=0): no time-based early exit — rely on maxJobs cap instead.
+      const failedCutoff = periodCutoff > 0 ? Math.min(periodCutoff, fiveWeeksAgo) : 0;
       const [failedJobs, completedJobs] = await Promise.all([
-        queue.getJobs(['failed'], 0, 9999),
-        queue.getJobs(['completed'], 0, 9999),
+        getJobsBatched(queue, 'failed', failedCutoff, { batchSize: 200, maxJobs: 5000 }),
+        getJobsBatched(queue, 'completed', fiveWeeksAgo, { batchSize: 200, maxJobs: 2000 }),
       ]);
 
       for (const job of completedJobs) {
@@ -240,7 +272,7 @@ export function createStatsRouter(config) {
       };
 
       if (search) {
-        const allRaw = await queue.getJobs(['failed'], 0, 9999);
+        const allRaw = await getJobsBatched(queue, 'failed', 0, { batchSize: 200, maxJobs: 2000 });
         const allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
         const filtered = allMapped.filter((j) =>
           j.id.toLowerCase().includes(search) ||
