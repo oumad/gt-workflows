@@ -41,6 +41,9 @@ export function useWorkflowDetail(onUpdate: () => void) {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importedParams, setImportedParams] = useState<WorkflowParams | null>(null)
+  const [importServerUrlPreserved, setImportServerUrlPreserved] = useState(false)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [showDependencyAudit, setShowDependencyAudit] = useState(false)
   const [dependencyAuditCache, setDependencyAuditCache] = useState<DependencyAuditCache | null>(null)
@@ -395,6 +398,42 @@ export function useWorkflowDetail(onUpdate: () => void) {
     }
   }, [name, params]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleImportParamsFile = useCallback(() => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file || !params) return
+      try {
+        const text = await file.text()
+        const parsed = JSON.parse(text) as WorkflowParams
+        // Preserve current serverUrl
+        let preserved = false
+        if (params.comfyui_config?.serverUrl) {
+          if (!parsed.comfyui_config) parsed.comfyui_config = {} as WorkflowParams['comfyui_config']
+          if (parsed.comfyui_config!.serverUrl !== undefined || params.comfyui_config.serverUrl !== undefined) {
+            parsed.comfyui_config!.serverUrl = params.comfyui_config.serverUrl
+            preserved = true
+          }
+        }
+        setImportedParams(parsed)
+        setImportServerUrlPreserved(preserved)
+        setShowImportModal(true)
+      } catch {
+        setError('Failed to read imported file. Make sure it is valid JSON.')
+      }
+    }
+    input.click()
+  }, [params])
+
+  const handleImportConfirm = useCallback(() => {
+    if (!importedParams) return
+    handleParamsUpdate(importedParams)
+    setShowImportModal(false)
+    setImportedParams(null)
+  }, [importedParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     name,
     params,
@@ -435,6 +474,11 @@ export function useWorkflowDetail(onUpdate: () => void) {
     setShowDuplicateModal,
     showDownloadModal,
     setShowDownloadModal,
+    showImportModal,
+    setShowImportModal,
+    importedParams,
+    setImportedParams,
+    importServerUrlPreserved,
     logsServerUrl,
     setLogsServerUrl,
     showDependencyAudit,
@@ -464,6 +508,8 @@ export function useWorkflowDetail(onUpdate: () => void) {
     handleIconDelete,
     handleIconUpload,
     handleWorkflowFileUpload,
+    handleImportParamsFile,
+    handleImportConfirm,
     persistWorkflowDetailUI,
     persistLastRun,
   }

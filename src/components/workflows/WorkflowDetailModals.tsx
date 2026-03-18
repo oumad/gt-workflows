@@ -4,6 +4,7 @@ import SaveConfirmationModal from '@/components/modals/SaveConfirmationModal'
 import ResetConfirmationModal from '@/components/modals/ResetConfirmationModal'
 import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
+import ImportParamsModal from '@/components/modals/ImportParamsModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
 import type { DependencyAuditCache } from '@/components/modals/dependency-audit/types'
@@ -31,6 +32,12 @@ interface WorkflowDetailModalsProps {
   setShowDuplicateModal: (v: boolean) => void
   showDownloadModal: boolean
   setShowDownloadModal: (v: boolean) => void
+  showImportModal: boolean
+  setShowImportModal: (v: boolean) => void
+  importedParams: WorkflowParams | null
+  setImportedParams: (v: WorkflowParams | null) => void
+  importServerUrlPreserved: boolean
+  handleImportConfirm: () => void
   logsServerUrl: string | null
   setLogsServerUrl: (v: string | null) => void
   showDependencyAudit: boolean
@@ -68,6 +75,12 @@ export function WorkflowDetailModals({
   setShowDuplicateModal,
   showDownloadModal,
   setShowDownloadModal,
+  showImportModal,
+  setShowImportModal,
+  importedParams,
+  setImportedParams,
+  importServerUrlPreserved,
+  handleImportConfirm,
   logsServerUrl,
   setLogsServerUrl,
   showDependencyAudit,
@@ -151,6 +164,19 @@ export function WorkflowDetailModals({
             hasWorkflowFile: !!workflowJson,
           }}
           onClose={() => setShowDownloadModal(false)}
+        />
+      )}
+
+      {showImportModal && params && importedParams && (
+        <ImportParamsModal
+          currentParams={params}
+          importedParams={importedParams}
+          serverUrlPreserved={importServerUrlPreserved}
+          onConfirm={handleImportConfirm}
+          onCancel={() => {
+            setShowImportModal(false)
+            setImportedParams(null)
+          }}
         />
       )}
 
