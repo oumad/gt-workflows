@@ -320,6 +320,7 @@ export function createStatsRouter(config) {
 
       let jobs;
       let totalScanned = null;
+      let reachedRangeStart = false;
       const timeRange = from != null && to != null && !Number.isNaN(from) && !Number.isNaN(to);
 
       const jobMatchesUserFilter = (job, filter) => {
@@ -342,6 +343,11 @@ export function createStatsRouter(config) {
           if (ts < from || ts > to) return false;
           return !userFilter || jobMatchesUserFilter(job, userFilter);
         });
+        const minTsInChunk = rawFiltered.reduce((acc, j) => {
+          const ts = j.finishedOn ?? j.processedOn ?? j.timestamp;
+          return ts != null && (acc == null || ts < acc) ? ts : acc;
+        }, null);
+        reachedRangeStart = minTsInChunk != null && minTsInChunk < from;
       } else {
         const raw = await queue.getJobs(['completed'], offset, offset + limit - 1);
         jobs = (raw || []).filter((j) => j != null);
@@ -371,7 +377,7 @@ export function createStatsRouter(config) {
           }
         }
         const keyForUser = anonymise && userLabel ? anonymiseUserName(String(userLabel)) : userLabel;
-        if (anonymise && keyForUser) {
+        if (anonymise && keyForUser && userLabel !== 'Unknown') {
           byUser[keyForUser] = (byUser[keyForUser] || 0) + 1;
         }
         if (wfName && typeof wfName === 'string') {
@@ -419,6 +425,7 @@ export function createStatsRouter(config) {
         payload.from = req.query.from;
         payload.to = req.query.to;
         payload.totalScanned = totalScanned;
+        payload.reachedRangeStart = reachedRangeStart;
       } else {
         payload.offset = offset;
         payload.limit = limit;

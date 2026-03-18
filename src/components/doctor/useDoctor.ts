@@ -46,7 +46,7 @@ export function useDoctor(): DoctorState {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DoctorStatsResponse | null>(null)
-  const [period, setPeriod] = useState<DoctorPeriod>('1w')
+  const [period, setPeriod] = useState<DoctorPeriod>('1d')
   const loadIdRef = useRef(0)
   const statsAbortRef = useRef<AbortController | null>(null)
   const failedJobsAbortRef = useRef<AbortController | null>(null)

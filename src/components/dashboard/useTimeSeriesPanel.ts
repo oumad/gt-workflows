@@ -2,7 +2,9 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { TimeSeriesItem } from '@/features/dashboard/useTimeViewSeries'
 
 export const CHART_HEIGHT = 260
-export const CHART_PADDING = { top: 12, right: 12, bottom: 32, left: 52 }
+export const CHART_PADDING = { top: 12, right: 12, bottom: 32, left: 36 }
+/** Fixed viewBox width so x/y axis text stays the same size for day, month, year, etc. */
+const CHART_VIEWBOX_WIDTH = 800
 const Y_AXIS_TICKS = 5
 const DOWNLOAD_LEGEND_HEIGHT = 44
 const DOWNLOAD_LEGEND_ITEM_GAP = 14
@@ -66,7 +68,7 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
     return m || 1
   }, [visibleSeries])
 
-  const chartWidth = Math.max(600, (dates.length * 56) | 0)
+  const chartWidth = CHART_VIEWBOX_WIDTH
   const innerWidth = chartWidth - CHART_PADDING.left - CHART_PADDING.right
   const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
 
@@ -74,8 +76,12 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
   const scaleX = (i: number): number => CHART_PADDING.left + (i / Math.max(1, dates.length - 1)) * innerWidth
 
   const yTickValues = useMemo((): number[] => {
+    const seen = new Set<number>()
     const out: number[] = []
-    for (let i = 0; i <= Y_AXIS_TICKS; i++) out.push(Math.round((maxVal * i) / Y_AXIS_TICKS))
+    for (let i = 0; i <= Y_AXIS_TICKS; i++) {
+      const v = Math.round((maxVal * i) / Y_AXIS_TICKS)
+      if (!seen.has(v)) { seen.add(v); out.push(v) }
+    }
     return out
   }, [maxVal])
 

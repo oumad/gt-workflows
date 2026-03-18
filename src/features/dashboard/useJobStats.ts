@@ -24,7 +24,7 @@ import {
   type JobStatsCacheParams,
 } from './statsCache'
 
-const CHUNK_SIZE = 500
+const CHUNK_SIZE = 2000
 const TIME_RANGE_SCAN_LIMIT = 15000
 const TIME_RANGE_CHUNK_SIZE = 2000
 
@@ -154,6 +154,7 @@ export function useJobStats(params: UseJobStatsParams): UseJobStatsResult {
               includeJobs: true,
             })
             allJobs.push(...(res.jobs ?? []))
+            if (res.reachedRangeStart) break
           }
         } else {
           for (let offset = 0; offset < jobsLimit; offset += CHUNK_SIZE) {

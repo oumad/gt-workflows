@@ -5,7 +5,7 @@
 
 import type { ActivityJob } from '@/services/api/stats'
 
-export type TimeViewRangeId = 'day' | 'month' | 'year' | 'all'
+export type TimeViewRangeId = 'week' | 'month' | 'year' | 'all'
 
 export interface TimeViewBounds {
   from: string
@@ -27,7 +27,7 @@ function toDateKey(ts: number): string {
  */
 export function getTimeViewBounds(
   timeRange: TimeViewRangeId,
-  selectedDate: string,
+  selectedWeek: string,
   selectedMonth: number,
   selectedYearForMonth: number,
   selectedYearForYear: number
@@ -37,10 +37,20 @@ export function getTimeViewBounds(
   let to: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
   switch (timeRange) {
-    case 'day': {
-      const [y, m, d] = selectedDate.split('-').map(Number)
-      from = new Date(y, m - 1, d, 0, 0, 0, 0)
-      to = new Date(y, m - 1, d, 23, 59, 59, 999)
+    case 'week': {
+      // selectedWeek is "YYYY-Www" (HTML week input value)
+      const [yearStr, weekStr] = selectedWeek.split('-W')
+      const year = Number(yearStr)
+      const week = Number(weekStr)
+      // ISO week 1 is the week containing Jan 4; find its Monday
+      const jan4 = new Date(year, 0, 4)
+      const dow = jan4.getDay() || 7 // Mon=1 … Sun=7
+      from = new Date(jan4)
+      from.setDate(jan4.getDate() - (dow - 1) + (week - 1) * 7)
+      from.setHours(0, 0, 0, 0)
+      to = new Date(from)
+      to.setDate(from.getDate() + 6)
+      to.setHours(23, 59, 59, 999)
       break
     }
     case 'month': {
