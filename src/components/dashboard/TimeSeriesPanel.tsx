@@ -104,18 +104,13 @@ export function TimeSeriesPanel({
               ref={p.svgRef}
               className="dashboard-timeseries-chart dashboard-timeseries-chart--hover"
               viewBox={`0 0 ${p.chartWidth} ${CHART_HEIGHT}`}
-              preserveAspectRatio="xMidYMid meet"
+              preserveAspectRatio="none"
               style={{ width: '100%', height: CHART_HEIGHT }}
               aria-label={`Time series: ${title}`}
               onMouseMove={p.handleChartMouseMove}
               onMouseLeave={p.handleChartMouseLeave}
             >
               <rect x={CHART_PADDING.left} y={CHART_PADDING.top} width={p.innerWidth} height={p.innerHeight} fill="transparent" aria-hidden />
-              <text
-                x={CHART_PADDING.left - 8} y={CHART_PADDING.top + p.innerHeight / 2}
-                className="dashboard-timeseries-chart-y-label" textAnchor="middle"
-                transform={`rotate(-90, ${CHART_PADDING.left - 8}, ${CHART_PADDING.top + p.innerHeight / 2})`}
-              >Count</text>
               {p.yTickValues.map((tickVal) => {
                 const y = p.scaleY(tickVal)
                 return (

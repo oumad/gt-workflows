@@ -9,7 +9,7 @@ import './Dashboard.css'
 
 /** Time range options for Time View (no magic strings). */
 export const TIME_VIEW_RANGE = {
-  DAY: 'day',
+  WEEK: 'week',
   MONTH: 'month',
   YEAR: 'year',
   ALL: 'all',
@@ -18,11 +18,21 @@ export const TIME_VIEW_RANGE = {
 export type { TimeViewRangeId }
 
 const TIME_VIEW_RANGE_OPTIONS: ReadonlyArray<{ value: TimeViewRangeId; label: string }> = [
-  { value: TIME_VIEW_RANGE.DAY, label: 'Day' },
+  { value: TIME_VIEW_RANGE.WEEK, label: 'Week' },
   { value: TIME_VIEW_RANGE.MONTH, label: 'Month' },
   { value: TIME_VIEW_RANGE.YEAR, label: 'Year' },
   { value: TIME_VIEW_RANGE.ALL, label: 'All' },
 ]
+
+/** Returns the current ISO week as "YYYY-Www" for use as a week input default. */
+function currentISOWeek(): string {
+  const d = new Date()
+  const thu = new Date(d)
+  thu.setDate(d.getDate() - (d.getDay() + 6) % 7 + 3)
+  const jan1 = new Date(thu.getFullYear(), 0, 1)
+  const week = Math.ceil(((thu.getTime() - jan1.getTime()) / 86400000 + 1) / 7)
+  return `${thu.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
 
 const MONTHS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 1, label: 'January' },
@@ -42,11 +52,8 @@ const MONTHS: ReadonlyArray<{ value: number; label: string }> = [
 const currentYear = (): number => new Date().getFullYear()
 
 export function DashboardTimeView(): React.ReactElement {
-  const [timeRange, setTimeRange] = useState<TimeViewRangeId>(TIME_VIEW_RANGE.DAY)
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const d = new Date()
-    return d.toISOString().slice(0, 10)
-  })
+  const [timeRange, setTimeRange] = useState<TimeViewRangeId>(TIME_VIEW_RANGE.WEEK)
+  const [selectedWeek, setSelectedWeek] = useState<string>(currentISOWeek)
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1)
   const [selectedYearForMonth, setSelectedYearForMonth] = useState<number>(currentYear())
   const [selectedYearForYear, setSelectedYearForYear] = useState<number>(currentYear())
@@ -55,8 +62,8 @@ export function DashboardTimeView(): React.ReactElement {
     setTimeRange(e.target.value as TimeViewRangeId)
   }, [])
 
-  const handleDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedDate(e.target.value)
+  const handleWeekChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedWeek(e.target.value)
   }, [])
 
   const handleMonthChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -88,7 +95,7 @@ export function DashboardTimeView(): React.ReactElement {
     progress,
   } = useTimeViewSeries({
     timeRange,
-    selectedDate,
+    selectedWeek,
     selectedMonth,
     selectedYearForMonth,
     selectedYearForYear,
@@ -98,6 +105,12 @@ export function DashboardTimeView(): React.ReactElement {
   const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set())
   const initialWorkflowSelectDone = useRef(false)
   const initialServerSelectDone = useRef(false)
+
+  // Reset selection state when the query params change so new data auto-selects all items.
+  useEffect(() => {
+    initialWorkflowSelectDone.current = false
+    initialServerSelectDone.current = false
+  }, [timeRange, selectedWeek, selectedMonth, selectedYearForMonth, selectedYearForYear])
 
   useEffect(() => {
     if (workflowSeries.length === 0) return
@@ -145,15 +158,15 @@ export function DashboardTimeView(): React.ReactElement {
                 ))}
               </select>
             </label>
-            {timeRange === TIME_VIEW_RANGE.DAY && (
+            {timeRange === TIME_VIEW_RANGE.WEEK && (
               <label className="dashboard-timeview-label">
-                <span className="dashboard-timeview-label-text">Date</span>
+                <span className="dashboard-timeview-label-text">Week</span>
                 <input
-                  type="date"
+                  type="week"
                   className="dashboard-timeview-input"
-                  value={selectedDate}
-                  onChange={handleDateChange}
-                  aria-label="Date"
+                  value={selectedWeek}
+                  onChange={handleWeekChange}
+                  aria-label="Week"
                 />
               </label>
             )}

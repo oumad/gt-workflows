@@ -54,6 +54,8 @@ export interface UsageStatsResponse {
   from?: string
   to?: string
   totalScanned?: number
+  /** When true, this chunk included jobs older than `from`; client can stop scanning. */
+  reachedRangeStart?: boolean
   userFilter?: string
   jobs?: ActivityJob[]
   error?: string
@@ -251,6 +253,10 @@ export async function getQueueStats(): Promise<QueueStatsResponse> {
 
 export async function getQueueStatsWithJobLists(): Promise<QueueStatsWithJobsResponse> {
   const response = await fetchWithTimeout('/api/stats/queue?list=1', STATS_REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Queue stats failed (${response.status}): ${body || response.statusText}`)
+  }
   const data = await response.json()
   return {
     configured: data.configured ?? false,
@@ -358,12 +364,15 @@ export async function getUsageStatsTimeRangeChunked(
     merged.userActivity = mergeUserActivity(merged.userActivity, res.userActivity ?? [])
     merged.jobsSampled += res.jobsSampled ?? 0
     onProgress(offset + limit, scanLimit)
+    if (res.reachedRangeStart) break
+    if (res.totalScanned != null && res.totalScanned - offset < limit) break
   }
   return merged
 }
 
 const TIME_VIEW_CHUNK_SIZE = 2000
-const TIME_VIEW_SCAN_LIMIT_MAX = 15000
+/** Scan up to 200k completed jobs so day/month in the past can be found. */
+const TIME_VIEW_SCAN_LIMIT_MAX = 200000
 
 export interface TimeViewJobsResult {
   jobs: ActivityJob[]
@@ -375,11 +384,13 @@ export interface TimeViewJobsResult {
 export async function getUsageStatsTimeRangeWithJobs(
   from: string,
   to: string,
-  onProgress?: (scanned: number, total: number) => void
+  onProgress?: (scanned: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<TimeViewJobsResult> {
   const scanLimit = TIME_VIEW_SCAN_LIMIT_MAX
   const allJobs: ActivityJob[] = []
   for (let offset = 0; offset < scanLimit; offset += TIME_VIEW_CHUNK_SIZE) {
+    if (signal?.aborted) break
     const limit = Math.min(TIME_VIEW_CHUNK_SIZE, scanLimit - offset)
     const res = await getUsageStatsChunk({
       from,
@@ -393,8 +404,11 @@ export async function getUsageStatsTimeRangeWithJobs(
     if (!res.configured) return { jobs: [], configured: false }
     const chunk = res.jobs ?? []
     allJobs.push(...chunk)
-    onProgress?.(offset + chunk.length, scanLimit)
-    if (chunk.length < limit) break
+    onProgress?.(offset + limit, scanLimit)
+    if (res.reachedRangeStart) break
+    // Use raw jobs scanned (not time-filtered count) to detect true end of queue.
+    // chunk.length < limit would misfire when the batch contains jobs outside the time range.
+    if (res.totalScanned != null && res.totalScanned - offset < limit) break
   }
   return { jobs: allJobs, configured: true }
 }

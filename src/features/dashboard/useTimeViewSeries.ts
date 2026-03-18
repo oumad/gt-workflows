@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { getUsageStatsTimeRangeWithJobs } from '@/services/api/stats'
 import {
   getTimeViewBounds,
@@ -16,11 +16,14 @@ export interface TimeSeriesItem {
 
 export interface UseTimeViewSeriesParams {
   timeRange: TimeViewRangeId
-  selectedDate: string
+  selectedWeek: string
   selectedMonth: number
   selectedYearForMonth: number
   selectedYearForYear: number
 }
+
+// Session cache: key = `${from}|${to}`, survives re-mounts, cleared on page refresh.
+const timeViewAggCache = new Map<string, AggregatedByDay>()
 
 export interface UseTimeViewSeriesResult {
   workflowDates: string[]
@@ -50,7 +53,7 @@ function buildSeries(
 export function useTimeViewSeries(params: UseTimeViewSeriesParams): UseTimeViewSeriesResult {
   const {
     timeRange,
-    selectedDate,
+    selectedWeek,
     selectedMonth,
     selectedYearForMonth,
     selectedYearForYear,
@@ -64,31 +67,58 @@ export function useTimeViewSeries(params: UseTimeViewSeriesParams): UseTimeViewS
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
 
+  const fetchIdRef = useRef(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
   const fetchSeries = useCallback((): void => {
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    fetchIdRef.current += 1
+    const localId = fetchIdRef.current
     const bounds = getTimeViewBounds(
       timeRange,
-      selectedDate,
+      selectedWeek,
       selectedMonth,
       selectedYearForMonth,
       selectedYearForYear
     )
+
+    const cacheKey = `${bounds.from}|${bounds.to}`
+    const cached = timeViewAggCache.get(cacheKey)
+    if (cached) {
+      const wf = buildSeries(cached, 'workflow')
+      const sv = buildSeries(cached, 'server')
+      setWorkflowDates(wf.dates)
+      setWorkflowSeries(wf.series)
+      setServerDates(sv.dates)
+      setServerSeries(sv.series)
+      setLoading(false)
+      setError(null)
+      setProgress(null)
+      return
+    }
+
     setLoading(true)
     setError(null)
     setProgress({ current: 0, total: 1 })
-    getUsageStatsTimeRangeWithJobs(bounds.from, bounds.to, (current, total) =>
-      setProgress({ current, total })
-    )
+    setWorkflowDates([])
+    setWorkflowSeries([])
+    setServerDates([])
+    setServerSeries([])
+    getUsageStatsTimeRangeWithJobs(bounds.from, bounds.to, (current, total) => {
+      if (fetchIdRef.current === localId) setProgress({ current, total })
+    }, controller.signal)
       .then((res) => {
+        if (fetchIdRef.current !== localId) return
         setProgress(null)
         if (!res.configured || res.error) {
           setError(res.error ?? 'Stats not configured')
-          setWorkflowDates([])
-          setWorkflowSeries([])
-          setServerDates([])
-          setServerSeries([])
           return
         }
         const agg = aggregateJobsByDay(res.jobs)
+        timeViewAggCache.set(cacheKey, agg)
         const wf = buildSeries(agg, 'workflow')
         const sv = buildSeries(agg, 'server')
         setWorkflowDates(wf.dates)
@@ -97,17 +127,18 @@ export function useTimeViewSeries(params: UseTimeViewSeriesParams): UseTimeViewS
         setServerSeries(sv.series)
       })
       .catch((err) => {
+        if (fetchIdRef.current !== localId) return
+        if (controller.signal.aborted) return
         setProgress(null)
         setError(err instanceof Error ? err.message : 'Failed to load usage')
-        setWorkflowDates([])
-        setWorkflowSeries([])
-        setServerDates([])
-        setServerSeries([])
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (fetchIdRef.current !== localId) return
+        setLoading(false)
+      })
   }, [
     timeRange,
-    selectedDate,
+    selectedWeek,
     selectedMonth,
     selectedYearForMonth,
     selectedYearForYear,
@@ -115,6 +146,7 @@ export function useTimeViewSeries(params: UseTimeViewSeriesParams): UseTimeViewS
 
   useEffect(() => {
     fetchSeries()
+    return () => { abortControllerRef.current?.abort() }
   }, [fetchSeries])
 
   return {

@@ -157,7 +157,10 @@ export function Activity() {
   const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const inFlightRef = useRef(false)
   const load = useCallback(async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     setLoading(true)
     try {
       const queueRes = await getQueueStatsWithJobLists()
@@ -168,6 +171,7 @@ export function Activity() {
         error: err instanceof Error ? err.message : 'Failed to load',
       })
     } finally {
+      inFlightRef.current = false
       setLoading(false)
     }
   }, [])

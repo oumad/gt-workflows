@@ -825,12 +825,24 @@
 }
 
 /* ----- Time View: time series panels ----- */
+.dashboard-timeview-panels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .dashboard-timeseries-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem 1.25rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
+  min-height: 420px;
+  width: 90%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboard-timeseries-header {
@@ -1047,20 +1059,21 @@
   padding: 0.25rem 0;
   width: 100%;
   min-width: 0;
+  min-height: 280px;
+  flex-shrink: 0;
 }
 
 .dashboard-timeseries-chart {
   display: block;
-  min-width: 100%;
 }
 
 .dashboard-timeseries-chart-y-label {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--text-secondary);
 }
 
 .dashboard-timeseries-chart-y-tick {
-  font-size: 10px;
+  font-size: 11px;
   fill: var(--text-muted);
 }
 
@@ -1069,24 +1082,28 @@
 }
 
 .dashboard-timeseries-chart-label {
-  font-size: 10px;
+  font-size: 11px;
   fill: var(--text-muted);
 }
 
 .dashboard-timeseries-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
+  gap: 0.5rem 1rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
+  height: 120px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  align-content: flex-start;
 }
 
 .dashboard-timeseries-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   max-width: 100%;
 }

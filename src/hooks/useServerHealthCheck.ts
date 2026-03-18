@@ -34,8 +34,10 @@ export function useServerHealthCheck(
     }
   }, [healthStatuses])
 
-  // Check health of a single server
-  const checkServerHealth = useCallback(async (serverUrl: string): Promise<ServerHealthStatus> => {
+  const HEALTH_CHECK_TIMEOUT_MS = 15000; // 15s per server so one slow server doesn't block Check All
+
+  // Check health of a single server (optional signal for timeout/abort)
+  const checkServerHealth = useCallback(async (serverUrl: string, signal?: AbortSignal): Promise<ServerHealthStatus> => {
     try {
       const response = await fetchWithAuth('/api/servers/health-check', {
         method: 'POST',
@@ -43,6 +45,7 @@ export function useServerHealthCheck(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ serverUrl }),
+        signal,
       });
 
       // Always try to parse the response, even if status is not ok
@@ -111,31 +114,45 @@ export function useServerHealthCheck(
       return newMap;
     });
 
-    // Check servers sequentially with a small delay to avoid overwhelming the server
-    // This prevents "fetch failed" errors from too many concurrent requests
-    const results: ServerHealthStatus[] = [];
-    for (let i = 0; i < serversToCheck.length; i++) {
-      const url = serversToCheck[i];
-      const result = await checkServerHealth(url);
-      results.push(result);
-      
-      // Add a small delay between checks (except for the last one)
-      if (i < serversToCheck.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
+    // Run checks with limited concurrency (4 at a time) and per-request timeout so one slow server doesn't hang the UI
+    const CONCURRENCY = 4;
+    let nextIndex = 0;
+
+    const runOne = async (): Promise<void> => {
+      while (nextIndex < serversToCheck.length) {
+        const url = serversToCheck[nextIndex++];
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+        try {
+          const result = await checkServerHealth(url, controller.signal);
+          clearTimeout(timeoutId);
+          setHealthStatuses((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(result.serverUrl, result);
+            return newMap;
+          });
+        } catch (err) {
+          clearTimeout(timeoutId);
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          const isTimeout = err instanceof Error && err.name === 'AbortError';
+          setHealthStatuses((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(url, {
+              serverUrl: url,
+              healthy: false,
+              error: isTimeout ? `Request timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : errorMessage,
+              lastChecked: new Date().toISOString(),
+            });
+            return newMap;
+          });
+        } finally {
+          checkingServersRef.current.delete(url);
+        }
       }
-    }
+    };
 
-    // Update statuses
-    setHealthStatuses((prev) => {
-      const newMap = new Map(prev);
-      results.forEach((result) => {
-        newMap.set(result.serverUrl, result);
-      });
-      return newMap;
-    });
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, serversToCheck.length) }, () => runOne()));
 
-    // Remove from checking set
-    serversToCheck.forEach((url) => checkingServersRef.current.delete(url));
     setIsChecking(false);
   }, [serverUrls, enabled, checkServerHealth]);
 
@@ -158,13 +175,32 @@ export function useServerHealthCheck(
       newMap.set(serverUrl, { serverUrl, healthy: null })
       return newMap
     })
-    const result = await checkServerHealth(serverUrl)
-    checkingServersRef.current.delete(serverUrl)
-    setHealthStatuses((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(serverUrl, result)
-      return newMap
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
+    try {
+      const result = await checkServerHealth(serverUrl, controller.signal)
+      clearTimeout(timeoutId)
+      setHealthStatuses((prev) => {
+        const newMap = new Map(prev)
+        newMap.set(serverUrl, result)
+        return newMap
+      })
+    } catch (err) {
+      clearTimeout(timeoutId)
+      const isTimeout = err instanceof Error && err.name === 'AbortError'
+      setHealthStatuses((prev) => {
+        const newMap = new Map(prev)
+        newMap.set(serverUrl, {
+          serverUrl,
+          healthy: false,
+          error: isTimeout ? `Request timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : (err instanceof Error ? err.message : 'Unknown error'),
+          lastChecked: new Date().toISOString(),
+        })
+        return newMap
+      })
+    } finally {
+      checkingServersRef.current.delete(serverUrl)
+    }
   }, [checkServerHealth])
 
   return {

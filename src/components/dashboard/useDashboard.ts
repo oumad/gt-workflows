@@ -12,9 +12,9 @@ export function useDashboard() {
   const { role, guestStatsEnabled } = useAuth()
   const isAdmin = role === 'admin'
   const { preferences } = usePreferences()
-  const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('jobs')
+  const [rangeMode, setRangeMode] = useState<'jobs' | 'time'>('time')
   const [jobsLimit, setJobsLimit] = useState<number>(2000)
-  const [timeRangeId, setTimeRangeId] = useState<TimeRangeId>('7d')
+  const [timeRangeId, setTimeRangeId] = useState<TimeRangeId>('24h')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
