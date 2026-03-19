@@ -44,6 +44,7 @@ export function useWorkflowDetail(onUpdate: () => void) {
   const [showImportModal, setShowImportModal] = useState(false)
   const [importedParams, setImportedParams] = useState<WorkflowParams | null>(null)
   const [importServerUrlPreserved, setImportServerUrlPreserved] = useState(false)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [showDependencyAudit, setShowDependencyAudit] = useState(false)
   const [dependencyAuditCache, setDependencyAuditCache] = useState<DependencyAuditCache | null>(null)
@@ -479,6 +480,9 @@ export function useWorkflowDetail(onUpdate: () => void) {
     importedParams,
     setImportedParams,
     importServerUrlPreserved,
+    showHistoryModal,
+    setShowHistoryModal,
+    loadWorkflow,
     logsServerUrl,
     setLogsServerUrl,
     showDependencyAudit,

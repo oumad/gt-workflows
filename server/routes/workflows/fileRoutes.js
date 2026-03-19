@@ -3,8 +3,9 @@ import fs from 'fs/promises';
 import { Router } from 'express';
 import archiver from 'archiver';
 import { resolveWorkflowPath } from '../../lib/workflowPath.js';
+import { backupFiles } from '../../lib/workflowHistory.js';
 
-export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, upload, admin }) {
+export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, upload, admin, historyPath }) {
   const router = Router();
 
   router.get('/workflows/download-all', admin, async (req, res) => {
@@ -68,8 +69,10 @@ export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, uploa
       const workflowPath = resolved.workflowPath;
       const workflowPrefix = path.resolve(workflowPath) + path.sep;
       const params = await readParamsJson(workflowPath);
+      // Note: icon.jpg backup happens in upload middleware (before multer overwrites it)
       if (req.file.filename === 'icon.jpg' && params?.icon) {
-        const oldIconPath = path.resolve(workflowPath, params.icon.replace(/^\.\//, ''));
+        const oldIconName = params.icon.replace(/^\.\//, '');
+        const oldIconPath = path.resolve(workflowPath, oldIconName);
         if (oldIconPath.startsWith(workflowPrefix) && oldIconPath !== req.file.path) {
           try { await fs.unlink(oldIconPath); } catch (err) { if (err.code !== 'ENOENT') console.warn('Failed to delete old icon file:', err.message); }
         } else if (!oldIconPath.startsWith(workflowPrefix)) {
@@ -77,7 +80,11 @@ export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, uploa
         }
       }
       if (req.file.filename === 'workflow.json' && params?.comfyui_config?.workflow) {
-        const oldWorkflowPath = path.resolve(workflowPath, params.comfyui_config.workflow.replace(/^\.\//, ''));
+        const oldWorkflowName = params.comfyui_config.workflow.replace(/^\.\//, '');
+        if (historyPath) {
+          await backupFiles(historyPath, workflowPath, resolved.workflowName, [oldWorkflowName], 'Workflow file replaced').catch((err) => console.warn('History backup failed:', err.message));
+        }
+        const oldWorkflowPath = path.resolve(workflowPath, oldWorkflowName);
         if (oldWorkflowPath.startsWith(workflowPrefix) && oldWorkflowPath !== req.file.path) {
           try { await fs.unlink(oldWorkflowPath); } catch (err) { if (err.code !== 'ENOENT') console.warn('Failed to delete old workflow file:', err.message); }
         } else if (!oldWorkflowPath.startsWith(workflowPrefix)) {
@@ -122,6 +129,9 @@ export function createWorkflowsFileRouter({ workflowsPath, readParamsJson, uploa
       const filePath = path.join(resolved.workflowPath, filename);
       const resolvedPath = path.resolve(filePath);
       if (!resolvedPath.startsWith(path.resolve(resolved.workflowPath))) return res.status(403).json({ error: 'Invalid file path' });
+      if (historyPath) {
+        await backupFiles(historyPath, resolved.workflowPath, resolved.workflowName, [filename], 'File deleted').catch((err) => console.warn('History backup failed:', err.message));
+      }
       try {
         await fs.unlink(filePath);
       } catch (error) {

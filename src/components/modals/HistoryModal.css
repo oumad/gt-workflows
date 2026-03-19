@@ -1,0 +1,166 @@
+@import '../ui/Modal.css';
+@import '../ui/Buttons.css';
+
+.history-modal {
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-modal .modal-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.history-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.history-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+.history-entry:hover {
+  border-color: var(--accent);
+}
+
+.history-entry-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.history-entry-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.history-entry-action {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.history-entry-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.history-entry-files {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.history-file-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+}
+
+.history-entry-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: flex-start;
+}
+
+.history-entry-actions .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Restore confirmation view */
+.history-restore-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-restore-info {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-warning);
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+}
+
+.history-restore-info svg {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.history-restore-info > div {
+  flex: 1;
+}
+
+.history-restore-info strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.history-restore-info p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.history-restore-files {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.history-restore-files h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.history-restore-files ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.history-restore-files li {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+/* Diff section reuses SaveConfirmationModal.css classes */

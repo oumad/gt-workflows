@@ -164,6 +164,13 @@ export interface IconBadge {
 /** ComfyUI workflow API format (node id -> node data). */
 export type WorkflowJson = Record<string, unknown>;
 
+export interface HistoryEntry {
+  timestamp: string;
+  iso: string;
+  action: string;
+  files: string[];
+}
+
 export interface Workflow {
   name: string;
   folderPath: string;

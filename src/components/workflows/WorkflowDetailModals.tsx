@@ -5,6 +5,7 @@ import ResetConfirmationModal from '@/components/modals/ResetConfirmationModal'
 import DuplicateModal from '@/components/modals/DuplicateModal'
 import DownloadModal from '@/components/modals/DownloadModal'
 import ImportParamsModal from '@/components/modals/ImportParamsModal'
+import HistoryModal from '@/components/modals/HistoryModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import DependencyAuditModal from '@/components/modals/DependencyAuditModal'
 import type { DependencyAuditCache } from '@/components/modals/dependency-audit/types'
@@ -38,6 +39,9 @@ interface WorkflowDetailModalsProps {
   setImportedParams: (v: WorkflowParams | null) => void
   importServerUrlPreserved: boolean
   handleImportConfirm: () => void
+  showHistoryModal: boolean
+  setShowHistoryModal: (v: boolean) => void
+  onHistoryRestored: () => void
   logsServerUrl: string | null
   setLogsServerUrl: (v: string | null) => void
   showDependencyAudit: boolean
@@ -81,6 +85,9 @@ export function WorkflowDetailModals({
   setImportedParams,
   importServerUrlPreserved,
   handleImportConfirm,
+  showHistoryModal,
+  setShowHistoryModal,
+  onHistoryRestored,
   logsServerUrl,
   setLogsServerUrl,
   showDependencyAudit,
@@ -176,6 +183,18 @@ export function WorkflowDetailModals({
           onCancel={() => {
             setShowImportModal(false)
             setImportedParams(null)
+          }}
+        />
+      )}
+
+      {showHistoryModal && name && (
+        <HistoryModal
+          workflowName={name}
+          currentParams={params}
+          onClose={() => setShowHistoryModal(false)}
+          onRestored={() => {
+            setShowHistoryModal(false)
+            onHistoryRestored()
           }}
         />
       )}

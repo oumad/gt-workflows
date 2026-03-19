@@ -22,7 +22,7 @@ const apiLimiter = rateLimit({
 
 export function createApp() {
   const app = express();
-  const upload = createUploadMiddleware(config.workflowsPath);
+  const upload = createUploadMiddleware(config.workflowsPath, config.historyPath);
   const basicAuth = createBasicAuthMiddleware(config);
 
   app.use(helmet({
@@ -58,6 +58,7 @@ export function createApp() {
       upload,
       requireAdmin,
       preferencesPath: config.preferencesPath,
+      historyPath: config.historyPath,
     })
   );
   app.use('/api', createStatsRouter(config));

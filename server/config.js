@@ -49,6 +49,10 @@ export const config = Object.freeze({
   preferencesPath: process.env.GT_PREFERENCES_PATH
     ? path.resolve(process.env.GT_PREFERENCES_PATH)
     : path.join(dataDir, 'preferences'),
+  /** Directory for workflow file history/backups. One subfolder per workflow. */
+  historyPath: process.env.GT_WORKFLOW_HISTORY_PATH
+    ? path.resolve(process.env.GT_WORKFLOW_HISTORY_PATH)
+    : path.join(dataDir, 'workflow-history'),
   redisUrl: process.env.REDIS_URL || process.env.REDIS_HOST,
   bullQueueName: process.env.BULL_QUEUE_NAME || 'workflow-studio-comfyui-process-queue',
   auth: {
