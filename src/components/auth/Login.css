@@ -22,8 +22,7 @@
   margin-bottom: 1.5rem;
 }
 
-.login-header svg {
-  color: var(--accent);
+.login-logo {
   margin-bottom: 0.75rem;
 }
 

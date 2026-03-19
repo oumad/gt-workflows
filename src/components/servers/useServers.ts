@@ -1,10 +1,13 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getSettings } from '@/utils/settings'
 import { updatePreferences } from '@/services/api/preferences'
 import { usePreferences } from '@/hooks/usePreferences'
 import { useServerHealthCheck } from '@/hooks/useServerHealthCheck'
 import { useWorkflows } from '@/hooks/useWorkflows'
 import { getServerUrls } from '@/utils/serverUrl'
+import { fetchQueueDepth, type QueueDepth } from '@/services/api/servers'
+
+export type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unchecked'
 
 export function normalizeServerUrl(s: string): string {
   let u = s.trim()
@@ -26,6 +29,10 @@ export function useServers() {
   const [bulkText, setBulkText] = useState('')
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [addServerOpen, setAddServerOpen] = useState(false)
+  const [workflowsServerUrl, setWorkflowsServerUrl] = useState<string | null>(null)
+  const [serverSearch, setServerSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [queueDepths, setQueueDepths] = useState<Record<string, QueueDepth>>({})
 
   const hasChanges = useMemo(() => {
     if (monitoredServers.length !== savedServers.length) return true
@@ -57,6 +64,25 @@ export function useServers() {
       return () => clearTimeout(timer)
     }
   }, [saved])
+
+  // Wrap checkServer to also fetch queue depth afterward
+  const handleCheckServer = useCallback(async (url: string) => {
+    await checkServer(url)
+    fetchQueueDepth(url)
+      .then((depth) => setQueueDepths((prev) => ({ ...prev, [url]: depth })))
+      .catch(() => {})
+  }, [checkServer])
+
+  // Wrap checkAllServers to also fetch queue depths afterward
+  const handleCheckAllServers = useCallback(async () => {
+    await checkAllServers()
+    const uniqueUrls = [...new Set(displayServers.map((s) => s.replace(/\/$/, '')))]
+    for (const url of uniqueUrls) {
+      fetchQueueDepth(url)
+        .then((depth) => setQueueDepths((prev) => ({ ...prev, [url]: depth })))
+        .catch(() => {})
+    }
+  }, [checkAllServers, displayServers])
 
   const handleSave = async (
     servers: string[] = monitoredServers,
@@ -167,13 +193,65 @@ export function useServers() {
     return map
   }, [workflows])
 
+  const duplicateUrls = useMemo(() => {
+    const seen = new Set<string>()
+    const dupes = new Set<string>()
+    for (const s of displayServers) {
+      const norm = s.replace(/\/$/, '')
+      if (seen.has(norm)) dupes.add(norm)
+      else seen.add(norm)
+    }
+    return dupes
+  }, [displayServers]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const statusCounts = useMemo(() => {
+    let healthy = 0, unhealthy = 0, unchecked = 0
+    for (const s of displayServers) {
+      const norm = s.replace(/\/$/, '')
+      const h = getHealthStatus(norm)
+      if (!h || h.healthy === null) unchecked++
+      else if (h.healthy === true) healthy++
+      else unhealthy++
+    }
+    return { all: displayServers.length, healthy, unhealthy, unchecked }
+  }, [displayServers, getHealthStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredServers = useMemo(() => {
+    return displayServers.filter((server) => {
+      const norm = server.replace(/\/$/, '')
+      if (serverSearch) {
+        const q = serverSearch.toLowerCase()
+        const alias = serverAliases[server] || ''
+        if (!server.toLowerCase().includes(q) && !alias.toLowerCase().includes(q)) return false
+      }
+      if (statusFilter !== 'all') {
+        const h = getHealthStatus(norm)
+        if (statusFilter === 'healthy' && h?.healthy !== true) return false
+        if (statusFilter === 'unhealthy' && h?.healthy !== false) return false
+        if (statusFilter === 'unchecked' && h != null && h.healthy !== null) return false
+      }
+      return true
+    })
+  }, [displayServers, serverSearch, statusFilter, serverAliases, getHealthStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     monitoredServers, serverAliases, prefsLoaded, saved, hasChanges,
     bulkOpen, setBulkOpen, bulkText, setBulkText,
     logsServerUrl, setLogsServerUrl,
     addServerOpen, setAddServerOpen,
-    displayServers, getHealthStatus, checkAllServers, checkServer, isChecking,
+    workflowsServerUrl, setWorkflowsServerUrl,
+    displayServers, filteredServers,
+    serverSearch, setServerSearch,
+    statusFilter, setStatusFilter,
+    statusCounts,
+    duplicateUrls,
+    queueDepths,
+    getHealthStatus,
+    checkAllServers: handleCheckAllServers,
+    checkServer: handleCheckServer,
+    isChecking,
     workflowCountPerServer,
+    workflows,
     handleSave, handleAddServerConfirm, handleBulkAdd,
     handleRemoveServer, handleServerUrlChange, handleServerAliasChange,
   }

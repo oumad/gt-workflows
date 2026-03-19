@@ -48,6 +48,44 @@ export function createHealthCheckRouter() {
     }
   });
 
+  router.get('/servers/queue-depth', async (req, res) => {
+    try {
+      const rawUrl = req.query.url
+      if (!rawUrl || typeof rawUrl !== 'string') {
+        return res.status(400).json({ error: 'Server URL (url) is required' })
+      }
+      const base = rawUrl.trim().replace(/\/$/, '')
+      if (!base.startsWith('http://') && !base.startsWith('https://')) {
+        return res.status(400).json({ error: 'Invalid server URL' })
+      }
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      try {
+        const response = await fetch(`${base}/queue`, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        })
+        clearTimeout(timeoutId)
+        if (!response.ok) {
+          return res.status(502).json({ error: `Server returned ${response.status}` })
+        }
+        const data = await response.json()
+        res.json({
+          running: Array.isArray(data.queue_running) ? data.queue_running.length : 0,
+          pending: Array.isArray(data.queue_pending) ? data.queue_pending.length : 0,
+        })
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError.name === 'AbortError') {
+          return res.status(504).json({ error: 'Request timed out' })
+        }
+        res.status(502).json({ error: fetchError.message || 'Failed to fetch queue' })
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message })
+    }
+  })
+
   router.post('/servers/health-check', async (req, res) => {
     try {
       const { serverUrl } = req.body;

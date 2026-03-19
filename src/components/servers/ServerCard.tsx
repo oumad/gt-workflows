@@ -1,5 +1,6 @@
-import { Server, X, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid } from 'lucide-react'
+import { Server, X, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, AlertTriangle } from 'lucide-react'
 import type { ServerHealthStatus } from '@/hooks/useServerHealthCheck'
+import type { QueueDepth } from '@/services/api/servers'
 
 interface ServerCardProps {
   server: string
@@ -8,16 +9,20 @@ interface ServerCardProps {
   health: ServerHealthStatus | null
   wfCount: number
   isServerChecking: boolean
+  isDuplicate?: boolean
+  queueDepth?: QueueDepth
   onRemove: (index: number) => void
   onUrlChange: (index: number, newUrl: string) => void
   onAliasChange: (url: string, alias: string) => void
   onViewLogs: (url: string) => void
   onCheck: (url: string) => void
+  onViewWorkflows: (url: string) => void
 }
 
 export function ServerCard({
   server, index, serverAliases, health, wfCount, isServerChecking,
-  onRemove, onUrlChange, onAliasChange, onViewLogs, onCheck,
+  isDuplicate, queueDepth,
+  onRemove, onUrlChange, onAliasChange, onViewLogs, onCheck, onViewWorkflows,
 }: ServerCardProps) {
   const norm = server.replace(/\/$/, '')
   const healthClass = !health
@@ -28,8 +33,15 @@ export function ServerCard({
         ? 'server-card--unhealthy'
         : 'server-card--checking'
 
+  const queueLabel = queueDepth
+    ? [
+        queueDepth.running > 0 ? `${queueDepth.running} running` : '',
+        queueDepth.pending > 0 ? `${queueDepth.pending} queued` : '',
+      ].filter(Boolean).join(', ')
+    : null
+
   return (
-    <div className={`server-card ${healthClass}`}>
+    <div className={`server-card ${healthClass} ${isDuplicate ? 'server-card--duplicate' : ''}`}>
       <div className="server-card-header">
         <div className="server-card-status-icon">
           {!health && <Server size={18} className="server-card-icon-default" />}
@@ -40,6 +52,11 @@ export function ServerCard({
         <span className="server-card-title" title={serverAliases[server] || server}>
           {serverAliases[server] || server.replace(/^https?:\/\//, '')}
         </span>
+        {isDuplicate && (
+          <span className="server-card-duplicate-badge" title="Duplicate URL — this server appears more than once">
+            <AlertTriangle size={14} />
+          </span>
+        )}
         <button type="button" className="server-card-remove" onClick={() => onRemove(index)} title="Remove server">
           <X size={14} />
         </button>
@@ -53,7 +70,7 @@ export function ServerCard({
             value={server}
             onChange={(e) => onUrlChange(index, e.target.value)}
             placeholder="http://127.0.0.1:8188"
-            className="server-card-input"
+            className={`server-card-input${isDuplicate ? ' server-card-input--duplicate' : ''}`}
             aria-label="Server URL"
           />
         </div>
@@ -71,10 +88,20 @@ export function ServerCard({
       </div>
 
       <div className="server-card-footer">
-        <span className="server-card-wf-count" title={`${wfCount} workflow${wfCount !== 1 ? 's' : ''} use this server`}>
+        <button
+          type="button"
+          className="server-card-wf-count"
+          onClick={() => onViewWorkflows(norm)}
+          title={`${wfCount} workflow${wfCount !== 1 ? 's' : ''} use this server — click to view`}
+        >
           <LayoutGrid size={13} />
           {wfCount} workflow{wfCount !== 1 ? 's' : ''}
-        </span>
+        </button>
+        {queueLabel && health?.healthy === true && (
+          <span className="server-card-queue" title="ComfyUI queue depth">
+            {queueLabel}
+          </span>
+        )}
         {health?.lastChecked && (
           <span className="server-card-checked-time" title={`Last checked: ${new Date(health.lastChecked).toLocaleTimeString()}`}>
             {new Date(health.lastChecked).toLocaleTimeString()}

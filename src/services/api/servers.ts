@@ -105,6 +105,20 @@ export async function testWorkflow(
   }
 }
 
+export interface QueueDepth {
+  running: number
+  pending: number
+}
+
+export async function fetchQueueDepth(serverUrl: string): Promise<QueueDepth> {
+  const url = `/api/servers/queue-depth?url=${encodeURIComponent(serverUrl)}`
+  const response = await fetchWithAuth(url)
+  if (!response.ok) {
+    throw new Error(await extractApiError(response, `Failed to fetch queue (${response.status})`))
+  }
+  return response.json()
+}
+
 export async function cancelTestWorkflow(serverUrl: string): Promise<void> {
   await fetchWithAuth('/api/servers/test-workflow/cancel', {
     method: 'POST',
