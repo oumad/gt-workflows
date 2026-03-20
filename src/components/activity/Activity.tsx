@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Activity as ActivityIcon } from 'lucide-react'
+import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
 import { useAuth } from '@/features/auth'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
@@ -7,12 +7,8 @@ import { formatDateTimeMedium } from '@/utils/dateFormat'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import './Activity.css'
 
-const AUTO_REFRESH_OPTIONS = [
-  { value: 0, label: 'Off' },
-  { value: 5, label: '5 sec' },
-  { value: 10, label: '10 sec' },
-  { value: 30, label: '30 sec' },
-] as const
+const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
+type AutoInterval = 5 | 30 | 60 | 300 | null
 
 const HOVER_FIELD_OPTIONS: { value: 'name' | 'user' | 'server'; label: string }[] = [
   { value: 'name', label: 'Name' },
@@ -154,8 +150,14 @@ export function Activity() {
   const [hoverField, setHoverField] = useState<'name' | 'user' | 'server'>('server')
   const [hoveredValue, setHoveredValue] = useState<string | null>(null)
   const [logModalServerUrl, setLogModalServerUrl] = useState<string | null>(null)
-  const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
+
+  const cycleAutoInterval = useCallback(() => {
+    setAutoInterval((cur) => {
+      const idx = AUTO_INTERVALS.indexOf(cur)
+      return AUTO_INTERVALS[(idx + 1) % AUTO_INTERVALS.length]
+    })
+  }, [])
 
   const inFlightRef = useRef(false)
   const load = useCallback(async () => {
@@ -181,18 +183,15 @@ export function Activity() {
     load()
   }, [load, authStatus])
 
+  // Stable ref so the interval doesn't reset when load changes
+  const loadRef = useRef(load)
+  useEffect(() => { loadRef.current = load }, [load])
+
   useEffect(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-    if (authStatus === 'ok' && autoRefreshSeconds > 0) {
-      intervalRef.current = setInterval(load, autoRefreshSeconds * 1000)
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [autoRefreshSeconds, load, authStatus])
+    if (!autoInterval || authStatus !== 'ok') return
+    const id = setInterval(() => { loadRef.current() }, autoInterval * 1000)
+    return () => clearInterval(id)
+  }, [autoInterval, authStatus])
 
   if (loading && !data) {
     return (
@@ -232,52 +231,47 @@ export function Activity() {
           Activity
         </h1>
         <div className="activity-toolbar-controls">
-        <button
-          type="button"
-          className="btn btn-toolbar"
-          onClick={load}
-          disabled={loading}
-          title="Refresh"
-        >
-          <RefreshCw size={18} className={loading ? 'spin' : ''} />
-          Refresh
-        </button>
-        <label className="activity-autorefresh-label">
-          Auto-refresh
-          <select
-            className="activity-autorefresh-select"
-            value={autoRefreshSeconds}
-            onChange={(e) => setAutoRefreshSeconds(Number(e.target.value))}
+          <button
+            type="button"
+            className="btn btn-toolbar"
+            onClick={load}
             disabled={loading}
+            title="Refresh"
           >
-            {AUTO_REFRESH_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="activity-autorefresh-label">
-          Hover
-          <select
-            className="activity-autorefresh-select"
-            value={hoverField}
-            onChange={(e) => setHoverField(e.target.value as 'name' | 'user' | 'server')}
-            disabled={loading}
+            <RefreshCw size={18} className={loading ? 'spin' : ''} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            className={`btn btn-toolbar ${autoInterval ? 'btn-toolbar--active' : ''}`}
+            onClick={cycleAutoInterval}
+            title={autoInterval ? `Auto-refresh every ${autoInterval < 60 ? `${autoInterval}s` : `${autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (5s / 30s / 1m)'}
           >
-            {HOVER_FIELD_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {showSpinner && (
-          <span className="activity-toolbar-loading">
-            <span className="activity-loading-spinner activity-loading-spinner--small" />
-            data is loading, please wait :)
-          </span>
-        )}
+            {autoInterval ? <Timer size={18} /> : <TimerOff size={18} />}
+            {autoInterval
+              ? autoInterval < 60 ? `Auto ${autoInterval}s` : `Auto ${autoInterval / 60}m`
+              : 'Auto'}
+          </button>
+          <label className="activity-autorefresh-label">
+            Hover
+            <select
+              className="activity-autorefresh-select"
+              value={hoverField}
+              onChange={(e) => setHoverField(e.target.value as 'name' | 'user' | 'server')}
+              disabled={loading}
+            >
+              {HOVER_FIELD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {showSpinner && (
+            <span className="activity-toolbar-loading">
+              <span className="activity-loading-spinner activity-loading-spinner--small" />
+            </span>
+          )}
         </div>
       </header>
 

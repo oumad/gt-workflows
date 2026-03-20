@@ -114,6 +114,14 @@ nav {
   padding: 2rem;
 }
 
+.app-footer {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  flex-shrink: 0;
+}
+
 /* Shared page title: icon + text, same across Workflows, Job stats, Activity, Settings, Create */
 .page-title {
   display: flex;

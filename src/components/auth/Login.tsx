@@ -62,6 +62,7 @@ export function Login({ onSuccess }: LoginProps) {
         <div className="login-header">
           <AppLogo size={48} className="login-logo" />
           <h1>GT Workflows Manager</h1>
+          <p className="login-brand">GEAR Productions</p>
           <p className="login-subtitle">Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">

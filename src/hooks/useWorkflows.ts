@@ -36,7 +36,7 @@ export function useWorkflows(): UseWorkflowsResult {
 
   return {
     workflows: query.data ?? [],
-    loading: query.isLoading,
+    loading: query.isFetching,
     error,
     loadWorkflows,
   }

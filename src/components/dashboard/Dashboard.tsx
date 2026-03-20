@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, RefreshCw, AlertCircle } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertCircle, Timer, TimerOff } from 'lucide-react'
 import { ROUTES } from '@/app/routes'
 import { JOBS_LIMIT_OPTIONS, TIME_RANGES } from '@/features/dashboard'
 import { useDashboard } from './useDashboard'
@@ -46,6 +46,17 @@ export function Dashboard(): React.ReactElement {
             )}
             <button type="button" className="btn btn-toolbar" onClick={() => d.loadStats(true)} disabled={d.loading} title="Refresh stats">
               <RefreshCw size={18} className={d.loading ? 'spin' : ''} /> Refresh
+            </button>
+            <button
+              type="button"
+              className={`btn btn-toolbar ${d.autoInterval ? 'btn-toolbar--active' : ''}`}
+              onClick={d.cycleAutoInterval}
+              title={d.autoInterval ? `Auto-refresh every ${d.autoInterval < 60 ? `${d.autoInterval}s` : `${d.autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (5s / 30s / 1m)'}
+            >
+              {d.autoInterval ? <Timer size={18} /> : <TimerOff size={18} />}
+              {d.autoInterval
+                ? d.autoInterval < 60 ? `Auto ${d.autoInterval}s` : `Auto ${d.autoInterval / 60}m`
+                : 'Auto'}
             </button>
             <Link to={ROUTES.jobStatsTimeView} className="btn btn-toolbar">Time View</Link>
           </div>

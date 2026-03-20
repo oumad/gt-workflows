@@ -151,6 +151,9 @@ function MainLayoutWithData(): React.ReactElement {
       <main className="app-main">
         <Outlet context={{ workflows, loading, error, loadWorkflows }} />
       </main>
+      <footer className="app-footer">
+        GEAR Productions — 2026
+      </footer>
     </div>
   )
 }

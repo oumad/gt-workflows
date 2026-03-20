@@ -11,8 +11,8 @@ import { fetchQueueDepth, type QueueDepth } from '@/services/api/servers'
 export type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unchecked'
 export type SortBy = 'default' | 'name' | 'status' | 'latency'
 
-const AUTO_INTERVALS = [30, 60, 300, null] as const
-export type AutoInterval = 30 | 60 | 300 | null
+const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
+export type AutoInterval = 5 | 30 | 60 | 300 | null
 
 // Status priority for sort: needs-attention first
 const STATUS_SORT_ORDER = (healthy: boolean | null | undefined): number => {
