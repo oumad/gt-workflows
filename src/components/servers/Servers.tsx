@@ -5,6 +5,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import AddServerModal from '@/components/modals/AddServerModal'
+import ServerJobsModal from '@/components/modals/ServerJobsModal'
 import ServerWorkflowsModal from '@/components/modals/ServerWorkflowsModal'
 import { ServerCard } from './ServerCard'
 import { useServers } from './useServers'
@@ -31,6 +32,7 @@ export function Servers() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [importPreview, setImportPreview] = useState<{ url: string; name?: string; tags?: string[] }[] | null>(null)
   const [editingServerUrl, setEditingServerUrl] = useState<string | null>(null)
+  const [jobsServerUrl, setJobsServerUrl] = useState<string | null>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -275,6 +277,7 @@ export function Servers() {
                         onViewLogs={s.setLogsServerUrl}
                         onCheck={s.checkServer}
                         onViewWorkflows={s.setWorkflowsServerUrl}
+                        onViewJobs={setJobsServerUrl}
                       />
                     )
                   })}
@@ -294,6 +297,13 @@ export function Servers() {
           serverAliases={s.serverAliases}
           workflows={s.workflows}
           onClose={() => s.setWorkflowsServerUrl(null)}
+        />
+      )}
+      {jobsServerUrl && (
+        <ServerJobsModal
+          serverUrl={jobsServerUrl}
+          serverAliases={s.serverAliases}
+          onClose={() => setJobsServerUrl(null)}
         />
       )}
       {s.addServerOpen && (

@@ -63,12 +63,13 @@ interface ServerCardProps {
   onViewLogs: (url: string) => void
   onCheck: (url: string) => void
   onViewWorkflows: (url: string) => void
+  onViewJobs: (url: string) => void
 }
 
 export function ServerCard({
   server, index, serverAliases, serverGroups, health, wfCount, isServerChecking,
   isDuplicate, queueDepth, showDragHandle,
-  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows,
+  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs,
 }: ServerCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const norm = server.replace(/\/$/, '')
@@ -183,9 +184,14 @@ export function ServerCard({
         )}
 
         {queueLabel && health?.healthy === true && (
-          <span className="server-card-queue" title="ComfyUI queue depth">
+          <button
+            type="button"
+            className="server-card-queue"
+            onClick={() => onViewJobs(norm)}
+            title="View current jobs on this server"
+          >
             {queueLabel}
-          </span>
+          </button>
         )}
 
         {health?.lastChecked ? (

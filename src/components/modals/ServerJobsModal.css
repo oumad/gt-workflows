@@ -1,0 +1,220 @@
+@import '../ui/Modal.css';
+@import '../ui/Buttons.css';
+@import '../ui/SpinnerIcon.css';
+
+.server-jobs-modal {
+  max-width: 680px;
+  width: 100%;
+}
+
+/* ── Header ── */
+.server-jobs-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.server-jobs-title-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.server-jobs-title-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-jobs-title-url {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-jobs-count {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.server-jobs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ── Body ── */
+.server-jobs-body {
+  padding: 1.25rem;
+}
+
+.server-jobs-loading {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem;
+}
+
+.server-jobs-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: icon-spinner-spin 0.8s linear infinite;
+}
+
+.server-jobs-error {
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 0.875rem;
+}
+
+/* ── Two columns ── */
+.server-jobs-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 520px) {
+  .server-jobs-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Section ── */
+.server-jobs-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.server-jobs-section--active {
+  border-top: 3px solid var(--activity-active, #22c55e);
+}
+
+.server-jobs-section--waiting {
+  border-top: 3px solid var(--activity-waiting, #f97316);
+}
+
+.server-jobs-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.6rem 0.875rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.server-jobs-section--active .server-jobs-section-title {
+  color: var(--activity-active, #16a34a);
+}
+
+.server-jobs-section--waiting .server-jobs-section-title {
+  color: var(--activity-waiting, #ea580c);
+}
+
+.server-jobs-section-count {
+  font-weight: 400;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.server-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.server-jobs-empty {
+  margin: 0;
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ── Mini job card ── */
+.server-job-mini-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--bg-primary);
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.server-job-mini-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.server-job-mini-card--active {
+  border-left-color: var(--activity-active, #22c55e);
+}
+
+.server-job-mini-card--waiting {
+  border-left-color: var(--activity-waiting, #f97316);
+}
+
+.server-job-mini-name {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-job-mini-user {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.server-job-mini-id {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 0.7rem;
+  font-family: ui-monospace, monospace;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 0.1rem;
+}

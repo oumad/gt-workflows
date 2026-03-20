@@ -627,12 +627,13 @@
   color: var(--accent);
 }
 
-/* Queue depth as a styled pill */
+/* Queue depth — clickable pill button */
 .server-card-queue {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   font-size: 0.71rem;
+  font-family: inherit;
   color: var(--success);
   background: color-mix(in srgb, var(--success) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
@@ -641,6 +642,13 @@
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.server-card-queue:hover {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
 }
 
 /* Timestamp + latency combined */
