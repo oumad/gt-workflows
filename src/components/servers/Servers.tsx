@@ -1,4 +1,5 @@
-import { Server, Plus, X, ListPlus, Activity, Search, Tag, ArrowUpDown, Timer, TimerOff } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Server, Plus, X, Activity, Loader2, Search, Tag, ArrowUpDown, Timer, TimerOff, Upload, Download, ChevronDown, AlertTriangle } from 'lucide-react'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
@@ -26,6 +27,36 @@ const SORT_LABELS: Record<SortBy, string> = {
 
 export function Servers() {
   const s = useServers()
+  const importRef = useRef<HTMLInputElement>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [importPreview, setImportPreview] = useState<{ url: string; name?: string; tags?: string[] }[] | null>(null)
+  const [editingServerUrl, setEditingServerUrl] = useState<string | null>(null)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    file.text().then((text) => {
+      try {
+        const parsed: unknown = JSON.parse(text)
+        if (!Array.isArray(parsed)) return
+        const entries = (parsed as unknown[])
+          .filter((e) => e && typeof e === 'object' && !Array.isArray(e) && typeof (e as Record<string, unknown>).url === 'string')
+          .map((e) => {
+            const entry = e as Record<string, unknown>
+            const rawTags = Array.isArray(entry.tags) ? entry.tags.filter((t) => typeof t === 'string') : []
+            return {
+              url: entry.url as string,
+              name: typeof entry.name === 'string' ? entry.name : undefined,
+              tags: rawTags.length > 0 ? rawTags as string[] : undefined,
+            }
+          })
+        if (entries.length > 0) setImportPreview(entries)
+      } catch {
+        // ignore invalid files
+      }
+    })
+  }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -57,9 +88,6 @@ export function Servers() {
           <button type="button" onClick={() => s.setAddServerOpen(true)} className="btn btn-toolbar">
             <Plus size={16} /> Add Server
           </button>
-          <button type="button" onClick={() => s.setBulkOpen((o) => !o)} className="btn btn-toolbar">
-            <ListPlus size={16} /> Add Multiple
-          </button>
           {s.displayServers.length > 0 && (
             <>
               <button
@@ -69,22 +97,58 @@ export function Servers() {
                 disabled={s.isChecking}
                 title="Check health of all servers"
               >
-                <Activity size={16} className={s.isChecking ? 'spin' : ''} />
+                {s.isChecking ? <Loader2 size={16} className="spin" /> : <Activity size={16} />}
                 {s.checkProgress
                   ? `${s.checkProgress.checked}/${s.checkProgress.total}`
                   : s.isChecking ? 'Checking…' : 'Check All'}
               </button>
               <button
                 type="button"
-                className={`btn btn-toolbar ${s.autoCheckEnabled ? 'btn-toolbar--active' : ''}`}
-                onClick={() => s.setAutoCheckEnabled((v) => !v)}
-                title={s.autoCheckEnabled ? 'Auto-check every 5 min (click to disable)' : 'Enable auto-check every 5 min'}
+                className={`btn btn-toolbar ${s.autoInterval ? 'btn-toolbar--active' : ''}`}
+                onClick={s.cycleAutoInterval}
+                title={s.autoInterval ? `Auto-check every ${s.autoInterval < 60 ? `${s.autoInterval}s` : `${s.autoInterval / 60}m`} — click to cycle` : 'Enable auto-check (30s / 1m / 5m)'}
               >
-                {s.autoCheckEnabled ? <Timer size={16} /> : <TimerOff size={16} />}
-                {s.autoCheckEnabled ? 'Auto 5m' : 'Auto'}
+                {s.autoInterval ? <Timer size={16} /> : <TimerOff size={16} />}
+                {s.autoInterval
+                  ? s.autoInterval < 60 ? `Auto ${s.autoInterval}s` : `Auto ${s.autoInterval / 60}m`
+                  : 'Auto'}
               </button>
             </>
           )}
+          <span className="servers-header-sep" />
+          <div className="servers-more-menu">
+            <button
+              type="button"
+              className={`btn btn-toolbar ${moreOpen ? 'btn-toolbar--active' : ''}`}
+              onClick={() => setMoreOpen((o) => !o)}
+              title="More actions"
+            >
+              More <ChevronDown size={13} />
+            </button>
+            {moreOpen && (
+              <>
+                <div className="servers-more-backdrop" onClick={() => setMoreOpen(false)} />
+                <div className="servers-more-dropdown">
+                  <button
+                    type="button"
+                    className="servers-more-item"
+                    onClick={() => { s.handleExport(); setMoreOpen(false) }}
+                    disabled={s.monitoredServers.length === 0}
+                  >
+                    <Download size={14} /> Export
+                  </button>
+                  <button
+                    type="button"
+                    className="servers-more-item"
+                    onClick={() => { importRef.current?.click(); setMoreOpen(false) }}
+                  >
+                    <Upload size={14} /> Import
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
       </header>
 
@@ -207,13 +271,10 @@ export function Servers() {
                         queueDepth={s.queueDepths[norm]}
                         showDragHandle={showDragHandle}
                         onRemove={s.handleRemoveServer}
-                        onUrlChange={s.handleServerUrlChange}
-                        onAliasChange={s.handleServerAliasChange}
-                        onGroupChange={s.handleServerGroupChange}
+                        onEdit={setEditingServerUrl}
                         onViewLogs={s.setLogsServerUrl}
                         onCheck={s.checkServer}
                         onViewWorkflows={s.setWorkflowsServerUrl}
-                        onEditDone={s.handleSave}
                       />
                     )
                   })}
@@ -223,25 +284,6 @@ export function Servers() {
           )}
         </>
       ) : null}
-
-      {s.bulkOpen && (
-        <div className="servers-bulk-panel">
-          <p className="servers-bulk-hint">
-            One entry per line — <code>url</code> or <code>url, display name</code>
-          </p>
-          <textarea
-            className="servers-bulk-textarea"
-            placeholder={`http://127.0.0.1:8188\nhttp://server2:8188, Production\nhttp://server3:8188, Staging`}
-            value={s.bulkText}
-            onChange={(e) => s.setBulkText(e.target.value)}
-            rows={5}
-          />
-          <div className="servers-bulk-actions">
-            <button type="button" onClick={s.handleBulkAdd} className="btn btn-primary">Add servers</button>
-            <button type="button" onClick={() => { s.setBulkOpen(false); s.setBulkText('') }} className="btn btn-secondary">Cancel</button>
-          </div>
-        </div>
-      )}
 
       {s.logsServerUrl && (
         <ServerLogsModal serverUrl={s.logsServerUrl} serverAliases={s.serverAliases} onClose={() => s.setLogsServerUrl(null)} />
@@ -260,6 +302,56 @@ export function Servers() {
           onConfirm={s.handleAddServerConfirm}
           onCancel={() => s.setAddServerOpen(false)}
         />
+      )}
+      {editingServerUrl && (
+        <AddServerModal
+          existingUrls={s.monitoredServers}
+          initialValues={{
+            url: editingServerUrl,
+            name: s.serverAliases[editingServerUrl],
+            tags: s.serverGroups[editingServerUrl.replace(/\/$/, '')],
+          }}
+          onConfirm={(result) => { s.handleEditServer(editingServerUrl, result); setEditingServerUrl(null) }}
+          onCancel={() => setEditingServerUrl(null)}
+        />
+      )}
+
+      {importPreview && (
+        <div className="modal-overlay" onClick={() => setImportPreview(null)}>
+          <div className="modal-content import-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><Upload size={18} /> Import Servers</h2>
+              <button type="button" className="modal-close" onClick={() => setImportPreview(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="import-confirm-warning">
+                <AlertTriangle size={16} />
+                <span>
+                  This will <strong>replace</strong> all {s.monitoredServers.length} current server{s.monitoredServers.length !== 1 ? 's' : ''} with the {importPreview.length} server{importPreview.length !== 1 ? 's' : ''} from the file.
+                </span>
+              </div>
+              <ul className="import-confirm-list">
+                {importPreview.map((e) => (
+                  <li key={e.url} className="import-confirm-entry">
+                    <span className="import-confirm-url">{e.url}</span>
+                    {e.name && <span className="import-confirm-meta">{e.name}</span>}
+                    {e.tags?.map((t) => <span key={t} className="import-confirm-tag">{t}</span>)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setImportPreview(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => { s.handleImport(importPreview); setImportPreview(null) }}
+              >
+                <Upload size={14} /> Import {importPreview.length} server{importPreview.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

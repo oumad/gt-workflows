@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Server, X, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, AlertTriangle, Cpu, Pencil, Check, GripVertical } from 'lucide-react'
+import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ServerHealthStatus, ServerSystemInfo } from '@/hooks/useServerHealthCheck'
@@ -51,7 +51,7 @@ interface ServerCardProps {
   server: string
   index: number
   serverAliases: Record<string, string>
-  serverGroups: Record<string, string>
+  serverGroups: Record<string, string[]>
   health: ServerHealthStatus | null
   wfCount: number
   isServerChecking: boolean
@@ -59,23 +59,20 @@ interface ServerCardProps {
   queueDepth?: QueueDepth
   showDragHandle: boolean
   onRemove: (index: number) => void
-  onUrlChange: (index: number, newUrl: string) => void
-  onAliasChange: (url: string, alias: string) => void
-  onGroupChange: (url: string, group: string) => void
+  onEdit: (url: string) => void
   onViewLogs: (url: string) => void
   onCheck: (url: string) => void
   onViewWorkflows: (url: string) => void
-  onEditDone: () => void
 }
 
 export function ServerCard({
   server, index, serverAliases, serverGroups, health, wfCount, isServerChecking,
   isDuplicate, queueDepth, showDragHandle,
-  onRemove, onUrlChange, onAliasChange, onGroupChange, onViewLogs, onCheck, onViewWorkflows, onEditDone,
+  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows,
 }: ServerCardProps) {
-  const [isEditing, setIsEditing] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const norm = server.replace(/\/$/, '')
+  const bareUrl = server.replace(/^https?:\/\//, '')
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: server })
   const style = {
@@ -100,7 +97,6 @@ export function ServerCard({
       ].filter(Boolean).join(' · ')
     : null
 
-  const invalidScheme = server.includes('://') && !server.startsWith('http://') && !server.startsWith('https://')
   const showSysInfo = health?.healthy === true && health.systemInfo &&
     (health.systemInfo.comfyVersion || health.systemInfo.gpuName)
 
@@ -110,19 +106,14 @@ export function ServerCard({
     : 'server-card-latency--error'
     : ''
 
-  function handleDone() {
-    setIsEditing(false)
-    onEditDone()
-  }
-
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`server-card ${healthClass} ${isDuplicate ? 'server-card--duplicate' : ''} ${isEditing ? 'server-card--editing' : ''}`}
+      className={`server-card ${healthClass} ${isDuplicate ? 'server-card--duplicate' : ''}`}
     >
       <div className="server-card-header">
-        {showDragHandle && !isEditing && (
+        {showDragHandle && (
           <div className="server-card-drag-handle" {...attributes} {...listeners} title="Drag to reorder">
             <GripVertical size={14} />
           </div>
@@ -135,33 +126,20 @@ export function ServerCard({
         </div>
         <div className="server-card-title-block">
           <span className="server-card-title" title={server}>
-            {serverAliases[server] || server.replace(/^https?:\/\//, '')}
+            {serverAliases[server] || bareUrl}
           </span>
-          {serverAliases[server] && (
-            <span className="server-card-url" title={server}>
-              {server.replace(/^https?:\/\//, '')}
-            </span>
-          )}
+          <span className="server-card-url" title={server}>
+            {bareUrl}
+          </span>
         </div>
-        {serverGroups[norm] && (
-          <span className="server-card-group-badge" title={`Tag: ${serverGroups[norm]}`}>
-            {serverGroups[norm]}
-          </span>
-        )}
         {isDuplicate && (
           <span className="server-card-duplicate-badge" title="Duplicate URL">
             <AlertTriangle size={14} />
           </span>
         )}
-        {isEditing ? (
-          <button type="button" className="server-card-edit-btn server-card-edit-btn--done" onClick={handleDone} title="Done editing">
-            <Check size={14} />
-          </button>
-        ) : (
-          <button type="button" className="server-card-edit-btn" onClick={() => setIsEditing(true)} title="Edit server">
-            <Pencil size={13} />
-          </button>
-        )}
+        <button type="button" className="server-card-edit-btn" onClick={() => onEdit(server)} title="Edit server">
+          <Pencil size={13} />
+        </button>
         {confirmRemove ? (
           <div className="server-card-remove-confirm">
             <span className="server-card-remove-label">Remove?</span>
@@ -179,47 +157,13 @@ export function ServerCard({
         )}
       </div>
 
-      {isEditing && (
-        <div className="server-card-body">
-          <div className="server-card-field">
-            <label className="server-card-label">URL</label>
-            <input
-              type="text"
-              value={server}
-              onChange={(e) => onUrlChange(index, e.target.value)}
-              placeholder="http://127.0.0.1:8188"
-              className={`server-card-input${isDuplicate ? ' server-card-input--duplicate' : ''}${invalidScheme ? ' server-card-input--invalid' : ''}`}
-              aria-label="Server URL"
-              autoFocus
-            />
-          </div>
-          {invalidScheme && (
-            <p className="server-card-scheme-error">
-              <AlertTriangle size={12} /> Only http:// and https:// are allowed
-            </p>
-          )}
-          <div className="server-card-field">
-            <label className="server-card-label">Name</label>
-            <input
-              type="text"
-              value={serverAliases[server] || ''}
-              onChange={(e) => onAliasChange(server, e.target.value)}
-              placeholder="Optional display name"
-              className="server-card-input"
-              aria-label="Display name"
-            />
-          </div>
-          <div className="server-card-field">
-            <label className="server-card-label">Tag</label>
-            <input
-              type="text"
-              value={serverGroups[norm] || ''}
-              onChange={(e) => onGroupChange(norm, e.target.value)}
-              placeholder="e.g. production"
-              className="server-card-input"
-              aria-label="Group tag"
-            />
-          </div>
+      {(serverGroups[norm] ?? []).length > 0 && (
+        <div className="server-card-tags">
+          {(serverGroups[norm] ?? []).map((tag) => (
+            <span key={tag} className="server-card-group-badge" title={`Tag: ${tag}`}>
+              {tag}
+            </span>
+          ))}
         </div>
       )}
 
@@ -266,7 +210,7 @@ export function ServerCard({
             <FileText size={14} />
           </button>
           <button type="button" className="server-action-btn" onClick={() => onCheck(norm)} disabled={isServerChecking} title="Check server health">
-            <Activity size={14} className={isServerChecking ? 'spin' : ''} />
+            {isServerChecking ? <Loader2 size={14} className="spin" /> : <Activity size={14} />}
           </button>
         </div>
       </div>

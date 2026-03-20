@@ -1,6 +1,31 @@
 import { Router } from 'express';
 import { readPreferences, writePreferences, patchWorkflowDetailUIEntry } from '../lib/preferencesFs.js';
 
+/** Migrate serverGroups: old format was Record<string, string>, new is Record<string, string[]>. */
+function migrateServerGroups(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result = Object.create(null);
+  for (const [key, val] of Object.entries(raw)) {
+    if (Array.isArray(val)) result[key] = val.filter((t) => typeof t === 'string' && t.trim());
+    else if (typeof val === 'string' && val.trim()) result[key] = [val.trim()];
+  }
+  return result;
+}
+
+function buildPreferencesResponse(prefs) {
+  return {
+    anonymiseUsers: Boolean(prefs.anonymiseUsers),
+    serversOpen: Boolean(prefs.serversOpen),
+    userDetailsOpen: Boolean(prefs.userDetailsOpen),
+    monitoredServers: Array.isArray(prefs.monitoredServers) ? prefs.monitoredServers : [],
+    expandedCategories: Array.isArray(prefs.expandedCategories) ? prefs.expandedCategories : [],
+    workflowDetailUI: (prefs.workflowDetailUI && typeof prefs.workflowDetailUI === 'object') ? prefs.workflowDetailUI : {},
+    workflowsInfo: Array.isArray(prefs.workflowsInfo) ? prefs.workflowsInfo : [],
+    serverAliases: (prefs.serverAliases && typeof prefs.serverAliases === 'object' && !Array.isArray(prefs.serverAliases)) ? prefs.serverAliases : {},
+    serverGroups: migrateServerGroups(prefs.serverGroups),
+  };
+}
+
 export function createPreferencesRouter(config) {
   const { preferencesPath } = config;
   const router = Router();
@@ -10,25 +35,7 @@ export function createPreferencesRouter(config) {
     const userId = req.authUsername || 'default';
     try {
       const prefs = await readPreferences(preferencesPath, userId);
-      const monitoredServers = Array.isArray(prefs.monitoredServers) ? prefs.monitoredServers : [];
-      const expandedCategories = Array.isArray(prefs.expandedCategories) ? prefs.expandedCategories : [];
-      const workflowDetailUI =
-        prefs.workflowDetailUI && typeof prefs.workflowDetailUI === 'object' ? prefs.workflowDetailUI : {};
-      const workflowsInfo = Array.isArray(prefs.workflowsInfo) ? prefs.workflowsInfo : [];
-      const serverAliases =
-        prefs.serverAliases && typeof prefs.serverAliases === 'object' && !Array.isArray(prefs.serverAliases)
-          ? prefs.serverAliases
-          : {};
-      res.json({
-        anonymiseUsers: Boolean(prefs.anonymiseUsers),
-        serversOpen: Boolean(prefs.serversOpen),
-        userDetailsOpen: Boolean(prefs.userDetailsOpen),
-        monitoredServers,
-        expandedCategories,
-        workflowDetailUI,
-        workflowsInfo,
-        serverAliases,
-      });
+      res.json(buildPreferencesResponse(prefs));
     } catch (err) {
       console.error('Preferences read error:', err.message);
       res.status(500).json({ error: 'Failed to read preferences' });
@@ -76,6 +83,9 @@ export function createPreferencesRouter(config) {
       }
       partial.serverAliases = sanitized;
     }
+    if (body.serverGroups != null && typeof body.serverGroups === 'object' && !Array.isArray(body.serverGroups)) {
+      partial.serverGroups = migrateServerGroups(body.serverGroups);
+    }
     if (Array.isArray(body.workflowsInfo)) {
       partial.workflowsInfo = body.workflowsInfo
         .filter(
@@ -101,23 +111,7 @@ export function createPreferencesRouter(config) {
     }
     try {
       const merged = await writePreferences(preferencesPath, userId, partial);
-      const monitoredServers = Array.isArray(merged.monitoredServers) ? merged.monitoredServers : [];
-      const expandedCategories = Array.isArray(merged.expandedCategories) ? merged.expandedCategories : [];
-      const workflowDetailUI =
-        merged.workflowDetailUI && typeof merged.workflowDetailUI === 'object' ? merged.workflowDetailUI : {};
-      const workflowsInfo = Array.isArray(merged.workflowsInfo) ? merged.workflowsInfo : [];
-      const serverAliases =
-        merged.serverAliases && typeof merged.serverAliases === 'object' ? merged.serverAliases : {};
-      res.json({
-        anonymiseUsers: Boolean(merged.anonymiseUsers),
-        serversOpen: Boolean(merged.serversOpen),
-        userDetailsOpen: Boolean(merged.userDetailsOpen),
-        monitoredServers,
-        expandedCategories,
-        workflowDetailUI,
-        workflowsInfo,
-        serverAliases,
-      });
+      res.json(buildPreferencesResponse(merged));
     } catch (err) {
       console.error('Preferences write error:', err.message);
       res.status(500).json({ error: 'Failed to save preferences' });

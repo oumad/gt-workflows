@@ -11,6 +11,9 @@ import { fetchQueueDepth, type QueueDepth } from '@/services/api/servers'
 export type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unchecked'
 export type SortBy = 'default' | 'name' | 'status' | 'latency'
 
+const AUTO_INTERVALS = [30, 60, 300, null] as const
+export type AutoInterval = 30 | 60 | 300 | null
+
 // Status priority for sort: needs-attention first
 const STATUS_SORT_ORDER = (healthy: boolean | null | undefined): number => {
   if (healthy === false) return 0   // unhealthy — needs attention now
@@ -42,34 +45,30 @@ export function useServers() {
   const [savedServers, setSavedServers] = useState<string[]>([])
   const [savedAliases, setSavedAliases] = useState<Record<string, string>>({})
   const [prefsLoaded, setPrefsLoaded] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [bulkOpen, setBulkOpen] = useState(false)
-  const [bulkText, setBulkText] = useState('')
   const [logsServerUrl, setLogsServerUrl] = useState<string | null>(null)
   const [addServerOpen, setAddServerOpen] = useState(false)
   const [workflowsServerUrl, setWorkflowsServerUrl] = useState<string | null>(null)
   const [serverSearch, setServerSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [queueDepths, setQueueDepths] = useState<Record<string, QueueDepth>>({})
-  const [serverGroups, setServerGroups] = useState<Record<string, string>>({})
-  const [savedGroups, setSavedGroups] = useState<Record<string, string>>({})
+  const [serverGroups, setServerGroups] = useState<Record<string, string[]>>({})
+  const [savedGroups, setSavedGroups] = useState<Record<string, string[]>>({})
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortBy>('default')
-  const [autoCheckEnabled, setAutoCheckEnabled] = useState(false)
+  const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
 
-  const hasChanges = useMemo(() => {
-    if (monitoredServers.length !== savedServers.length) return true
-    if (monitoredServers.some((v, i) => v !== savedServers[i])) return true
-    const ak = Object.keys(serverAliases), sk = Object.keys(savedAliases)
-    if (ak.length !== sk.length) return true
-    if (ak.some((k) => serverAliases[k] !== savedAliases[k])) return true
-    const gk = Object.keys(serverGroups), sgk = Object.keys(savedGroups)
-    if (gk.length !== sgk.length) return true
-    return gk.some((k) => serverGroups[k] !== savedGroups[k])
-  }, [monitoredServers, savedServers, serverAliases, savedAliases, serverGroups, savedGroups])
+  const cycleAutoInterval = useCallback(() => {
+    setAutoInterval((cur) => {
+      const idx = AUTO_INTERVALS.indexOf(cur)
+      return AUTO_INTERVALS[(idx + 1) % AUTO_INTERVALS.length]
+    })
+  }, [])
 
   const { workflows } = useWorkflows()
-  const displayServers = !prefsLoaded ? getSettings().monitoredServers : monitoredServers
+  const displayServers = useMemo(
+    () => (!prefsLoaded ? getSettings().monitoredServers : monitoredServers),
+    [prefsLoaded, monitoredServers],
+  )
   const { getHealthStatus, checkAllServers, checkServer, isChecking, checkProgress } = useServerHealthCheck(displayServers, { enabled: true })
 
   useEffect(() => {
@@ -110,19 +109,12 @@ export function useServers() {
     return () => clearInterval(id)
   }, [displayServers])
 
-  // Auto-check health every 5 minutes when enabled
+  // Auto-check health at the selected interval
   useEffect(() => {
-    if (!autoCheckEnabled || displayServers.length === 0) return
-    const id = setInterval(() => { handleCheckAllServersRef.current() }, 5 * 60_000)
+    if (!autoInterval || displayServers.length === 0) return
+    const id = setInterval(() => { handleCheckAllServersRef.current() }, autoInterval * 1000)
     return () => clearInterval(id)
-  }, [autoCheckEnabled, displayServers.length])
-
-  useEffect(() => {
-    if (saved) {
-      const timer = setTimeout(() => setSaved(false), 2500)
-      return () => clearTimeout(timer)
-    }
-  }, [saved])
+  }, [autoInterval, displayServers.length])
 
   const handleCheckServer = useCallback(async (url: string) => {
     await checkServer(url)
@@ -147,14 +139,13 @@ export function useServers() {
   const handleSave = async (
     servers: string[] = monitoredServers,
     aliases: Record<string, string> = serverAliases,
-    groups: Record<string, string> = serverGroups,
+    groups: Record<string, string[]> = serverGroups,
   ) => {
     try {
       await updatePreferences({ monitoredServers: servers, serverAliases: aliases, serverGroups: groups })
       setSavedServers(servers)
       setSavedAliases(aliases)
       setSavedGroups(groups)
-      setSaved(true)
       invalidatePreferences()
       window.dispatchEvent(new Event('settingsUpdated'))
     } catch {
@@ -162,13 +153,14 @@ export function useServers() {
     }
   }
 
-  const handleAddServerConfirm = async (result: { url: string; name?: string; group?: string }) => {
-    const { url, name, group } = result
+  const handleAddServerConfirm = async (result: { url: string; name?: string; tags?: string[] }) => {
+    const { url, name, tags } = result
     setAddServerOpen(false)
     if (!monitoredServers.includes(url)) {
       const newServers = [...monitoredServers, url]
       const newAliases = name ? { ...serverAliases, [url]: name } : serverAliases
-      const newGroups = group ? { ...serverGroups, [url]: group } : serverGroups
+      const norm = url.replace(/\/$/, '')
+      const newGroups = tags && tags.length > 0 ? { ...serverGroups, [norm]: tags } : serverGroups
       setMonitoredServers(newServers)
       setServerAliases(newAliases)
       setServerGroups(newGroups)
@@ -176,48 +168,71 @@ export function useServers() {
     }
   }
 
-  const handleBulkAdd = async () => {
-    const entries: { url: string; name?: string }[] = []
-    for (const line of bulkText.split(/\n/)) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const commaIdx = trimmed.indexOf(',')
-      let url: string
-      let name: string | undefined
-      if (commaIdx >= 0) {
-        url = normalizeServerUrl(trimmed.slice(0, commaIdx))
-        const namePart = trimmed.slice(commaIdx + 1).trim()
-        name = namePart || undefined
-      } else {
-        url = normalizeServerUrl(trimmed)
-      }
-      if (url) entries.push({ url, name })
+  const handleExport = () => {
+    const entries = monitoredServers.map((url) => {
+      const norm = url.replace(/\/$/, '')
+      const entry: { url: string; name?: string; tags?: string[] } = { url }
+      if (serverAliases[url]) entry.name = serverAliases[url]
+      if (serverGroups[norm]?.length) entry.tags = serverGroups[norm]
+      return entry
+    })
+    const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'servers.json'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const handleImport = async (entries: { url: string; name?: string; tags?: string[] }[]) => {
+    const newServers: string[] = []
+    const newAliases: Record<string, string> = {}
+    const newGroups: Record<string, string[]> = {}
+    const seen = new Set<string>()
+    for (const entry of entries) {
+      const url = normalizeServerUrl(entry.url)
+      if (!url || seen.has(url)) continue
+      seen.add(url)
+      newServers.push(url)
+      if (entry.name?.trim()) newAliases[url] = entry.name.trim()
+      const tags = entry.tags?.filter((t) => t.trim()) ?? []
+      if (tags.length > 0) newGroups[url.replace(/\/$/, '')] = tags
     }
-    const existing = new Set(monitoredServers)
-    const uniqueNewUrls = new Set<string>()
-    for (const e of entries) { if (e.url && !existing.has(e.url)) uniqueNewUrls.add(e.url) }
-    const newUrls = Array.from(uniqueNewUrls)
-    const newNames: Record<string, string> = {}
-    for (const e of entries) { if (e.name && uniqueNewUrls.has(e.url)) newNames[e.url] = e.name }
-    setBulkText('')
-    setBulkOpen(false)
-    if (newUrls.length > 0) {
-      const newServers = [...monitoredServers, ...newUrls]
-      const newAliases = Object.keys(newNames).length > 0 ? { ...serverAliases, ...newNames } : serverAliases
-      setMonitoredServers(newServers)
-      setServerAliases(newAliases)
-      await handleSave(newServers, newAliases)
-    }
+    setMonitoredServers(newServers)
+    setServerAliases(newAliases)
+    setServerGroups(newGroups)
+    await handleSave(newServers, newAliases, newGroups)
+  }
+
+  const handleEditServer = async (oldUrl: string, result: { url: string; name?: string; tags?: string[] }) => {
+    const { url: newUrl, name, tags } = result
+    const index = monitoredServers.indexOf(oldUrl)
+    if (index < 0) return
+    const newServers = [...monitoredServers]
+    newServers[index] = newUrl
+    const oldNorm = oldUrl.replace(/\/$/, '')
+    const newNorm = newUrl.replace(/\/$/, '')
+    const newAliases = { ...serverAliases }
+    delete newAliases[oldUrl]
+    if (name) newAliases[newUrl] = name
+    const newGroups = { ...serverGroups }
+    delete newGroups[oldNorm]
+    if (tags && tags.length > 0) newGroups[newNorm] = tags
+    setMonitoredServers(newServers)
+    setServerAliases(newAliases)
+    setServerGroups(newGroups)
+    await handleSave(newServers, newAliases, newGroups)
   }
 
   const handleRemoveServer = (index: number) => {
     const url = monitoredServers[index]
+    const norm = url.replace(/\/$/, '')
     setMonitoredServers(monitoredServers.filter((_, i) => i !== index))
     const nextAliases = { ...serverAliases }
     delete nextAliases[url]
     setServerAliases(nextAliases)
     const nextGroups = { ...serverGroups }
-    delete nextGroups[url]
+    delete nextGroups[norm]
     setServerGroups(nextGroups)
   }
 
@@ -242,10 +257,10 @@ export function useServers() {
     }
   }
 
-  const handleServerGroupChange = (url: string, group: string) => {
+  const handleServerGroupChange = (url: string, tags: string[]) => {
     setServerGroups((prev) => {
       const next = { ...prev }
-      if (group.trim()) next[url] = group.trim()
+      if (tags.length > 0) next[url] = tags
       else delete next[url]
       return next
     })
@@ -312,8 +327,8 @@ export function useServers() {
     const groups = new Set<string>()
     for (const url of displayServers) {
       const norm = url.replace(/\/$/, '')
-      const group = serverGroups[norm] || serverGroups[url]
-      if (group) groups.add(group)
+      const tags = serverGroups[norm] ?? serverGroups[url] ?? []
+      for (const t of tags) if (t) groups.add(t)
     }
     return Array.from(groups).sort()
   }, [displayServers, serverGroups])
@@ -333,8 +348,8 @@ export function useServers() {
         if (statusFilter === 'unchecked' && h != null && h.healthy !== null) return false
       }
       if (groupFilter !== null) {
-        const group = serverGroups[norm] || serverGroups[server]
-        if (group !== groupFilter) return false
+        const tags = serverGroups[norm] ?? serverGroups[server] ?? []
+        if (!tags.includes(groupFilter)) return false
       }
       return true
     })
@@ -362,8 +377,7 @@ export function useServers() {
   }, [displayServers, serverSearch, statusFilter, serverAliases, getHealthStatus, groupFilter, serverGroups, sortBy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
-    monitoredServers, serverAliases, serverGroups, prefsLoaded, saved, hasChanges,
-    bulkOpen, setBulkOpen, bulkText, setBulkText,
+    monitoredServers, serverAliases, serverGroups, prefsLoaded,
     logsServerUrl, setLogsServerUrl,
     addServerOpen, setAddServerOpen,
     workflowsServerUrl, setWorkflowsServerUrl,
@@ -373,7 +387,7 @@ export function useServers() {
     groupFilter, setGroupFilter,
     uniqueGroups,
     sortBy, setSortBy,
-    autoCheckEnabled, setAutoCheckEnabled,
+    autoInterval, cycleAutoInterval,
     statusCounts,
     duplicateUrls,
     queueDepths,
@@ -384,7 +398,7 @@ export function useServers() {
     checkProgress,
     workflowCountPerServer,
     workflows,
-    handleSave, handleAddServerConfirm, handleBulkAdd,
-    handleRemoveServer, handleServerUrlChange, handleServerAliasChange, handleServerGroupChange, handleReorder,
+    handleSave, handleAddServerConfirm, handleEditServer, handleExport, handleImport,
+    handleRemoveServer, handleReorder,
   }
 }
