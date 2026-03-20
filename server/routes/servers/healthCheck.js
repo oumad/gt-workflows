@@ -8,6 +8,13 @@ const HEALTH_CHECK_ENDPOINTS = [
   { path: '/object_info', name: 'object_info', method: 'POST' },
 ];
 
+function parseGpuName(rawName) {
+  if (!rawName || typeof rawName !== 'string') return undefined;
+  // e.g. "cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync" -> "NVIDIA GeForce RTX 4090"
+  const cleaned = rawName.replace(/^[^:]+:\d+\s+/, '').replace(/\s*:[^:]*$/, '').trim();
+  return cleaned || undefined;
+}
+
 export function createHealthCheckRouter() {
   const router = Router();
 
@@ -115,20 +122,37 @@ export function createHealthCheckRouter() {
             fetchOptions.headers['Content-Type'] = 'application/json';
             fetchOptions.body = JSON.stringify({});
           }
+          const startMs = Date.now();
           const response = await fetch(healthCheckUrl, fetchOptions);
           clearTimeout(timeoutId);
+          const latencyMs = Date.now() - startMs;
           lastStatus = response.status;
           if (response.status >= 400) {
             console.log(`[Health Check] ${endpoint.name} returned ${response.status} for ${normalizedUrl}`);
           }
           if (response.status < 500) {
             const isHealthy = response.status >= 200 && response.status < 400;
+            let systemInfo = null;
+            if (endpoint.name === 'system_stats' && isHealthy) {
+              try {
+                const statsData = await response.json();
+                const device = Array.isArray(statsData.devices) ? statsData.devices[0] : null;
+                systemInfo = {
+                  comfyVersion: typeof statsData.system?.comfyui_version === 'string' ? statsData.system.comfyui_version : undefined,
+                  gpuName: device ? parseGpuName(device.name) : undefined,
+                  vramTotal: typeof device?.vram_total === 'number' ? device.vram_total : undefined,
+                  vramFree: typeof device?.vram_free === 'number' ? device.vram_free : undefined,
+                };
+              } catch { /* ignore parse errors */ }
+            }
             return res.json({
               healthy: isHealthy,
               serverUrl: normalizedUrl,
               status: response.status,
               endpoint: endpoint.name,
               timestamp: new Date().toISOString(),
+              latencyMs,
+              ...(systemInfo ? { systemInfo } : {}),
               ...(response.status >= 400 && response.status < 500
                 ? { warning: `Endpoint returned ${response.status}, server may require authentication or endpoint may not be available` }
                 : {}),

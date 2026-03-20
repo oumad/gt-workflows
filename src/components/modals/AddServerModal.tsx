@@ -5,6 +5,7 @@ import './AddServerModal.css'
 export interface AddServerResult {
   url: string
   name?: string
+  group?: string
 }
 
 interface AddServerModalProps {
@@ -16,6 +17,8 @@ interface AddServerModalProps {
 function normalizeUrl(value: string): string {
   let u = value.trim()
   if (!u) return ''
+  // If it already has a non-http scheme, leave it as-is so validation can catch it
+  if (u.includes('://') && !u.startsWith('http://') && !u.startsWith('https://')) return u.replace(/\/$/, '')
   if (!u.startsWith('http://') && !u.startsWith('https://')) u = `http://${u}`
   return u.replace(/\/$/, '')
 }
@@ -27,6 +30,7 @@ export default function AddServerModal({
 }: AddServerModalProps) {
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
+  const [group, setGroup] = useState('')
   const [urlError, setUrlError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -37,6 +41,10 @@ export default function AddServerModal({
       setUrlError('URL is required')
       return
     }
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      setUrlError('Only http:// and https:// URLs are allowed')
+      return
+    }
     if (existingUrls.includes(normalized)) {
       setUrlError('This server is already in the list')
       return
@@ -44,6 +52,7 @@ export default function AddServerModal({
     onConfirm({
       url: normalized,
       name: name.trim() || undefined,
+      group: group.trim() || undefined,
     })
   }
 
@@ -92,6 +101,18 @@ export default function AddServerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Local ComfyUI"
+              className="add-server-input"
+              autoComplete="off"
+            />
+          </div>
+          <div className="add-server-field">
+            <label htmlFor="add-server-group">Tag (optional)</label>
+            <input
+              id="add-server-group"
+              type="text"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              placeholder="e.g. production"
               className="add-server-input"
               autoComplete="off"
             />

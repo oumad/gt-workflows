@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { arrayMove } from '@dnd-kit/sortable'
 import { getSettings } from '@/utils/settings'
 import { updatePreferences } from '@/services/api/preferences'
 import { usePreferences } from '@/hooks/usePreferences'
@@ -8,12 +9,29 @@ import { getServerUrls } from '@/utils/serverUrl'
 import { fetchQueueDepth, type QueueDepth } from '@/services/api/servers'
 
 export type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unchecked'
+export type SortBy = 'default' | 'name' | 'status' | 'latency'
+
+// Status priority for sort: needs-attention first
+const STATUS_SORT_ORDER = (healthy: boolean | null | undefined): number => {
+  if (healthy === false) return 0   // unhealthy — needs attention now
+  if (healthy === null) return 1    // checking
+  if (healthy === undefined) return 2 // unchecked
+  return 3                          // healthy
+}
 
 export function normalizeServerUrl(s: string): string {
   let u = s.trim()
   if (!u) return ''
-  if (!u.startsWith('http://') && !u.startsWith('https://')) u = `http://${u}`
+  if (!u.startsWith('http://') && !u.startsWith('https://')) {
+    if (!u.includes('://')) u = `http://${u}`
+  }
   return u.replace(/\/$/, '')
+}
+
+export function hasInvalidScheme(url: string): boolean {
+  const u = url.trim()
+  if (!u || !u.includes('://')) return false
+  return !u.startsWith('http://') && !u.startsWith('https://')
 }
 
 export function useServers() {
@@ -33,30 +51,71 @@ export function useServers() {
   const [serverSearch, setServerSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [queueDepths, setQueueDepths] = useState<Record<string, QueueDepth>>({})
+  const [serverGroups, setServerGroups] = useState<Record<string, string>>({})
+  const [savedGroups, setSavedGroups] = useState<Record<string, string>>({})
+  const [groupFilter, setGroupFilter] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<SortBy>('default')
+  const [autoCheckEnabled, setAutoCheckEnabled] = useState(false)
 
   const hasChanges = useMemo(() => {
     if (monitoredServers.length !== savedServers.length) return true
     if (monitoredServers.some((v, i) => v !== savedServers[i])) return true
     const ak = Object.keys(serverAliases), sk = Object.keys(savedAliases)
     if (ak.length !== sk.length) return true
-    return ak.some((k) => serverAliases[k] !== savedAliases[k])
-  }, [monitoredServers, savedServers, serverAliases, savedAliases])
+    if (ak.some((k) => serverAliases[k] !== savedAliases[k])) return true
+    const gk = Object.keys(serverGroups), sgk = Object.keys(savedGroups)
+    if (gk.length !== sgk.length) return true
+    return gk.some((k) => serverGroups[k] !== savedGroups[k])
+  }, [monitoredServers, savedServers, serverAliases, savedAliases, serverGroups, savedGroups])
 
   const { workflows } = useWorkflows()
   const displayServers = !prefsLoaded ? getSettings().monitoredServers : monitoredServers
-  const { getHealthStatus, checkAllServers, checkServer, isChecking } = useServerHealthCheck(displayServers, { enabled: true })
+  const { getHealthStatus, checkAllServers, checkServer, isChecking, checkProgress } = useServerHealthCheck(displayServers, { enabled: true })
 
   useEffect(() => {
     if (!preferences || prefsInitialized.current) return
     prefsInitialized.current = true
     const list = preferences.monitoredServers ?? getSettings().monitoredServers
     const aliases = preferences.serverAliases ?? {}
+    const groups = preferences.serverGroups ?? {}
     setMonitoredServers(list)
     setServerAliases(aliases)
+    setServerGroups(groups)
     setSavedServers(list)
     setSavedAliases(aliases)
+    setSavedGroups(groups)
     setPrefsLoaded(true)
   }, [preferences])
+
+  // Stable refs so polling intervals don't reset on every render
+  const getHealthStatusRef = useRef(getHealthStatus)
+  useEffect(() => { getHealthStatusRef.current = getHealthStatus }, [getHealthStatus])
+
+  const handleCheckAllServersRef = useRef<() => Promise<void>>(async () => {})
+
+  // Auto-poll queue depths for healthy servers every 30 seconds
+  useEffect(() => {
+    if (displayServers.length === 0) return
+    const poll = () => {
+      const urls = [...new Set(displayServers.map((s) => s.replace(/\/$/, '')))]
+      for (const url of urls) {
+        if (getHealthStatusRef.current(url)?.healthy === true) {
+          fetchQueueDepth(url)
+            .then((depth) => setQueueDepths((prev) => ({ ...prev, [url]: depth })))
+            .catch(() => {})
+        }
+      }
+    }
+    const id = setInterval(poll, 30_000)
+    return () => clearInterval(id)
+  }, [displayServers])
+
+  // Auto-check health every 5 minutes when enabled
+  useEffect(() => {
+    if (!autoCheckEnabled || displayServers.length === 0) return
+    const id = setInterval(() => { handleCheckAllServersRef.current() }, 5 * 60_000)
+    return () => clearInterval(id)
+  }, [autoCheckEnabled, displayServers.length])
 
   useEffect(() => {
     if (saved) {
@@ -65,7 +124,6 @@ export function useServers() {
     }
   }, [saved])
 
-  // Wrap checkServer to also fetch queue depth afterward
   const handleCheckServer = useCallback(async (url: string) => {
     await checkServer(url)
     fetchQueueDepth(url)
@@ -73,7 +131,6 @@ export function useServers() {
       .catch(() => {})
   }, [checkServer])
 
-  // Wrap checkAllServers to also fetch queue depths afterward
   const handleCheckAllServers = useCallback(async () => {
     await checkAllServers()
     const uniqueUrls = [...new Set(displayServers.map((s) => s.replace(/\/$/, '')))]
@@ -84,14 +141,19 @@ export function useServers() {
     }
   }, [checkAllServers, displayServers])
 
+  // Keep ref in sync for auto-check interval
+  useEffect(() => { handleCheckAllServersRef.current = handleCheckAllServers }, [handleCheckAllServers])
+
   const handleSave = async (
     servers: string[] = monitoredServers,
     aliases: Record<string, string> = serverAliases,
+    groups: Record<string, string> = serverGroups,
   ) => {
     try {
-      await updatePreferences({ monitoredServers: servers, serverAliases: aliases })
+      await updatePreferences({ monitoredServers: servers, serverAliases: aliases, serverGroups: groups })
       setSavedServers(servers)
       setSavedAliases(aliases)
+      setSavedGroups(groups)
       setSaved(true)
       invalidatePreferences()
       window.dispatchEvent(new Event('settingsUpdated'))
@@ -100,15 +162,17 @@ export function useServers() {
     }
   }
 
-  const handleAddServerConfirm = async (result: { url: string; name?: string }) => {
-    const { url, name } = result
+  const handleAddServerConfirm = async (result: { url: string; name?: string; group?: string }) => {
+    const { url, name, group } = result
     setAddServerOpen(false)
     if (!monitoredServers.includes(url)) {
       const newServers = [...monitoredServers, url]
       const newAliases = name ? { ...serverAliases, [url]: name } : serverAliases
+      const newGroups = group ? { ...serverGroups, [url]: group } : serverGroups
       setMonitoredServers(newServers)
       setServerAliases(newAliases)
-      await handleSave(newServers, newAliases)
+      setServerGroups(newGroups)
+      await handleSave(newServers, newAliases, newGroups)
     }
   }
 
@@ -149,11 +213,12 @@ export function useServers() {
   const handleRemoveServer = (index: number) => {
     const url = monitoredServers[index]
     setMonitoredServers(monitoredServers.filter((_, i) => i !== index))
-    if (serverAliases[url]) {
-      const next = { ...serverAliases }
-      delete next[url]
-      setServerAliases(next)
-    }
+    const nextAliases = { ...serverAliases }
+    delete nextAliases[url]
+    setServerAliases(nextAliases)
+    const nextGroups = { ...serverGroups }
+    delete nextGroups[url]
+    setServerGroups(nextGroups)
   }
 
   const handleServerUrlChange = (index: number, newUrl: string) => {
@@ -163,11 +228,27 @@ export function useServers() {
     updated[index] = normalized
     setMonitoredServers(updated)
     if (serverAliases[oldUrl] && oldUrl !== normalized) {
-      const next = { ...serverAliases }
-      delete next[oldUrl]
-      if (normalized) next[normalized] = serverAliases[oldUrl]
-      setServerAliases(next)
+      const nextAliases = { ...serverAliases }
+      delete nextAliases[oldUrl]
+      if (normalized) nextAliases[normalized] = serverAliases[oldUrl]
+      setServerAliases(nextAliases)
     }
+    if (serverGroups[oldUrl] && oldUrl !== normalized) {
+      const nextGroups = { ...serverGroups }
+      const group = nextGroups[oldUrl]
+      delete nextGroups[oldUrl]
+      if (normalized) nextGroups[normalized] = group
+      setServerGroups(nextGroups)
+    }
+  }
+
+  const handleServerGroupChange = (url: string, group: string) => {
+    setServerGroups((prev) => {
+      const next = { ...prev }
+      if (group.trim()) next[url] = group.trim()
+      else delete next[url]
+      return next
+    })
   }
 
   const handleServerAliasChange = (url: string, alias: string) => {
@@ -178,6 +259,17 @@ export function useServers() {
       return next
     })
   }
+
+  // Drag-to-reorder: reorder monitoredServers and immediately persist
+  const handleReorder = useCallback((activeId: string, overId: string) => {
+    const activeIdx = monitoredServers.indexOf(activeId)
+    const overIdx = monitoredServers.indexOf(overId)
+    if (activeIdx < 0 || overIdx < 0 || activeIdx === overIdx) return
+    const reordered = arrayMove(monitoredServers, activeIdx, overIdx)
+    setMonitoredServers(reordered)
+    setSavedServers(reordered)
+    updatePreferences({ monitoredServers: reordered, serverAliases, serverGroups }).catch(() => {})
+  }, [monitoredServers, serverAliases, serverGroups])
 
   const workflowCountPerServer = useMemo(() => {
     const map: Record<string, number> = {}
@@ -216,8 +308,18 @@ export function useServers() {
     return { all: displayServers.length, healthy, unhealthy, unchecked }
   }, [displayServers, getHealthStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const uniqueGroups = useMemo(() => {
+    const groups = new Set<string>()
+    for (const url of displayServers) {
+      const norm = url.replace(/\/$/, '')
+      const group = serverGroups[norm] || serverGroups[url]
+      if (group) groups.add(group)
+    }
+    return Array.from(groups).sort()
+  }, [displayServers, serverGroups])
+
   const filteredServers = useMemo(() => {
-    return displayServers.filter((server) => {
+    const filtered = displayServers.filter((server) => {
       const norm = server.replace(/\/$/, '')
       if (serverSearch) {
         const q = serverSearch.toLowerCase()
@@ -230,12 +332,37 @@ export function useServers() {
         if (statusFilter === 'unhealthy' && h?.healthy !== false) return false
         if (statusFilter === 'unchecked' && h != null && h.healthy !== null) return false
       }
+      if (groupFilter !== null) {
+        const group = serverGroups[norm] || serverGroups[server]
+        if (group !== groupFilter) return false
+      }
       return true
     })
-  }, [displayServers, serverSearch, statusFilter, serverAliases, getHealthStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (sortBy === 'default') return filtered
+
+    return [...filtered].sort((a, b) => {
+      const normA = a.replace(/\/$/, '')
+      const normB = b.replace(/\/$/, '')
+      if (sortBy === 'name') {
+        const nameA = (serverAliases[normA] || normA.replace(/^https?:\/\//, '')).toLowerCase()
+        const nameB = (serverAliases[normB] || normB.replace(/^https?:\/\//, '')).toLowerCase()
+        return nameA.localeCompare(nameB)
+      }
+      if (sortBy === 'status') {
+        return STATUS_SORT_ORDER(getHealthStatus(normA)?.healthy) - STATUS_SORT_ORDER(getHealthStatus(normB)?.healthy)
+      }
+      if (sortBy === 'latency') {
+        const latA = getHealthStatus(normA)?.latencyMs ?? Infinity
+        const latB = getHealthStatus(normB)?.latencyMs ?? Infinity
+        return latA - latB
+      }
+      return 0
+    })
+  }, [displayServers, serverSearch, statusFilter, serverAliases, getHealthStatus, groupFilter, serverGroups, sortBy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
-    monitoredServers, serverAliases, prefsLoaded, saved, hasChanges,
+    monitoredServers, serverAliases, serverGroups, prefsLoaded, saved, hasChanges,
     bulkOpen, setBulkOpen, bulkText, setBulkText,
     logsServerUrl, setLogsServerUrl,
     addServerOpen, setAddServerOpen,
@@ -243,6 +370,10 @@ export function useServers() {
     displayServers, filteredServers,
     serverSearch, setServerSearch,
     statusFilter, setStatusFilter,
+    groupFilter, setGroupFilter,
+    uniqueGroups,
+    sortBy, setSortBy,
+    autoCheckEnabled, setAutoCheckEnabled,
     statusCounts,
     duplicateUrls,
     queueDepths,
@@ -250,9 +381,10 @@ export function useServers() {
     checkAllServers: handleCheckAllServers,
     checkServer: handleCheckServer,
     isChecking,
+    checkProgress,
     workflowCountPerServer,
     workflows,
     handleSave, handleAddServerConfirm, handleBulkAdd,
-    handleRemoveServer, handleServerUrlChange, handleServerAliasChange,
+    handleRemoveServer, handleServerUrlChange, handleServerAliasChange, handleServerGroupChange, handleReorder,
   }
 }

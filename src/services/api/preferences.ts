@@ -29,6 +29,8 @@ export interface AppPreferences {
   workflowsInfo: Workflow[]
   /** Optional display names for monitored servers (URL -> name) */
   serverAliases: Record<string, string>
+  /** Optional group/tag labels for monitored servers (URL -> group name) */
+  serverGroups?: Record<string, string>
 }
 
 const DEFAULT_PREFERENCES: AppPreferences = {
@@ -40,6 +42,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   workflowDetailUI: {},
   workflowsInfo: [],
   serverAliases: {},
+  serverGroups: {},
 }
 
 export async function getPreferences(): Promise<AppPreferences> {

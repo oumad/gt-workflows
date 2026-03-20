@@ -72,4 +72,5 @@ export const AppPreferencesSchema = z.object({
   // param field values in older stored data. Runtime shape is still cast to Workflow[].
   workflowsInfo: z.array(z.any()),
   serverAliases: z.record(z.string()),
+  serverGroups: z.record(z.string()).optional(),
 })
