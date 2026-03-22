@@ -6,8 +6,9 @@ import { extractWorkflowDependencies } from '../../lib/workflowDependencies.js';
 import { runDependencyAudit } from '../servers/dependencyAudit.js';
 import { handleTestWorkflow } from '../servers/testWorkflow.js';
 import { patchWorkflowDetailUIEntry } from '../../lib/preferencesFs.js';
+import { backupFiles, backupAllFiles } from '../../lib/workflowHistory.js';
 
-export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findWorkflowJson, admin, preferencesPath }) {
+export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findWorkflowJson, admin, preferencesPath, historyPath }) {
   const router = Router();
 
   router.get('/workflows/list', async (req, res) => {
@@ -79,6 +80,9 @@ export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findW
       if (!resolved.ok) return res.status(400).json({ error: resolved.error });
       try { await fs.access(resolved.workflowPath); } catch { return res.status(404).json({ error: 'Workflow not found' }); }
       const paramsPath = path.join(resolved.workflowPath, 'params.json');
+      if (historyPath) {
+        await backupFiles(historyPath, resolved.workflowPath, resolved.workflowName, ['params.json'], 'Params saved').catch((err) => console.warn('History backup failed:', err.message));
+      }
       const tmpPath = `${paramsPath}.tmp`;
       try {
         await fs.writeFile(tmpPath, JSON.stringify(req.body, null, 2), 'utf-8');
@@ -209,6 +213,9 @@ export function createWorkflowsCrudRouter({ workflowsPath, readParamsJson, findW
       const resolved = resolveWorkflowPath(workflowsPath, req.params.name);
       if (!resolved.ok) return res.status(400).json({ error: resolved.error });
       try { await fs.access(resolved.workflowPath); } catch { return res.status(404).json({ error: 'Workflow not found' }); }
+      if (historyPath) {
+        await backupAllFiles(historyPath, resolved.workflowPath, resolved.workflowName, 'Workflow deleted').catch((err) => console.warn('History backup failed:', err.message));
+      }
       await fs.rm(resolved.workflowPath, { recursive: true, force: true });
       res.json({ success: true });
     } catch (error) {

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, AlertCircle, Copy, Download, Package, Play } from 'lucide-react'
+import { ArrowLeft, Save, FileJson, Settings, Eye, EyeOff, RotateCcw, AlertCircle, Copy, Download, Upload, History, Package, Play } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import Editor from '@monaco-editor/react'
@@ -27,6 +27,7 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
     handleParamsUpdate, handleSaveClick, handleResetClick,
     handleEditParamsJson, handleCancelEditParamsJson, handleSaveParamsJson,
     handleIconDelete, handleIconUpload, handleWorkflowFileUpload,
+    handleImportParamsFile, handleImportConfirm,
     setLogsServerUrl, setShowTestWorkflow, setShowDependencyAudit,
     setShowDuplicateModal, setShowDownloadModal,
     isFieldChanged, persistWorkflowDetailUI,
@@ -90,6 +91,12 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
           </button>
           <button onClick={() => setShowDownloadModal(true)} disabled={loading} className="btn btn-secondary" title="Download workflow">
             <Download size={16} /> Download
+          </button>
+          <button onClick={handleImportParamsFile} disabled={loading} className="btn btn-secondary" title="Import params.json file">
+            <Upload size={16} /> Import
+          </button>
+          <button onClick={() => detail.setShowHistoryModal(true)} disabled={loading} className="btn btn-secondary" title="View file history">
+            <History size={16} /> History
           </button>
           <button onClick={handleResetClick} disabled={loading || saving} className="btn btn-secondary" title="Reset to saved version">
             <RotateCcw size={16} /> Reset
@@ -356,6 +363,15 @@ export function WorkflowDetail({ onUpdate }: WorkflowDetailProps) {
         setShowDuplicateModal={setShowDuplicateModal}
         showDownloadModal={detail.showDownloadModal}
         setShowDownloadModal={setShowDownloadModal}
+        showImportModal={detail.showImportModal}
+        setShowImportModal={detail.setShowImportModal}
+        importedParams={detail.importedParams}
+        setImportedParams={detail.setImportedParams}
+        importServerUrlPreserved={detail.importServerUrlPreserved}
+        handleImportConfirm={handleImportConfirm}
+        showHistoryModal={detail.showHistoryModal}
+        setShowHistoryModal={detail.setShowHistoryModal}
+        onHistoryRestored={detail.loadWorkflow}
         logsServerUrl={detail.logsServerUrl}
         setLogsServerUrl={setLogsServerUrl}
         showDependencyAudit={detail.showDependencyAudit}

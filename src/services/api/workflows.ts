@@ -1,4 +1,4 @@
-import type { Workflow, WorkflowParams, WorkflowJson } from '@/types'
+import type { Workflow, WorkflowParams, WorkflowJson, HistoryEntry } from '@/types'
 import { WorkflowListResponseSchema } from '@/lib/schemas'
 import { fetchWithAuth, extractApiError } from '@/utils/auth'
 
@@ -169,4 +169,57 @@ export async function downloadWorkflow(workflowName: string): Promise<void> {
   a.click()
   window.URL.revokeObjectURL(url)
   document.body.removeChild(a)
+}
+
+// --- History API ---
+
+export async function getWorkflowHistory(workflowName: string): Promise<HistoryEntry[]> {
+  const response = await fetchWithAuth(`/api/workflows/${encodeURIComponent(workflowName)}/history`)
+  if (!response.ok) throw new Error('Failed to fetch workflow history')
+  const data = (await response.json()) as { entries: HistoryEntry[] }
+  return data.entries
+}
+
+export async function getHistoryEntryDetail(workflowName: string, timestamp: string): Promise<HistoryEntry> {
+  const response = await fetchWithAuth(
+    `/api/workflows/${encodeURIComponent(workflowName)}/history/${encodeURIComponent(timestamp)}`
+  )
+  if (!response.ok) throw new Error('Failed to fetch history entry')
+  return response.json()
+}
+
+export async function getHistoryFileContent(workflowName: string, timestamp: string, filename: string): Promise<string> {
+  const response = await fetchWithAuth(
+    `/api/workflows/${encodeURIComponent(workflowName)}/history/${encodeURIComponent(timestamp)}/file/${encodeURIComponent(filename)}`
+  )
+  if (!response.ok) throw new Error('Failed to fetch history file')
+  return response.text()
+}
+
+export async function restoreFromHistory(
+  workflowName: string,
+  timestamp: string
+): Promise<{ restoredFiles: string[]; backupTimestamp: string | null }> {
+  const response = await fetchWithAuth(
+    `/api/workflows/${encodeURIComponent(workflowName)}/history/${encodeURIComponent(timestamp)}/restore`,
+    { method: 'POST' }
+  )
+  if (!response.ok) throw new Error('Failed to restore from history')
+  return response.json()
+}
+
+export async function deleteHistoryEntry(workflowName: string, timestamp: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/api/workflows/${encodeURIComponent(workflowName)}/history/${encodeURIComponent(timestamp)}`,
+    { method: 'DELETE' }
+  )
+  if (!response.ok) throw new Error('Failed to delete history entry')
+}
+
+export async function clearWorkflowHistory(workflowName: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/api/workflows/${encodeURIComponent(workflowName)}/history`,
+    { method: 'DELETE' }
+  )
+  if (!response.ok) throw new Error('Failed to clear workflow history')
 }
