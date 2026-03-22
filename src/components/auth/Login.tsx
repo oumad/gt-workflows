@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { Lock } from 'lucide-react'
 import { setStoredAuth, clearStoredAuth, fetchWithAuth, getUnauthorizedFlag, clearUnauthorizedFlag } from '@/utils/auth'
 import { useAuth } from '@/contexts/AuthContext'
+import { AppLogo } from '@/components/ui/AppLogo'
 import './Login.css'
 
 interface LoginProps {
@@ -60,8 +60,9 @@ export function Login({ onSuccess }: LoginProps) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <Lock size={32} />
+          <AppLogo size={48} className="login-logo" />
           <h1>GT Workflows Manager</h1>
+          <p className="login-brand">GEAR Productions</p>
           <p className="login-subtitle">Sign in to continue</p>
         </div>
         <form onSubmit={handleSubmit} className="login-form">

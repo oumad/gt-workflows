@@ -3,6 +3,7 @@ import { Routes, Route, Link, Navigate, useLocation, Outlet, useOutletContext } 
 import type { Workflow } from '@/types'
 import { ROUTES } from '@/app/routes'
 import { LogOut } from 'lucide-react'
+import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuth, Login, clearStoredAuth } from '@/features/auth'
 import { useWorkflows } from '@/features/workflows'
 import { WorkflowList, WorkflowDetail, WorkflowCreate } from '@/features/workflows'
@@ -127,7 +128,10 @@ function MainLayoutWithData(): React.ReactElement {
       <header className="app-header">
         <div className="header-content">
           <div className="header-left">
-            <h1>GT Workflows Manager</h1>
+            <div className="app-brand">
+              <AppLogo size={20} className="app-brand-logo" />
+              <h1>GT Workflows Manager</h1>
+            </div>
             <nav>
               {isAdmin && (
                 <>
@@ -147,6 +151,9 @@ function MainLayoutWithData(): React.ReactElement {
       <main className="app-main">
         <Outlet context={{ workflows, loading, error, loadWorkflows }} />
       </main>
+      <footer className="app-footer">
+        GEAR Productions — 2026
+      </footer>
     </div>
   )
 }

@@ -1,15 +1,28 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { fetchWithAuth } from '@/utils/auth'
 
+export interface ServerSystemInfo {
+  comfyVersion?: string
+  gpuName?: string
+  vramTotal?: number
+  vramFree?: number
+}
+
 export interface ServerHealthStatus {
   serverUrl: string;
   healthy: boolean | null; // null = checking, true = healthy, false = unhealthy
   error?: string;
   lastChecked?: string;
+  latencyMs?: number;
+  systemInfo?: ServerSystemInfo;
+}
+
+export interface CheckProgress {
+  checked: number
+  total: number
 }
 
 interface UseServerHealthCheckOptions {
-  checkInterval?: number; // in seconds, default 6
   enabled?: boolean;
 }
 
@@ -25,7 +38,9 @@ export function useServerHealthCheck(
     () => new Map(healthStatusCache)
   );
   const [isChecking, setIsChecking] = useState(false);
+  const [checkProgress, setCheckProgress] = useState<CheckProgress | null>(null);
   const checkingServersRef = useRef<Set<string>>(new Set());
+  const checkedCountRef = useRef(0);
 
   // Keep module-level cache in sync with state
   useEffect(() => {
@@ -34,37 +49,29 @@ export function useServerHealthCheck(
     }
   }, [healthStatuses])
 
-  const HEALTH_CHECK_TIMEOUT_MS = 15000; // 15s per server so one slow server doesn't block Check All
+  const HEALTH_CHECK_TIMEOUT_MS = 15000;
 
-  // Check health of a single server (optional signal for timeout/abort)
   const checkServerHealth = useCallback(async (serverUrl: string, signal?: AbortSignal): Promise<ServerHealthStatus> => {
     try {
       const response = await fetchWithAuth('/api/servers/health-check', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serverUrl }),
         signal,
       });
-
-      // Always try to parse the response, even if status is not ok
-      // The backend returns health status in the body regardless of HTTP status
       let data;
       try {
         data = await response.json();
-      } catch (parseError) {
-        // If we can't parse JSON, it's a real error
+      } catch {
         throw new Error(`Failed to parse response: ${response.statusText}`);
       }
-
-      // Backend always returns 200 with health status in body
-      // But check response.ok just in case
       return {
         serverUrl,
         healthy: data.healthy === true,
         error: data.error,
         lastChecked: data.timestamp || new Date().toISOString(),
+        latencyMs: typeof data.latencyMs === 'number' ? data.latencyMs : undefined,
+        systemInfo: data.systemInfo ?? undefined,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -77,44 +84,31 @@ export function useServerHealthCheck(
     }
   }, []);
 
-  // Check all unique servers
   const checkAllServers = useCallback(async () => {
-    if (!enabled || serverUrls.length === 0) {
-      return
-    }
+    if (!enabled || serverUrls.length === 0) return
 
     const uniqueServers = Array.from(new Set(serverUrls.filter(Boolean)));
-    if (uniqueServers.length === 0) {
-      return
-    }
+    if (uniqueServers.length === 0) return
 
-    // Filter out servers that are currently being checked
-    const serversToCheck = uniqueServers.filter(
-      (url) => !checkingServersRef.current.has(url)
-    );
-
+    const serversToCheck = uniqueServers.filter(url => !checkingServersRef.current.has(url));
     if (serversToCheck.length === 0) return;
 
     setIsChecking(true);
+    checkedCountRef.current = 0;
+    setCheckProgress({ checked: 0, total: serversToCheck.length });
 
-    // Mark servers as being checked
     serversToCheck.forEach((url) => checkingServersRef.current.add(url));
 
-    // Set status to checking for servers being checked
     setHealthStatuses((prev) => {
       const newMap = new Map(prev);
       serversToCheck.forEach((url) => {
         if (!newMap.has(url) || newMap.get(url)?.healthy !== null) {
-          newMap.set(url, {
-            serverUrl: url,
-            healthy: null, // checking
-          });
+          newMap.set(url, { serverUrl: url, healthy: null });
         }
       });
       return newMap;
     });
 
-    // Run checks with limited concurrency (4 at a time) and per-request timeout so one slow server doesn't hang the UI
     const CONCURRENCY = 4;
     let nextIndex = 0;
 
@@ -140,13 +134,15 @@ export function useServerHealthCheck(
             newMap.set(url, {
               serverUrl: url,
               healthy: false,
-              error: isTimeout ? `Request timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : errorMessage,
+              error: isTimeout ? `Timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : errorMessage,
               lastChecked: new Date().toISOString(),
             });
             return newMap;
           });
         } finally {
           checkingServersRef.current.delete(url);
+          checkedCountRef.current += 1;
+          setCheckProgress({ checked: checkedCountRef.current, total: serversToCheck.length });
         }
       }
     };
@@ -154,16 +150,11 @@ export function useServerHealthCheck(
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, serversToCheck.length) }, () => runOne()));
 
     setIsChecking(false);
+    setCheckProgress(null);
   }, [serverUrls, enabled, checkServerHealth]);
 
-  // Manual health checks only - no automatic polling
-  // Users can trigger checks manually via checkAllServers function
-
-  // Get health status for a specific server
   const getHealthStatus = useCallback(
-    (serverUrl: string): ServerHealthStatus | undefined => {
-      return healthStatuses.get(serverUrl);
-    },
+    (serverUrl: string): ServerHealthStatus | undefined => healthStatuses.get(serverUrl),
     [healthStatuses]
   );
 
@@ -193,7 +184,7 @@ export function useServerHealthCheck(
         newMap.set(serverUrl, {
           serverUrl,
           healthy: false,
-          error: isTimeout ? `Request timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : (err instanceof Error ? err.message : 'Unknown error'),
+          error: isTimeout ? `Timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : (err instanceof Error ? err.message : 'Unknown error'),
           lastChecked: new Date().toISOString(),
         })
         return newMap
@@ -207,8 +198,8 @@ export function useServerHealthCheck(
     healthStatuses: Array.from(healthStatuses.values()),
     getHealthStatus,
     isChecking,
+    checkProgress,
     checkAllServers,
     checkServer,
   };
 }
-

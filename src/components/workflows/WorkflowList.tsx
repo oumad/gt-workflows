@@ -18,7 +18,7 @@ interface WorkflowListProps {
 export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowListProps) {
   const wl = useWorkflowList(workflows, onRefresh)
 
-  if (loading) {
+  if (loading && workflows.length === 0) {
     return (
       <div className="loading-container">
         <RefreshCw className="spinner" size={32} />
@@ -87,8 +87,8 @@ export function WorkflowList({ workflows, loading, error, onRefresh }: WorkflowL
               <button onClick={wl.enterSelectionMode} className="btn btn-secondary">
                 <CheckSquare size={16} /> Select
               </button>
-              <button onClick={onRefresh} className="btn btn-secondary">
-                <RefreshCw size={16} /> Refresh
+              <button onClick={onRefresh} className="btn btn-secondary" disabled={loading}>
+                <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
               </button>
               <button
                 onClick={wl.handleDownloadAll}

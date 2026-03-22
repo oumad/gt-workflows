@@ -15,6 +15,9 @@ export const DOCTOR_PERIODS: { id: DoctorPeriod; label: string }[] = [
 
 export const FAILED_JOBS_PAGE_SIZE = 25
 
+const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
+export type AutoInterval = 5 | 30 | 60 | 300 | null
+
 export interface DoctorState {
   configured: boolean | null
   loading: boolean
@@ -31,6 +34,8 @@ export interface DoctorState {
   topUsers: DoctorRankItem[]
   topErrors: DoctorRankItem[]
   refresh: () => void
+  autoInterval: AutoInterval
+  cycleAutoInterval: () => void
   failedJobs: FailedJobSummary[]
   failedJobsTotal: number
   failedJobsPage: number
@@ -47,6 +52,7 @@ export function useDoctor(): DoctorState {
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DoctorStatsResponse | null>(null)
   const [period, setPeriod] = useState<DoctorPeriod>('1d')
+  const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
   const loadIdRef = useRef(0)
   const statsAbortRef = useRef<AbortController | null>(null)
   const failedJobsAbortRef = useRef<AbortController | null>(null)
@@ -140,10 +146,27 @@ export function useDoctor(): DoctorState {
     trend = 0
   }
 
+  const cycleAutoInterval = useCallback(() => {
+    setAutoInterval((cur) => {
+      const idx = AUTO_INTERVALS.indexOf(cur)
+      return AUTO_INTERVALS[(idx + 1) % AUTO_INTERVALS.length]
+    })
+  }, [])
+
   const refresh = useCallback(() => {
     load(period)
     loadFailedJobs(failedJobsPage, debouncedSearch)
   }, [load, loadFailedJobs, period, failedJobsPage, debouncedSearch])
+
+  // Stable ref so the interval doesn't reset when refresh deps change
+  const refreshRef = useRef(refresh)
+  useEffect(() => { refreshRef.current = refresh }, [refresh])
+
+  useEffect(() => {
+    if (!autoInterval) return
+    const id = setInterval(() => { refreshRef.current() }, autoInterval * 1000)
+    return () => clearInterval(id)
+  }, [autoInterval])
 
   return {
     configured, loading, error,
@@ -154,7 +177,7 @@ export function useDoctor(): DoctorState {
     topServers: data?.topServers ?? [],
     topUsers: data?.topUsers ?? [],
     topErrors: data?.topErrors ?? [],
-    refresh,
+    refresh, autoInterval, cycleAutoInterval,
     failedJobs, failedJobsTotal, failedJobsPage, failedJobsLoading,
     failedJobsSearch, setFailedJobsSearch, setFailedJobsPage,
   }

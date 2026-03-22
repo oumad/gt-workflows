@@ -30,8 +30,18 @@
   gap: 1.5rem;
 }
 
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.app-brand-logo {
+  flex-shrink: 0;
+}
+
 .app-header h1 {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -102,6 +112,14 @@ nav {
   width: 100%;
   margin: 0 auto;
   padding: 2rem;
+}
+
+.app-footer {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  flex-shrink: 0;
 }
 
 /* Shared page title: icon + text, same across Workflows, Job stats, Activity, Settings, Create */

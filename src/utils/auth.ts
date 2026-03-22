@@ -66,7 +66,9 @@ export function clearStoredAuth(): void {
 }
 
 const AUTH_REQUIRED_EVENT = 'gt-workflows-authRequired';
-const UNAUTHORIZED_FLAG_KEY = 'gt-workflows-unauthorized';
+
+// In-memory flag — resets on every page load so F5 / fresh tabs never show the "session expired" banner.
+let unauthorizedFlag = false;
 
 export function onAuthRequired(callback: () => void): () => void {
   const handler = () => callback();
@@ -75,23 +77,15 @@ export function onAuthRequired(callback: () => void): () => void {
 }
 
 export function getUnauthorizedFlag(): boolean {
-  try {
-    return sessionStorage.getItem(UNAUTHORIZED_FLAG_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return unauthorizedFlag;
 }
 
 export function clearUnauthorizedFlag(): void {
-  try {
-    sessionStorage.removeItem(UNAUTHORIZED_FLAG_KEY);
-  } catch {}
+  unauthorizedFlag = false;
 }
 
 function dispatchAuthRequired(): void {
-  try {
-    sessionStorage.setItem(UNAUTHORIZED_FLAG_KEY, '1');
-  } catch {}
+  unauthorizedFlag = true;
   window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
 }
 

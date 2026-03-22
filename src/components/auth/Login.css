@@ -7,6 +7,7 @@
   background: var(--bg-primary);
 }
 
+
 .login-card {
   width: 100%;
   max-width: 360px;
@@ -22,8 +23,7 @@
   margin-bottom: 1.5rem;
 }
 
-.login-header svg {
-  color: var(--accent);
+.login-logo {
   margin-bottom: 0.75rem;
 }
 
@@ -32,6 +32,20 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.35rem;
+}
+
+.login-brand {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  margin: 0.1rem 0 0.55rem;
 }
 
 .login-subtitle {

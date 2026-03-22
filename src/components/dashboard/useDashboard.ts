@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '@/features/auth'
 import { useJobStats, JOBS_LIMIT_OPTIONS, TIME_RANGES, type TimeRangeId } from '@/features/dashboard'
 import { usePreferences } from '@/hooks/usePreferences'
@@ -7,6 +7,9 @@ import { anonymiseUserName } from '@/utils/anonymise'
 
 export { JOBS_LIMIT_OPTIONS, TIME_RANGES }
 export type { TimeRangeId }
+
+const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
+export type AutoInterval = 5 | 30 | 60 | 300 | null
 
 export function useDashboard() {
   const { role, guestStatsEnabled } = useAuth()
@@ -22,6 +25,14 @@ export function useDashboard() {
   const [workflowSearch, setWorkflowSearch] = useState('')
   const [workflowSortMode, setWorkflowSortMode] = useState<'usage' | 'users'>('usage')
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
+
+  const cycleAutoInterval = useCallback(() => {
+    setAutoInterval((cur) => {
+      const idx = AUTO_INTERVALS.indexOf(cur)
+      return AUTO_INTERVALS[(idx + 1) % AUTO_INTERVALS.length]
+    })
+  }, [])
 
   const toggleServerDetail = useCallback((server: string) => {
     setExpandedServers(prev => {
@@ -93,6 +104,16 @@ export function useDashboard() {
     updatePreferences({ userDetailsOpen: next }).catch(() => setUserDetailsOpen(!next))
   }, [userDetailsOpen])
 
+  // Stable ref so the interval doesn't reset when loadStats changes
+  const loadStatsRef = useRef(loadStats)
+  useEffect(() => { loadStatsRef.current = loadStats }, [loadStats])
+
+  useEffect(() => {
+    if (!autoInterval) return
+    const id = setInterval(() => { loadStatsRef.current(true) }, autoInterval * 1000)
+    return () => clearInterval(id)
+  }, [autoInterval])
+
   const isGuest = role === 'guest'
 
   return {
@@ -105,5 +126,6 @@ export function useDashboard() {
     timeRangeLabel, configured, loading, error, progress, userJobs, userJobsLoading, loadStats,
     filteredWorkflowUsage, workflowDisplayList, maxWorkflow, maxWorkflowByUsers, maxServer,
     serverWorkflowsMap, getDisplayName, sampleSubtitle,
+    autoInterval, cycleAutoInterval,
   }
 }

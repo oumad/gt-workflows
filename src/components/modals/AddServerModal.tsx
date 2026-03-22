@@ -1,49 +1,55 @@
 import { useState } from 'react'
-import { X, Server } from 'lucide-react'
+import { X, Server, Pencil } from 'lucide-react'
+import { normalizeServerUrl, hasInvalidScheme } from '@/components/servers/useServers'
 import './AddServerModal.css'
 
 export interface AddServerResult {
   url: string
   name?: string
+  tags?: string[]
 }
 
 interface AddServerModalProps {
   onConfirm: (result: AddServerResult) => void
   onCancel: () => void
   existingUrls: string[]
-}
-
-function normalizeUrl(value: string): string {
-  let u = value.trim()
-  if (!u) return ''
-  if (!u.startsWith('http://') && !u.startsWith('https://')) u = `http://${u}`
-  return u.replace(/\/$/, '')
+  initialValues?: { url: string; name?: string; tags?: string[] }
 }
 
 export default function AddServerModal({
   onConfirm,
   onCancel,
   existingUrls,
+  initialValues,
 }: AddServerModalProps) {
-  const [url, setUrl] = useState('')
-  const [name, setName] = useState('')
+  const isEdit = !!initialValues
+  const [url, setUrl] = useState(initialValues?.url ?? '')
+  const [name, setName] = useState(initialValues?.name ?? '')
+  const [tags, setTags] = useState(initialValues?.tags?.join(', ') ?? '')
   const [urlError, setUrlError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const normalized = normalizeUrl(url)
+    const normalized = normalizeServerUrl(url)
     setUrlError(null)
     if (!normalized) {
       setUrlError('URL is required')
       return
     }
-    if (existingUrls.includes(normalized)) {
+    if (hasInvalidScheme(normalized)) {
+      setUrlError('Only http:// and https:// URLs are allowed')
+      return
+    }
+    const duplicate = existingUrls.filter((u) => u !== initialValues?.url).includes(normalized)
+    if (duplicate) {
       setUrlError('This server is already in the list')
       return
     }
+    const parsedTags = tags.split(',').map((t) => t.trim()).filter(Boolean)
     onConfirm({
       url: normalized,
       name: name.trim() || undefined,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
     })
   }
 
@@ -52,15 +58,10 @@ export default function AddServerModal({
       <div className="modal-content add-server-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="add-server-title">
-            <Server size={20} />
-            <span>Add monitored server</span>
+            {isEdit ? <Pencil size={18} /> : <Server size={20} />}
+            <span>{isEdit ? 'Edit server' : 'Add monitored server'}</span>
           </div>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onCancel}
-            aria-label="Close"
-          >
+          <button type="button" className="modal-close" onClick={onCancel} aria-label="Close">
             <X size={20} />
           </button>
         </div>
@@ -73,10 +74,7 @@ export default function AddServerModal({
               id="add-server-url"
               type="text"
               value={url}
-              onChange={(e) => {
-                setUrl(e.target.value)
-                setUrlError(null)
-              }}
+              onChange={(e) => { setUrl(e.target.value); setUrlError(null) }}
               placeholder="http://127.0.0.1:8188"
               className={urlError ? 'add-server-input add-server-input-error' : 'add-server-input'}
               autoFocus
@@ -96,12 +94,24 @@ export default function AddServerModal({
               autoComplete="off"
             />
           </div>
+          <div className="add-server-field">
+            <label htmlFor="add-server-tags">Tags (optional, comma-separated)</label>
+            <input
+              id="add-server-tags"
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="e.g. production, europe"
+              className="add-server-input"
+              autoComplete="off"
+            />
+          </div>
           <div className="add-server-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel}>
               Cancel
             </button>
             <button type="submit" className="btn btn-primary">
-              Add server
+              {isEdit ? 'Save changes' : 'Add server'}
             </button>
           </div>
         </form>
