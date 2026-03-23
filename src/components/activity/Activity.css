@@ -1,5 +1,6 @@
 @import '../ui/Buttons.css';
 @import '../ui/SpinnerIcon.css';
+@import '../doctor/Doctor.css';
 
 .activity-page {
   width: 100%;
@@ -311,4 +312,213 @@
 .activity-job-card-server-btn:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+
+.activity-job-card-server-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+  margin-right: 0.3em;
+  vertical-align: middle;
+}
+
+.activity-job-card-elapsed {
+  color: var(--activity-active, #22c55e);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+}
+
+.activity-column-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0.1em 0.45em;
+  margin-left: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent, #6366f1);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+/* ── View toggle ─────────────────────────────────────────────────────────── */
+
+.activity-view-toggle {
+  display: flex;
+  border: 1px solid var(--border, #2e2e3e);
+  border-radius: 8px;
+  overflow: hidden;
+  gap: 0;
+}
+
+.activity-view-toggle .btn {
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--border, #2e2e3e);
+}
+
+.activity-view-toggle .btn:last-child {
+  border-right: none;
+}
+
+/* ── Stats view ──────────────────────────────────────────────────────────── */
+
+.activity-stats {
+  padding: 0 0 2rem;
+}
+
+/* ── Running jobs panel ──────────────────────────────────────────────────── */
+
+.activity-stats-running {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.activity-stats-running-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  gap: 1rem;
+}
+
+.activity-stats-running-header:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+.activity-stats-running-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.activity-stats-running-icon--active {
+  color: var(--activity-active, #22c55e);
+  animation: activity-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes activity-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.activity-stats-running-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.activity-stats-running-toggle {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+.activity-stats-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-muted);
+}
+
+.activity-stats-badge--active.activity-stats-badge--lit {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--activity-active, #22c55e);
+  color: var(--activity-active, #22c55e);
+}
+
+.activity-stats-badge--waiting.activity-stats-badge--lit {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: var(--activity-waiting, #f97316);
+  color: var(--activity-waiting, #f97316);
+}
+
+.activity-stats-running-body {
+  padding: 0.75rem 1rem;
+}
+
+.activity-stats-running-empty {
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.activity-stats-running-table {
+  margin: 0;
+}
+
+.activity-stats-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.activity-stats-controls-left,
+.activity-stats-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Stats view — override doctor-* red colors with neutral/positive colors ── */
+
+/* Rank bars: accent instead of error-red */
+.activity-stats .doctor-rank-bar {
+  background: var(--accent, #6366f1);
+}
+
+/* Big summary numbers: accent instead of inheriting error-red */
+.activity-stats .doctor-card-value {
+  color: var(--accent, #6366f1);
+}
+
+/* Weekly trend: up = good (green), down = bad (red) — opposite of Doctor */
+.activity-stats .doctor-trend-indicator--up {
+  color: var(--success, #22c55e);
+}
+
+.activity-stats .doctor-trend-indicator--down {
+  color: var(--error, #ef4444);
+}
+
+/* "Recent Jobs" panel title — remove any red tint */
+.activity-stats .doctor-failed-panel-title {
+  color: var(--text-primary);
+}
+
+.activity-stats-job-row {
+  cursor: default;
+}
+
+.activity-stats-job-row:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+.activity-stats-cell-duration {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, #888);
+  font-size: 0.8rem;
+  white-space: nowrap;
 }

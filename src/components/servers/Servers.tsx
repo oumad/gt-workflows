@@ -8,7 +8,9 @@ import AddServerModal from '@/components/modals/AddServerModal'
 import ServerJobsModal from '@/components/modals/ServerJobsModal'
 import ServerWorkflowsModal from '@/components/modals/ServerWorkflowsModal'
 import { ServerCard } from './ServerCard'
+import { MonitoringPanel } from './MonitoringPanel'
 import { useServers } from './useServers'
+import { useMonitoring } from '@/hooks/useMonitoring'
 import type { StatusFilter, SortBy } from './useServers'
 import './Servers.css'
 
@@ -28,6 +30,7 @@ const SORT_LABELS: Record<SortBy, string> = {
 
 export function Servers() {
   const s = useServers()
+  const monitoring = useMonitoring()
   const importRef = useRef<HTMLInputElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   const [importPreview, setImportPreview] = useState<{ url: string; name?: string; tags?: string[] }[] | null>(null)
@@ -171,6 +174,14 @@ export function Servers() {
             </div>
           )}
 
+          <MonitoringPanel
+            config={monitoring.config}
+            checking={monitoring.checking}
+            serverAliases={s.serverAliases}
+            onCheckNow={monitoring.checkNow}
+            onUpdateInterval={monitoring.updateInterval}
+          />
+
           <div className="servers-toolbar">
             <div className="servers-search">
               <Search size={15} className="servers-search-icon" />
@@ -272,12 +283,14 @@ export function Servers() {
                         isDuplicate={s.duplicateUrls.has(norm)}
                         queueDepth={s.queueDepths[norm]}
                         showDragHandle={showDragHandle}
+                        isWatched={monitoring.isWatched(server)}
                         onRemove={s.handleRemoveServer}
                         onEdit={setEditingServerUrl}
                         onViewLogs={s.setLogsServerUrl}
                         onCheck={s.checkServer}
                         onViewWorkflows={s.setWorkflowsServerUrl}
                         onViewJobs={setJobsServerUrl}
+                        onToggleWatch={monitoring.toggleWatched}
                       />
                     )
                   })}

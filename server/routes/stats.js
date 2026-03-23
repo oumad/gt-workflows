@@ -5,6 +5,34 @@ import { toActivityJob, jobMatchesUser, anonymiseUserName } from '../lib/statsHe
 const USAGE_LIMIT_MIN = 100;
 const USAGE_LIMIT_MAX = 2000;
 
+/** Extract the best available timestamp from a Bull job. */
+function getJobTs(job) {
+  return job?.finishedOn ?? job?.processedOn ?? job?.timestamp ?? null;
+}
+
+/** Generic in-memory stats cache factory. */
+function makeStatsCache(ttlMs = 90_000, maxSize = 30) {
+  const store = new Map();
+  return {
+    get(key) {
+      const entry = store.get(key);
+      if (!entry) return null;
+      if (Date.now() - entry.ts > ttlMs) { store.delete(key); return null; }
+      return entry.data;
+    },
+    set(key, data) {
+      if (store.size >= maxSize) store.delete(store.keys().next().value);
+      store.set(key, { data, ts: Date.now() });
+    },
+  };
+}
+
+const doctorStatsCache = makeStatsCache();
+const completedStatsCache = makeStatsCache();
+
+function getCachedDoctorStats(key) { return doctorStatsCache.get(key); }
+function setCachedDoctorStats(key, data) { doctorStatsCache.set(key, data); }
+
 /**
  * Fetch jobs in small batches, stopping early once a job's timestamp falls below cutoffMs.
  * Jobs are returned newest-first by Bull, so the first job older than cutoff means all
@@ -133,13 +161,20 @@ export function createStatsRouter(config) {
       return res.json({ configured: false, message: 'Queue not configured.' });
     }
     try {
+      const hideAborted = req.query.hideAborted === '1';
+      const force = req.query.force === '1';
+      const period = req.query.period || '1w';
+
+      const cacheKey = `${period}:${hideAborted ? 1 : 0}`;
+      if (!force) {
+        const cached = getCachedDoctorStats(cacheKey);
+        if (cached) return res.json(cached);
+      }
+
       const counts = await queue.getJobCounts();
-      const totalFailed = counts.failed ?? 0;
 
       const now = Date.now();
       const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-      const thisWeekStart = now - oneWeekMs;
-      const prevWeekStart = thisWeekStart - oneWeekMs;
 
       const PERIOD_MS = {
         '1h': 60 * 60 * 1000,
@@ -147,7 +182,6 @@ export function createStatsRouter(config) {
         '1w': 7 * 24 * 60 * 60 * 1000,
         '1m': 30 * 24 * 60 * 60 * 1000,
       };
-      const period = req.query.period || '1w';
       const periodCutoff = period === 'all' ? 0 : now - (PERIOD_MS[period] ?? PERIOD_MS['1w']);
 
       const WEEKLY_HISTORY_COUNT = 5;
@@ -155,18 +189,21 @@ export function createStatsRouter(config) {
       const weekBucketsTotal = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
 
       const fiveWeeksAgo = now - 5 * oneWeekMs;
-      // Early exit cutoff for failed jobs: stop fetching once jobs are older than the
-      // selected period (and older than 5 weeks, since history only goes back that far).
+      // Early exit cutoff: stop fetching once jobs are older than the selected period and 5-week history window.
       // For 'all' (periodCutoff=0): no time-based early exit — rely on maxJobs cap instead.
       const failedCutoff = periodCutoff > 0 ? Math.min(periodCutoff, fiveWeeksAgo) : 0;
-      const [failedJobs, completedJobs] = await Promise.all([
+      const [rawFailedJobs, completedJobs] = await Promise.all([
         getJobsBatched(queue, 'failed', failedCutoff, { batchSize: 200, maxJobs: 5000 }),
         getJobsBatched(queue, 'completed', fiveWeeksAgo, { batchSize: 200, maxJobs: 2000 }),
       ]);
 
+      const isAborted = (job) => job?.failedReason && job.failedReason.toLowerCase().includes('abort');
+      const failedJobs = hideAborted ? rawFailedJobs.filter((j) => !isAborted(j)) : rawFailedJobs;
+      const totalFailed = hideAborted ? failedJobs.length : (counts.failed ?? 0);
+
       for (const job of completedJobs) {
         if (!job) continue;
-        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        const ts = getJobTs(job);
         if (ts == null) continue;
         const weeksAgo = Math.floor((now - ts) / oneWeekMs);
         if (weeksAgo >= 0 && weeksAgo < WEEKLY_HISTORY_COUNT) {
@@ -181,7 +218,7 @@ export function createStatsRouter(config) {
 
       for (const job of failedJobs) {
         if (!job) continue;
-        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        const ts = getJobTs(job);
         if (ts == null) continue;
 
         const weeksAgo = Math.floor((now - ts) / oneWeekMs);
@@ -221,7 +258,7 @@ export function createStatsRouter(config) {
         total: count + weekBucketsTotal[i],
       }));
 
-      res.json({
+      const responseData = {
         configured: true,
         totalFailed,
         thisWeekFailed: weekBuckets[0],
@@ -232,7 +269,10 @@ export function createStatsRouter(config) {
         topUsers: toSorted(byUser),
         topErrors: toSorted(byError),
         period,
-      });
+      };
+
+      setCachedDoctorStats(cacheKey, responseData);
+      return res.json(responseData);
     } catch (err) {
       console.error('Error fetching doctor stats:', err);
       res.status(500).json({ configured: true, error: err.message });
@@ -247,6 +287,7 @@ export function createStatsRouter(config) {
       const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
       const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 5), 100);
       const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+      const hideAborted = req.query.hideAborted === '1';
 
       const mapJob = (job) => {
         const data = job.data || {};
@@ -271,19 +312,26 @@ export function createStatsRouter(config) {
         };
       };
 
-      if (search) {
-        const allRaw = await getJobsBatched(queue, 'failed', 0, { batchSize: 200, maxJobs: 2000 });
-        const allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
-        const filtered = allMapped.filter((j) =>
-          j.id.toLowerCase().includes(search) ||
-          j.name.toLowerCase().includes(search) ||
-          j.server.toLowerCase().includes(search) ||
-          j.user.toLowerCase().includes(search) ||
-          (j.failedReason && j.failedReason.toLowerCase().includes(search))
-        );
-        const total = filtered.length;
+      if (search || hideAborted) {
+        // search needs full scan; hideAborted-only can use a larger window for accurate counts
+        const maxJobs = search ? 1000 : 2000;
+        const allRaw = await getJobsBatched(queue, 'failed', 0, { batchSize: 200, maxJobs });
+        let allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
+        if (search) {
+          allMapped = allMapped.filter((j) =>
+            j.id.toLowerCase().includes(search) ||
+            j.name.toLowerCase().includes(search) ||
+            j.server.toLowerCase().includes(search) ||
+            j.user.toLowerCase().includes(search) ||
+            (j.failedReason && j.failedReason.toLowerCase().includes(search))
+          );
+        }
+        if (hideAborted) {
+          allMapped = allMapped.filter((j) => !(j.failedReason && j.failedReason.toLowerCase().includes('abort')));
+        }
+        const total = allMapped.length;
         const start = (page - 1) * pageSize;
-        const jobs = filtered.slice(start, start + pageSize);
+        const jobs = allMapped.slice(start, start + pageSize);
         res.json({ configured: true, jobs, total, page, pageSize });
       } else {
         const counts = await queue.getJobCounts();
@@ -295,6 +343,148 @@ export function createStatsRouter(config) {
       }
     } catch (err) {
       console.error('Error fetching failed jobs:', err);
+      res.status(500).json({ configured: true, error: err.message, jobs: [], total: 0 });
+    }
+  });
+
+  router.get('/stats/completed', async (req, res) => {
+    if (!queue) return res.json({ configured: false, message: 'Queue not configured.' });
+    try {
+      const force = req.query.force === '1';
+      const period = req.query.period || '1w';
+      const cacheKey = period;
+      if (!force) {
+        const cached = completedStatsCache.get(cacheKey);
+        if (cached) return res.json(cached);
+      }
+
+      const counts = await queue.getJobCounts();
+      const totalCompleted = counts.completed ?? 0;
+
+      const now = Date.now();
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+      const PERIOD_MS = {
+        '1h': 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '1w': 7 * 24 * 60 * 60 * 1000,
+        '1m': 30 * 24 * 60 * 60 * 1000,
+      };
+      const periodCutoff = period === 'all' ? 0 : now - (PERIOD_MS[period] ?? PERIOD_MS['1w']);
+
+      const WEEKLY_HISTORY_COUNT = 5;
+      const weekBuckets = Array.from({ length: WEEKLY_HISTORY_COUNT }, () => 0);
+
+      const fiveWeeksAgo = now - 5 * oneWeekMs;
+      const cutoff = periodCutoff > 0 ? Math.min(periodCutoff, fiveWeeksAgo) : 0;
+      // Smaller scan caps for short periods — no point scanning 5k jobs to find last-hour data
+      const PERIOD_MAX_JOBS = { '1h': 500, '1d': 1500, '1w': 3000, '1m': 5000, 'all': 5000 };
+      const maxCompletedJobs = PERIOD_MAX_JOBS[period] ?? 3000;
+      const completedJobs = await getJobsBatched(queue, 'completed', cutoff, { batchSize: 200, maxJobs: maxCompletedJobs });
+
+      const byWorkflow = {};
+      const byServer = {};
+      const byUser = {};
+
+      for (const job of completedJobs) {
+        if (!job) continue;
+        const ts = getJobTs(job);
+        if (ts == null) continue;
+
+        const weeksAgo = Math.floor((now - ts) / oneWeekMs);
+        if (weeksAgo >= 0 && weeksAgo < WEEKLY_HISTORY_COUNT) weekBuckets[weeksAgo]++;
+
+        if (ts >= periodCutoff) {
+          const data = job.data || {};
+          const workflow = data.workflow || {};
+          const wfName = typeof workflow.name === 'string' ? workflow.name : null;
+          const serverUrl = workflow.config?.comfyui_config?.serverUrl;
+          const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : null;
+          const userObj = data.executionContext?.context?.user;
+          const userLabel = userObj ? (userObj.name || userObj.email || userObj.id || null) : null;
+
+          if (wfName) byWorkflow[wfName] = (byWorkflow[wfName] || 0) + 1;
+          if (server) byServer[server] = (byServer[server] || 0) + 1;
+          if (userLabel) byUser[String(userLabel)] = (byUser[String(userLabel)] || 0) + 1;
+        }
+      }
+
+      const toSorted = (map) =>
+        Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+
+      const weeklyHistory = weekBuckets.map((count, i) => ({
+        label: i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i} weeks ago`,
+        count,
+      }));
+
+      const responseData = {
+        configured: true,
+        totalCompleted,
+        weeklyHistory,
+        topWorkflows: toSorted(byWorkflow),
+        topServers: toSorted(byServer),
+        topUsers: toSorted(byUser),
+        period,
+      };
+
+      completedStatsCache.set(cacheKey, responseData);
+      return res.json(responseData);
+    } catch (err) {
+      console.error('Error fetching completed stats:', err);
+      res.status(500).json({ configured: true, error: err.message });
+    }
+  });
+
+  router.get('/stats/completed/jobs', async (req, res) => {
+    if (!queue) return res.json({ configured: false, jobs: [], total: 0 });
+    try {
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 5), 100);
+      const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+
+      const mapJob = (job) => {
+        const data = job.data || {};
+        const workflow = data.workflow || {};
+        const wfName = typeof workflow.name === 'string' ? workflow.name : '';
+        const serverUrl = workflow.config?.comfyui_config?.serverUrl;
+        const server = typeof serverUrl === 'string' ? serverUrl.replace(/\/$/, '') : '';
+        const userObj = data.executionContext?.context?.user;
+        const user = userObj ? (userObj.name || userObj.email || userObj.id || '') : '';
+        const processedOn = job.processedOn ?? null;
+        const finishedOn = job.finishedOn ?? null;
+        return {
+          id: String(job.id),
+          name: wfName || job.name || '',
+          server: server || '—',
+          user: user ? String(user) : '—',
+          timestamp: job.timestamp ?? null,
+          processedOn,
+          finishedOn,
+          duration: (processedOn != null && finishedOn != null) ? finishedOn - processedOn : null,
+        };
+      };
+
+      if (search) {
+        const allRaw = await getJobsBatched(queue, 'completed', 0, { batchSize: 200, maxJobs: 1000 });
+        const allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
+        const filtered = allMapped.filter((j) =>
+          j.id.toLowerCase().includes(search) ||
+          j.name.toLowerCase().includes(search) ||
+          j.server.toLowerCase().includes(search) ||
+          j.user.toLowerCase().includes(search)
+        );
+        const total = filtered.length;
+        const start = (page - 1) * pageSize;
+        res.json({ configured: true, jobs: filtered.slice(start, start + pageSize), total, page, pageSize });
+      } else {
+        const counts = await queue.getJobCounts();
+        const total = counts.completed ?? 0;
+        const start = (page - 1) * pageSize;
+        const raw = await queue.getJobs(['completed'], start, start + pageSize - 1);
+        const jobs = (raw || []).filter((j) => j != null).map(mapJob);
+        res.json({ configured: true, jobs, total, page, pageSize });
+      }
+    } catch (err) {
+      console.error('Error fetching completed jobs:', err);
       res.status(500).json({ configured: true, error: err.message, jobs: [], total: 0 });
     }
   });

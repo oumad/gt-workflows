@@ -119,10 +119,65 @@ export async function fetchQueueDepth(serverUrl: string): Promise<QueueDepth> {
   return response.json()
 }
 
+export async function restartServer(serverUrl: string): Promise<void> {
+  const response = await fetchWithAuth('/api/servers/restart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serverUrl }),
+  })
+  if (!response.ok) {
+    throw new Error(await extractApiError(response, `Failed to restart server (${response.status})`))
+  }
+}
+
 export async function cancelTestWorkflow(serverUrl: string): Promise<void> {
   await fetchWithAuth('/api/servers/test-workflow/cancel', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ serverUrl }),
   })
+}
+
+// ── Background Monitoring ──────────────────────────────────────────────────
+
+export interface MonitorServerStatus {
+  healthy: boolean
+  lastCheck: string
+  latencyMs: number | null
+  error: string | null
+}
+
+export interface MonitoringConfig {
+  watchedServers: string[]
+  intervalSeconds: number
+  discordEnabled: boolean
+  status: Record<string, MonitorServerStatus>
+  running: boolean
+}
+
+export async function getMonitoringConfig(): Promise<MonitoringConfig> {
+  const response = await fetchWithAuth('/api/servers/monitoring')
+  if (!response.ok) throw new Error(`Failed to load monitoring config (${response.status})`)
+  return response.json()
+}
+
+export async function patchMonitoringConfig(patch: {
+  watchedServers?: string[]
+  intervalSeconds?: number
+}): Promise<MonitoringConfig> {
+  const response = await fetchWithAuth('/api/servers/monitoring', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!response.ok) throw new Error(`Failed to update monitoring config (${response.status})`)
+  return response.json()
+}
+
+export async function triggerMonitoringCheck(): Promise<MonitoringConfig> {
+  const response = await fetchWithAuth('/api/servers/monitoring/check-now', {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error(`Failed to trigger check (${response.status})`)
+  return response.json()
 }

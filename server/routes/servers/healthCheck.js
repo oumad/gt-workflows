@@ -195,5 +195,60 @@ export function createHealthCheckRouter() {
     }
   });
 
+  router.post('/servers/restart', async (req, res) => {
+    try {
+      const { serverUrl } = req.body;
+      if (!serverUrl || typeof serverUrl !== 'string') {
+        return res.status(400).json({ error: 'Server URL is required' });
+      }
+      const base = serverUrl.trim().replace(/\/$/, '');
+      if (!base.startsWith('http://') && !base.startsWith('https://')) {
+        return res.status(400).json({ error: 'Invalid server URL' });
+      }
+      // ComfyUI Manager reboot endpoint (no /api/ prefix)
+      const rebootUrl = `${base}/manager/reboot`;
+      console.log(`[Restart] Sending reboot to ${rebootUrl}`);
+      // Put server in maintenance mode for 5 min to suppress monitoring alerts
+      const { monitoringService } = await import('../../lib/monitoringService.js');
+      monitoringService.setMaintenance(base, 5 * 60_000);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120_000);
+      try {
+        const response = await fetch(rebootUrl, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        console.log(`[Restart] ${base} responded with HTTP ${response.status}`);
+        if (!response.ok) {
+          monitoringService.clearMaintenance(base);
+          const body = await response.text().catch(() => '');
+          console.error(`[Restart] Reboot failed for ${base}: HTTP ${response.status} — ${body.slice(0, 200)}`);
+          return res.status(502).json({ error: `ComfyUI returned HTTP ${response.status}`, detail: body.slice(0, 200) });
+        }
+        return res.json({ ok: true, status: response.status });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          monitoringService.clearMaintenance(base);
+          console.error(`[Restart] Timed out waiting for ${base}`);
+          return res.status(504).json({ error: 'Request timed out after 120s' });
+        }
+        const msg = fetchErr.message || '';
+        // Connection reset/closed is expected — the server is restarting
+        if (msg.includes('ECONNRESET') || msg.includes('socket hang up') || msg.includes('UND_ERR_SOCKET')) {
+          console.log(`[Restart] ${base} closed connection — likely restarting`);
+          return res.json({ ok: true, status: 0, note: 'Connection closed — server is restarting' });
+        }
+        monitoringService.clearMaintenance(base);
+        console.error(`[Restart] Fetch error for ${base}: ${msg}`);
+        return res.status(502).json({ error: msg || 'Failed to reach server' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 }

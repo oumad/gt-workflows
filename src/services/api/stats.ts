@@ -150,6 +150,38 @@ export interface FailedJobsResponse {
   error?: string
 }
 
+export interface CompletedJobSummary {
+  id: string
+  name: string
+  server: string
+  user: string
+  timestamp: number | null
+  processedOn: number | null
+  finishedOn: number | null
+  duration: number | null
+}
+
+export interface CompletedJobsResponse {
+  configured: boolean
+  jobs: CompletedJobSummary[]
+  total: number
+  page: number
+  pageSize: number
+  error?: string
+}
+
+export interface CompletedStatsResponse {
+  configured: boolean
+  totalCompleted?: number
+  weeklyHistory?: { label: string; count: number }[]
+  topWorkflows?: DoctorRankItem[]
+  topServers?: DoctorRankItem[]
+  topUsers?: DoctorRankItem[]
+  period?: string
+  message?: string
+  error?: string
+}
+
 const STATS_REQUEST_TIMEOUT_MS = 30_000
 
 function fetchWithTimeout(url: string, timeoutMs: number, externalSignal?: AbortSignal): Promise<Response> {
@@ -218,8 +250,11 @@ function mergeUserActivity(a: UserActivityItem[], b: UserActivityItem[]): UserAc
   return Array.from(map.entries(), ([user, count]) => ({ user, count })).sort((x, y) => y.count - x.count)
 }
 
-export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: AbortSignal): Promise<DoctorStatsResponse> {
-  const response = await fetchWithTimeout(`/api/stats/doctor?period=${period}`, STATS_REQUEST_TIMEOUT_MS, signal)
+export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: AbortSignal, hideAborted = false, force = false): Promise<DoctorStatsResponse> {
+  const params = new URLSearchParams({ period })
+  if (hideAborted) params.set('hideAborted', '1')
+  if (force) params.set('force', '1')
+  const response = await fetchWithTimeout(`/api/stats/doctor?${params.toString()}`, STATS_REQUEST_TIMEOUT_MS, signal)
   if (!response.ok) {
     const body = await response.text()
     throw new Error(`Doctor stats failed (${response.status}): ${body || response.statusText}`)
@@ -227,9 +262,10 @@ export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: Abort
   return response.json()
 }
 
-export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal): Promise<FailedJobsResponse> {
+export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, hideAborted = false): Promise<FailedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
+  if (hideAborted) params.set('hideAborted', '1')
   const response = await fetchWithTimeout(
     `/api/stats/doctor/failed-jobs?${params.toString()}`,
     STATS_REQUEST_TIMEOUT_MS,
@@ -238,6 +274,28 @@ export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal
   if (!response.ok) {
     const body = await response.text()
     throw new Error(`Failed jobs fetch failed (${response.status}): ${body || response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function getCompletedStats(period = '1w', signal?: AbortSignal, force = false): Promise<CompletedStatsResponse> {
+  const params = new URLSearchParams({ period })
+  if (force) params.set('force', '1')
+  const response = await fetchWithTimeout(`/api/stats/completed?${params.toString()}`, STATS_REQUEST_TIMEOUT_MS, signal)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Completed stats failed (${response.status}): ${body || response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function getCompletedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal): Promise<CompletedJobsResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (search) params.set('search', search)
+  const response = await fetchWithTimeout(`/api/stats/completed/jobs?${params.toString()}`, STATS_REQUEST_TIMEOUT_MS, signal)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Completed jobs fetch failed (${response.status}): ${body || response.statusText}`)
   }
   return response.json()
 }

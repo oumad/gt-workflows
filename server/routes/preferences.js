@@ -23,6 +23,7 @@ function buildPreferencesResponse(prefs) {
     workflowsInfo: Array.isArray(prefs.workflowsInfo) ? prefs.workflowsInfo : [],
     serverAliases: (prefs.serverAliases && typeof prefs.serverAliases === 'object' && !Array.isArray(prefs.serverAliases)) ? prefs.serverAliases : {},
     serverGroups: migrateServerGroups(prefs.serverGroups),
+    doctorHideAborted: typeof prefs.doctorHideAborted === 'boolean' ? prefs.doctorHideAborted : false,
   };
 }
 
@@ -86,6 +87,7 @@ export function createPreferencesRouter(config) {
     if (body.serverGroups != null && typeof body.serverGroups === 'object' && !Array.isArray(body.serverGroups)) {
       partial.serverGroups = migrateServerGroups(body.serverGroups);
     }
+    if (typeof body.doctorHideAborted === 'boolean') partial.doctorHideAborted = body.doctorHideAborted;
     if (Array.isArray(body.workflowsInfo)) {
       partial.workflowsInfo = body.workflowsInfo
         .filter(
