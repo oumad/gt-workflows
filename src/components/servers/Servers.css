@@ -340,6 +340,7 @@
   /* Left accent bar driven by CSS custom property */
   --card-accent: transparent;
 
+  position: relative;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -511,48 +512,6 @@
   color: var(--error);
 }
 
-.server-card-remove-confirm {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  flex-shrink: 0;
-}
-
-.server-card-remove-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--error);
-  white-space: nowrap;
-}
-
-.server-card-remove-yes,
-.server-card-remove-no {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0.2rem;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  transition: background 0.15s, color 0.15s;
-}
-
-.server-card-remove-yes {
-  color: var(--error);
-}
-
-.server-card-remove-yes:hover {
-  background: rgba(239, 68, 68, 0.15);
-}
-
-.server-card-remove-no {
-  color: var(--text-muted);
-}
-
-.server-card-remove-no:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
 
 /* ── System info strip ───────────────────────────────────────────────────── */
 
@@ -728,18 +687,106 @@
   color: var(--success) !important;
 }
 
-.server-card-restart-confirm {
+/* ── Card confirm overlay (restart / remove) ─────────────────────────────── */
+
+.server-card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg-secondary) 97%, transparent);
+  backdrop-filter: blur(3px);
+  border-radius: inherit;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  flex-shrink: 0;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+  animation: overlay-in 0.12s ease;
 }
 
-.server-card-restart-label {
-  font-size: 0.72rem;
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.server-card-overlay-icon {
+  margin-bottom: 0.25rem;
+}
+
+.server-card-overlay-icon--accent { color: var(--accent); }
+.server-card-overlay-icon--danger { color: var(--error); }
+
+.server-card-overlay-title {
+  margin: 0;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text-primary);
+}
+
+.server-card-overlay-sub {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
+}
+
+.server-card-overlay-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.server-card-overlay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.server-card-overlay-btn--cancel {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.server-card-overlay-btn--cancel:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.server-card-overlay-btn--confirm {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.server-card-overlay-btn--confirm:hover {
+  background: var(--accent-hover, color-mix(in srgb, var(--accent) 85%, #000));
+  border-color: var(--accent-hover, color-mix(in srgb, var(--accent) 85%, #000));
+}
+
+.server-card-overlay-btn--danger {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+
+.server-card-overlay-btn--danger:hover {
+  background: color-mix(in srgb, var(--error) 85%, #000);
+  border-color: color-mix(in srgb, var(--error) 85%, #000);
 }
 
 /* Spinner */
@@ -1119,22 +1166,11 @@
   white-space: nowrap;
 }
 
-.monitoring-interval-select {
-  padding: 0.2rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+.monitoring-interval-btn {
   font-size: 0.78rem;
-  font-family: inherit;
-  cursor: pointer;
-  appearance: none;
-  transition: border-color 0.15s;
-}
-
-.monitoring-interval-select:focus {
-  outline: none;
-  border-color: var(--accent);
+  padding: 0.2rem 0.55rem;
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .monitoring-discord {

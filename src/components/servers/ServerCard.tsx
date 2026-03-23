@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2, Bell, BellRing, RotateCcw } from 'lucide-react'
+import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2, Bell, BellRing, RotateCcw, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ServerHealthStatus, ServerSystemInfo } from '@/hooks/useServerHealthCheck'
@@ -76,6 +76,7 @@ export function ServerCard({
 }: ServerCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
+  const showOverlay = confirmRemove || confirmRestart
   const [restarting, setRestarting] = useState(false)
   const [restartDone, setRestartDone] = useState(false)
   const [restartError, setRestartError] = useState<string | null>(null)
@@ -139,6 +140,40 @@ export function ServerCard({
       style={style}
       className={`server-card ${healthClass} ${isDuplicate ? 'server-card--duplicate' : ''}`}
     >
+      {showOverlay && (
+        <div className="server-card-overlay">
+          {confirmRestart && (
+            <>
+              <RotateCcw size={20} className="server-card-overlay-icon server-card-overlay-icon--accent" />
+              <p className="server-card-overlay-title">Restart ComfyUI?</p>
+              <p className="server-card-overlay-sub">{bareUrl}</p>
+              <div className="server-card-overlay-actions">
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRestart(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--confirm" onClick={handleRestart}>
+                  <RotateCcw size={13} /> Restart
+                </button>
+              </div>
+            </>
+          )}
+          {confirmRemove && (
+            <>
+              <Trash2 size={20} className="server-card-overlay-icon server-card-overlay-icon--danger" />
+              <p className="server-card-overlay-title">Remove server?</p>
+              <p className="server-card-overlay-sub">{bareUrl}</p>
+              <div className="server-card-overlay-actions">
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRemove(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--danger" onClick={() => onRemove(index)}>
+                  <Trash2 size={13} /> Remove
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <div className="server-card-header">
         {showDragHandle && (
           <div className="server-card-drag-handle" {...attributes} {...listeners} title="Drag to reorder">
@@ -177,21 +212,9 @@ export function ServerCard({
             {isWatched ? <BellRing size={13} /> : <Bell size={13} />}
           </button>
         )}
-        {confirmRemove ? (
-          <div className="server-card-remove-confirm">
-            <span className="server-card-remove-label">Remove?</span>
-            <button type="button" className="server-card-remove-yes" onClick={() => onRemove(index)} title="Confirm remove">
-              <Check size={12} />
-            </button>
-            <button type="button" className="server-card-remove-no" onClick={() => setConfirmRemove(false)} title="Cancel">
-              <X size={12} />
-            </button>
-          </div>
-        ) : (
-          <button type="button" className="server-card-remove" onClick={() => setConfirmRemove(true)} title="Remove server">
-            <X size={14} />
-          </button>
-        )}
+        <button type="button" className="server-card-remove" onClick={() => setConfirmRemove(true)} title="Remove server">
+          <X size={14} />
+        </button>
       </div>
 
       {(serverGroups[norm] ?? []).length > 0 && (
@@ -251,27 +274,15 @@ export function ServerCard({
           <button type="button" className="server-action-btn" onClick={() => onViewLogs(server)} title="View server logs">
             <FileText size={14} />
           </button>
-          {confirmRestart ? (
-            <div className="server-card-restart-confirm">
-              <span className="server-card-restart-label">Restart?</span>
-              <button type="button" className="server-card-remove-yes" onClick={handleRestart} title="Confirm restart">
-                <Check size={12} />
-              </button>
-              <button type="button" className="server-card-remove-no" onClick={() => setConfirmRestart(false)} title="Cancel">
-                <X size={12} />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className={`server-action-btn${restartDone ? ' server-action-btn--done' : ''}`}
-              onClick={() => setConfirmRestart(true)}
-              disabled={restarting}
-              title="Restart ComfyUI (requires ComfyUI Manager)"
-            >
-              {restarting ? <Loader2 size={14} className="spin" /> : restartDone ? <Check size={14} /> : <RotateCcw size={14} />}
-            </button>
-          )}
+          <button
+            type="button"
+            className={`server-action-btn${restartDone ? ' server-action-btn--done' : ''}`}
+            onClick={() => setConfirmRestart(true)}
+            disabled={restarting}
+            title="Restart ComfyUI (requires ComfyUI Manager)"
+          >
+            {restarting ? <Loader2 size={14} className="spin" /> : restartDone ? <Check size={14} /> : <RotateCcw size={14} />}
+          </button>
           <button type="button" className="server-action-btn" onClick={() => onCheck(norm)} disabled={isServerChecking} title="Check server health">
             {isServerChecking ? <Loader2 size={14} className="spin" /> : <Activity size={14} />}
           </button>

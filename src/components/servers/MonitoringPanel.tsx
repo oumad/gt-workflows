@@ -10,6 +10,15 @@ const INTERVAL_OPTIONS = [
   { value: 600, label: '10m' },
 ]
 
+function cycleInterval(current: number): number {
+  const idx = INTERVAL_OPTIONS.findIndex((o) => o.value === current)
+  return INTERVAL_OPTIONS[(idx + 1) % INTERVAL_OPTIONS.length].value
+}
+
+function intervalLabel(seconds: number): string {
+  return INTERVAL_OPTIONS.find((o) => o.value === seconds)?.label ?? `${seconds}s`
+}
+
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return '—'
   const elapsed = Date.now() - new Date(iso).getTime()
@@ -148,15 +157,14 @@ export function MonitoringPanel({
           <div className="monitoring-panel-footer">
             <div className="monitoring-panel-footer-left">
               <span className="monitoring-footer-label">Check every</span>
-              <select
-                className="monitoring-interval-select"
-                value={intervalSeconds}
-                onChange={(e) => onUpdateInterval(Number(e.target.value))}
+              <button
+                type="button"
+                className="btn btn-toolbar monitoring-interval-btn"
+                onClick={() => onUpdateInterval(cycleInterval(intervalSeconds))}
+                title="Click to cycle check interval"
               >
-                {INTERVAL_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                {intervalLabel(intervalSeconds)}
+              </button>
             </div>
             <div className="monitoring-panel-footer-right">
               {discordEnabled ? (
