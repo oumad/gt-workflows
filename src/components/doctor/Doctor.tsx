@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Stethoscope, RefreshCw, AlertCircle, TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight, Search, Hash, Percent, Timer, TimerOff } from 'lucide-react'
+import { Stethoscope, RefreshCw, AlertCircle, TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight, Search, Hash, Percent, Timer, TimerOff, Loader2 } from 'lucide-react'
 import { useDoctor, DOCTOR_PERIODS, FAILED_JOBS_PAGE_SIZE } from './useDoctor'
 import FailedJobModal from './FailedJobModal'
 import type { DoctorRankItem, FailedJobSummary, DoctorPeriod, WeeklyHistoryItem } from '@/services/api/stats'
@@ -118,11 +118,27 @@ function formatShortTs(ts: number | null): string {
   })
 }
 
+function formatRefreshedTime(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function getShortError(reason: string | null): string {
+  if (!reason) return ''
+  const first = reason.split('\n')[0].trim()
+  return first.length > 72 ? first.slice(0, 69) + '…' : first
+}
+
 export function Doctor(): React.ReactElement {
   const d = useDoctor()
   const [selectedJob, setSelectedJob] = useState<FailedJobSummary | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(d.failedJobsTotal / FAILED_JOBS_PAGE_SIZE))
+  const pageStart = d.failedJobsTotal === 0 ? 0 : (d.failedJobsPage - 1) * FAILED_JOBS_PAGE_SIZE + 1
+  const pageEnd = Math.min(d.failedJobsPage * FAILED_JOBS_PAGE_SIZE, d.failedJobsTotal)
+  const isSearching = d.searchPending || d.failedJobsLoading
+
+  const emptyLabel = (label: string) =>
+    d.hideAborted ? `${label} (excl. aborted)` : label
 
   return (
     <div className="doctor-page">
@@ -136,6 +152,11 @@ export function Doctor(): React.ReactElement {
           </p>
         </div>
         <div className="doctor-controls">
+          {d.lastRefreshed && (
+            <span className="doctor-last-refreshed" title={`Last refreshed at ${formatRefreshedTime(d.lastRefreshed)}`}>
+              {formatRefreshedTime(d.lastRefreshed)}
+            </span>
+          )}
           <select
             className="doctor-period-select"
             value={d.period}
@@ -146,6 +167,14 @@ export function Doctor(): React.ReactElement {
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
+          <button
+            type="button"
+            className={`btn btn-toolbar${d.hideAborted ? ' btn-toolbar--active' : ''}`}
+            onClick={() => d.setHideAborted(!d.hideAborted)}
+            title="Hide jobs aborted by the user from all panels"
+          >
+            Hide aborted
+          </button>
           <button type="button" className="btn btn-toolbar" onClick={d.refresh} disabled={d.loading} title="Refresh diagnostics">
             <RefreshCw size={18} className={d.loading ? 'spin' : ''} /> Refresh
           </button>
@@ -153,7 +182,7 @@ export function Doctor(): React.ReactElement {
             type="button"
             className={`btn btn-toolbar ${d.autoInterval ? 'btn-toolbar--active' : ''}`}
             onClick={d.cycleAutoInterval}
-            title={d.autoInterval ? `Auto-refresh every ${d.autoInterval < 60 ? `${d.autoInterval}s` : `${d.autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (30s / 1m / 5m)'}
+            title={d.autoInterval ? `Auto-refresh every ${d.autoInterval < 60 ? `${d.autoInterval}s` : `${d.autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (5s / 30s / 1m / 5m)'}
           >
             {d.autoInterval ? <Timer size={18} /> : <TimerOff size={18} />}
             {d.autoInterval
@@ -181,30 +210,53 @@ export function Doctor(): React.ReactElement {
               <div className="doctor-card">
                 <div className="doctor-card-header">Total Failed Jobs</div>
                 <div className="doctor-card-value">{d.totalFailed.toLocaleString()}</div>
-                <div className="doctor-card-footer">All time</div>
+                <div className="doctor-card-footer">
+                  {d.hideAborted ? 'All time · excl. aborted' : 'All time'}
+                </div>
               </div>
               <WeeklyTrendCard history={d.weeklyHistory} />
             </div>
-            <RankingCard title="Most Common Errors" items={d.topErrors} emptyLabel="No errors in this period" />
+            <RankingCard
+              title="Most Common Errors"
+              items={d.topErrors}
+              emptyLabel={emptyLabel('No errors in this period')}
+            />
           </div>
 
           <div className="doctor-rankings">
-            <RankingCard title="Most Failed Workflows" items={d.topWorkflows} emptyLabel="No failed workflows in this period" />
-            <RankingCard title="Most Failed Servers" items={d.topServers} emptyLabel="No server failures in this period" />
-            <RankingCard title="Most Failing Users" items={d.topUsers} emptyLabel="No user failures in this period" />
+            <RankingCard
+              title="Most Failed Workflows"
+              items={d.topWorkflows}
+              emptyLabel={emptyLabel('No failed workflows in this period')}
+            />
+            <RankingCard
+              title="Most Failed Servers"
+              items={d.topServers}
+              emptyLabel={emptyLabel('No server failures in this period')}
+            />
+            <RankingCard
+              title="Most Failing Users"
+              items={d.topUsers}
+              emptyLabel={emptyLabel('No user failures in this period')}
+            />
           </div>
 
           <div className="doctor-failed-panel">
             <div className="doctor-failed-panel-header">
               <div className="doctor-failed-panel-left">
                 <h2 className="doctor-failed-panel-title">Failed Jobs</h2>
-                <span className="doctor-failed-panel-count">{d.failedJobsTotal.toLocaleString()} total</span>
+                {d.failedJobsTotal > 0 && (
+                  <span className="doctor-failed-panel-count">{d.failedJobsTotal.toLocaleString()} total</span>
+                )}
               </div>
               <div className="doctor-failed-search">
-                <Search size={14} className="doctor-failed-search-icon" />
+                {isSearching
+                  ? <Loader2 size={14} className="doctor-failed-search-icon spin" />
+                  : <Search size={14} className="doctor-failed-search-icon" />
+                }
                 <input
                   type="text"
-                  className="doctor-failed-search-input"
+                  className={`doctor-failed-search-input${isSearching ? ' doctor-failed-search-input--busy' : ''}`}
                   placeholder="Search by ID, workflow, server, user or error…"
                   value={d.failedJobsSearch}
                   onChange={(e) => d.setFailedJobsSearch(e.target.value)}
@@ -215,7 +267,14 @@ export function Doctor(): React.ReactElement {
             {d.failedJobsLoading && d.failedJobs.length === 0 ? (
               <div className="doctor-loading">Loading failed jobs…</div>
             ) : d.failedJobs.length === 0 ? (
-              <div className="doctor-failed-empty">No failed jobs in the queue.</div>
+              <div className="doctor-failed-empty">
+                {d.failedJobsSearch
+                  ? `No results for "${d.failedJobsSearch}"${d.hideAborted ? ' (excl. aborted)' : ''}.`
+                  : d.hideAborted
+                    ? 'No failed jobs (excluding aborted).'
+                    : 'No failed jobs in the queue.'
+                }
+              </div>
             ) : (
               <>
                 <div className="doctor-failed-table-wrap">
@@ -224,7 +283,7 @@ export function Doctor(): React.ReactElement {
                       <tr>
                         <th>ID</th>
                         <th>Workflow</th>
-                        <th>Server</th>
+                        <th>Error</th>
                         <th>User</th>
                         <th>Failed at</th>
                       </tr>
@@ -234,7 +293,9 @@ export function Doctor(): React.ReactElement {
                         <tr key={job.id} className="doctor-failed-row" onClick={() => setSelectedJob(job)}>
                           <td className="doctor-failed-cell-id">{job.id}</td>
                           <td title={job.name}>{job.name || '—'}</td>
-                          <td title={job.server}>{job.server}</td>
+                          <td className="doctor-failed-cell-error" title={job.failedReason ?? undefined}>
+                            {getShortError(job.failedReason)}
+                          </td>
                           <td>{job.user}</td>
                           <td className="doctor-failed-cell-ts">{formatShortTs(job.finishedOn)}</td>
                         </tr>
@@ -253,7 +314,7 @@ export function Doctor(): React.ReactElement {
                     <ChevronLeft size={16} />
                   </button>
                   <span className="doctor-pagination-label">
-                    Page {d.failedJobsPage} of {totalPages}
+                    {pageStart}–{pageEnd} of {d.failedJobsTotal.toLocaleString()}
                   </span>
                   <button
                     type="button"

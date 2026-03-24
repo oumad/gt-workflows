@@ -31,6 +31,8 @@ export interface AppPreferences {
   serverAliases: Record<string, string>
   /** Tag labels for monitored servers (URL -> list of tags) */
   serverGroups?: Record<string, string[]>
+  /** Doctor tab: hide jobs whose error contains "abort" from all panels */
+  doctorHideAborted?: boolean
 }
 
 const DEFAULT_PREFERENCES: AppPreferences = {

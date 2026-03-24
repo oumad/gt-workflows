@@ -28,6 +28,15 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.doctor-last-refreshed {
+  font-size: 0.75rem;
+  color: var(--text-muted, #666);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .doctor-period-select {
@@ -374,6 +383,10 @@
   border-color: var(--color-primary, #6366f1);
 }
 
+.doctor-failed-search-input--busy {
+  opacity: 0.7;
+}
+
 .doctor-failed-empty {
   padding: 2rem 1rem;
   text-align: center;
@@ -432,6 +445,13 @@
   white-space: nowrap;
   color: var(--text-secondary, #888);
   font-size: 0.8rem;
+}
+
+.doctor-failed-cell-error {
+  max-width: 260px;
+  color: var(--color-error, #ef4444);
+  font-size: 0.8rem;
+  opacity: 0.85;
 }
 
 /* ---- Pagination ---- */

@@ -340,6 +340,7 @@
   /* Left accent bar driven by CSS custom property */
   --card-accent: transparent;
 
+  position: relative;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -511,48 +512,6 @@
   color: var(--error);
 }
 
-.server-card-remove-confirm {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  flex-shrink: 0;
-}
-
-.server-card-remove-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--error);
-  white-space: nowrap;
-}
-
-.server-card-remove-yes,
-.server-card-remove-no {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0.2rem;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  transition: background 0.15s, color 0.15s;
-}
-
-.server-card-remove-yes {
-  color: var(--error);
-}
-
-.server-card-remove-yes:hover {
-  background: rgba(239, 68, 68, 0.15);
-}
-
-.server-card-remove-no {
-  color: var(--text-muted);
-}
-
-.server-card-remove-no:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
 
 /* ── System info strip ───────────────────────────────────────────────────── */
 
@@ -724,6 +683,112 @@
   cursor: not-allowed;
 }
 
+.server-action-btn--done {
+  color: var(--success) !important;
+}
+
+/* ── Card confirm overlay (restart / remove) ─────────────────────────────── */
+
+.server-card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg-secondary) 97%, transparent);
+  backdrop-filter: blur(3px);
+  border-radius: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+  animation: overlay-in 0.12s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.server-card-overlay-icon {
+  margin-bottom: 0.25rem;
+}
+
+.server-card-overlay-icon--accent { color: var(--accent); }
+.server-card-overlay-icon--danger { color: var(--error); }
+
+.server-card-overlay-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.server-card-overlay-sub {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.server-card-overlay-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.server-card-overlay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.server-card-overlay-btn--cancel {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.server-card-overlay-btn--cancel:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.server-card-overlay-btn--confirm {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.server-card-overlay-btn--confirm:hover {
+  background: var(--accent-hover, color-mix(in srgb, var(--accent) 85%, #000));
+  border-color: var(--accent-hover, color-mix(in srgb, var(--accent) 85%, #000));
+}
+
+.server-card-overlay-btn--danger {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+
+.server-card-overlay-btn--danger:hover {
+  background: color-mix(in srgb, var(--error) 85%, #000);
+  border-color: color-mix(in srgb, var(--error) 85%, #000);
+}
+
 /* Spinner */
 .spin {
   animation: srv-spin 0.9s linear infinite;
@@ -840,6 +905,283 @@
   color: var(--text-muted) !important;
   max-width: 40ch;
 }
+
+/* ── Bell watch button ───────────────────────────────────────────────────── */
+
+.server-card-watch-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.server-card-watch-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.server-card-watch-btn--active {
+  color: var(--accent);
+}
+
+.server-card-watch-btn--active:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* ── Monitoring panel ────────────────────────────────────────────────────── */
+
+.monitoring-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.monitoring-panel--alert {
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+
+.monitoring-panel--empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.monitoring-panel-empty-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.monitoring-panel-empty-text {
+  line-height: 1.5;
+}
+
+/* Header */
+
+.monitoring-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.875rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.monitoring-panel-header:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.monitoring-panel--alert .monitoring-panel-header {
+  background: color-mix(in srgb, var(--error) 6%, transparent);
+}
+
+.monitoring-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.monitoring-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.monitoring-panel-bell {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.monitoring-panel-bell--alert {
+  color: var(--error);
+}
+
+.monitoring-panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.monitoring-panel-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.monitoring-panel-badge--ok {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.monitoring-panel-badge--down {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 28%, transparent);
+}
+
+.monitoring-panel-badge--warn {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent);
+  color: var(--warning, #f59e0b);
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 28%, transparent);
+}
+
+.monitoring-panel-chevron {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+/* Body */
+
+.monitoring-panel-body {
+  border-top: 1px solid var(--border);
+}
+
+/* Table */
+
+.monitoring-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.monitoring-table th {
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.monitoring-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  vertical-align: middle;
+}
+
+.monitoring-row:last-child td {
+  border-bottom: none;
+}
+
+.monitoring-row--down {
+  background: color-mix(in srgb, var(--error) 5%, transparent);
+}
+
+.monitoring-cell-server {
+  min-width: 0;
+  max-width: 220px;
+}
+
+.monitoring-server-alias {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitoring-server-url {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+
+.monitoring-cell-status { white-space: nowrap; }
+.monitoring-cell-latency { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.monitoring-cell-time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 0.78rem; }
+.monitoring-cell-error {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--error);
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+}
+
+.monitoring-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.monitoring-status--healthy { color: var(--success); }
+.monitoring-status--down    { color: var(--error); }
+.monitoring-status--unknown { color: var(--text-muted); }
+
+/* Footer */
+
+.monitoring-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.875rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-wrap: wrap;
+}
+
+.monitoring-panel-footer-left,
+.monitoring-panel-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.monitoring-footer-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.monitoring-interval-btn {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.monitoring-discord {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+}
+
+.monitoring-discord--enabled  { color: var(--success); }
+.monitoring-discord--disabled { color: var(--text-muted); font-style: italic; }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 

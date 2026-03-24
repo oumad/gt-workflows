@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2 } from 'lucide-react'
+import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2, Bell, BellRing, RotateCcw, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ServerHealthStatus, ServerSystemInfo } from '@/hooks/useServerHealthCheck'
 import type { QueueDepth } from '@/services/api/servers'
+import { restartServer } from '@/services/api/servers'
 import { formatRelativeTime } from '@/utils/dateFormat'
 
 // Ticks relative time every 30s
@@ -58,20 +59,46 @@ interface ServerCardProps {
   isDuplicate?: boolean
   queueDepth?: QueueDepth
   showDragHandle: boolean
+  isWatched?: boolean
   onRemove: (index: number) => void
   onEdit: (url: string) => void
   onViewLogs: (url: string) => void
   onCheck: (url: string) => void
   onViewWorkflows: (url: string) => void
   onViewJobs: (url: string) => void
+  onToggleWatch?: (url: string) => void
 }
 
 export function ServerCard({
   server, index, serverAliases, serverGroups, health, wfCount, isServerChecking,
-  isDuplicate, queueDepth, showDragHandle,
-  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs,
+  isDuplicate, queueDepth, showDragHandle, isWatched,
+  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs, onToggleWatch,
 }: ServerCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [confirmRestart, setConfirmRestart] = useState(false)
+  const showOverlay = confirmRemove || confirmRestart
+  const [restarting, setRestarting] = useState(false)
+  const [restartDone, setRestartDone] = useState(false)
+  const [restartError, setRestartError] = useState<string | null>(null)
+
+  async function handleRestart() {
+    if (restarting) return
+    setConfirmRestart(false)
+    setRestarting(true)
+    setRestartDone(false)
+    setRestartError(null)
+    try {
+      await restartServer(norm)
+      setRestartDone(true)
+      setTimeout(() => setRestartDone(false), 4000)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Restart failed'
+      setRestartError(msg)
+      setTimeout(() => setRestartError(null), 6000)
+    } finally {
+      setRestarting(false)
+    }
+  }
   const norm = server.replace(/\/$/, '')
   const bareUrl = server.replace(/^https?:\/\//, '')
 
@@ -113,6 +140,40 @@ export function ServerCard({
       style={style}
       className={`server-card ${healthClass} ${isDuplicate ? 'server-card--duplicate' : ''}`}
     >
+      {showOverlay && (
+        <div className="server-card-overlay">
+          {confirmRestart && (
+            <>
+              <RotateCcw size={20} className="server-card-overlay-icon server-card-overlay-icon--accent" />
+              <p className="server-card-overlay-title">Restart ComfyUI?</p>
+              <p className="server-card-overlay-sub">{bareUrl}</p>
+              <div className="server-card-overlay-actions">
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRestart(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--confirm" onClick={handleRestart}>
+                  <RotateCcw size={13} /> Restart
+                </button>
+              </div>
+            </>
+          )}
+          {confirmRemove && (
+            <>
+              <Trash2 size={20} className="server-card-overlay-icon server-card-overlay-icon--danger" />
+              <p className="server-card-overlay-title">Remove server?</p>
+              <p className="server-card-overlay-sub">{bareUrl}</p>
+              <div className="server-card-overlay-actions">
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRemove(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--danger" onClick={() => onRemove(index)}>
+                  <Trash2 size={13} /> Remove
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <div className="server-card-header">
         {showDragHandle && (
           <div className="server-card-drag-handle" {...attributes} {...listeners} title="Drag to reorder">
@@ -141,21 +202,19 @@ export function ServerCard({
         <button type="button" className="server-card-edit-btn" onClick={() => onEdit(server)} title="Edit server">
           <Pencil size={13} />
         </button>
-        {confirmRemove ? (
-          <div className="server-card-remove-confirm">
-            <span className="server-card-remove-label">Remove?</span>
-            <button type="button" className="server-card-remove-yes" onClick={() => onRemove(index)} title="Confirm remove">
-              <Check size={12} />
-            </button>
-            <button type="button" className="server-card-remove-no" onClick={() => setConfirmRemove(false)} title="Cancel">
-              <X size={12} />
-            </button>
-          </div>
-        ) : (
-          <button type="button" className="server-card-remove" onClick={() => setConfirmRemove(true)} title="Remove server">
-            <X size={14} />
+        {onToggleWatch && (
+          <button
+            type="button"
+            className={`server-card-watch-btn${isWatched ? ' server-card-watch-btn--active' : ''}`}
+            onClick={() => onToggleWatch(server)}
+            title={isWatched ? 'Stop monitoring this server' : 'Monitor this server in background'}
+          >
+            {isWatched ? <BellRing size={13} /> : <Bell size={13} />}
           </button>
         )}
+        <button type="button" className="server-card-remove" onClick={() => setConfirmRemove(true)} title="Remove server">
+          <X size={14} />
+        </button>
       </div>
 
       {(serverGroups[norm] ?? []).length > 0 && (
@@ -215,6 +274,15 @@ export function ServerCard({
           <button type="button" className="server-action-btn" onClick={() => onViewLogs(server)} title="View server logs">
             <FileText size={14} />
           </button>
+          <button
+            type="button"
+            className={`server-action-btn${restartDone ? ' server-action-btn--done' : ''}`}
+            onClick={() => setConfirmRestart(true)}
+            disabled={restarting}
+            title="Restart ComfyUI (requires ComfyUI Manager)"
+          >
+            {restarting ? <Loader2 size={14} className="spin" /> : restartDone ? <Check size={14} /> : <RotateCcw size={14} />}
+          </button>
           <button type="button" className="server-action-btn" onClick={() => onCheck(norm)} disabled={isServerChecking} title="Check server health">
             {isServerChecking ? <Loader2 size={14} className="spin" /> : <Activity size={14} />}
           </button>
@@ -223,6 +291,9 @@ export function ServerCard({
 
       {health?.healthy === false && health.error && (
         <div className="server-card-error">{health.error}</div>
+      )}
+      {restartError && (
+        <div className="server-card-error">{restartError}</div>
       )}
     </div>
   )

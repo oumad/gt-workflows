@@ -1,9 +1,12 @@
 .server-logs-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+/* ── Loading / Error ─────────────────────────────────────────────────────── */
 
 .server-logs-loading,
 .server-logs-error {
@@ -16,19 +19,114 @@
   color: var(--error);
 }
 
-.server-logs-pre {
-  margin: 0;
-  padding: 1rem;
-  background: var(--bg-primary);
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-x: auto;
+/* ── Sub-toolbar (search + actions) ─────────────────────────────────────── */
+
+.server-logs-subtoolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
+
+.server-logs-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  min-width: 0;
+  flex: 1;
+  max-width: 360px;
+}
+
+.server-logs-search-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.server-logs-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.server-logs-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.server-logs-match-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.server-logs-search-clear {
+  display: inline-flex;
+  padding: 0.1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.server-logs-search-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.server-logs-subtoolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.server-logs-entry-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-right: 0.4rem;
+  white-space: nowrap;
+}
+
+.server-logs-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.server-logs-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* ── Scrollable area ─────────────────────────────────────────────────────── */
+
+.server-logs-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+/* ── iframe ──────────────────────────────────────────────────────────────── */
 
 .server-logs-iframe {
   width: 100%;
@@ -38,24 +136,39 @@
   background: white;
 }
 
-.server-logs-formatted {
-  padding: 0;
+/* ── Raw pre ─────────────────────────────────────────────────────────────── */
+
+.server-logs-pre {
+  margin: 0;
+  padding: 1rem;
   background: var(--bg-primary);
   border-radius: 8px;
   border: 1px solid var(--border);
-  font-size: 0.8rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: 100%;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
+/* ── Formatted table ─────────────────────────────────────────────────────── */
+
+.server-logs-formatted {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  overflow: hidden;
 }
 
 .server-logs-formatted-head,
 .server-logs-formatted-row {
   display: grid;
-  grid-template-columns: 11rem 1fr;
+  grid-template-columns: 13rem 1fr;
   gap: 1rem;
-  padding: 0.35rem 1rem;
-  align-items: start;
+  padding: 0.4rem 1rem;
+  align-items: baseline;
 }
 
 .server-logs-formatted-head {
@@ -64,28 +177,91 @@
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border);
   font-weight: 600;
+  font-size: 0.78rem;
   color: var(--text-secondary);
   z-index: 1;
 }
 
 .server-logs-formatted-row {
-  border-bottom: 1px solid var(--border-subtle, var(--border));
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
 }
 
 .server-logs-formatted-row:last-child {
   border-bottom: none;
 }
 
+.server-logs-formatted-row:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+}
+
+/* ── Level color coding ──────────────────────────────────────────────────── */
+
+.server-logs-row--error {
+  border-left-color: var(--error, #ef4444);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.server-logs-row--error:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.server-logs-row--warn {
+  border-left-color: var(--activity-waiting, #f97316);
+  background: rgba(249, 115, 22, 0.05);
+}
+
+.server-logs-row--warn:hover {
+  background: rgba(249, 115, 22, 0.09);
+}
+
+.server-logs-row--info {
+  border-left-color: var(--accent, #6366f1);
+}
+
+.server-logs-row--debug {
+  border-left-color: var(--border);
+}
+
+.server-logs-row--debug .server-logs-formatted-time,
+.server-logs-row--debug .server-logs-formatted-msg {
+  opacity: 0.6;
+}
+
+/* ── Cell styles ─────────────────────────────────────────────────────────── */
+
 .server-logs-formatted-time {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .server-logs-formatted-msg {
   overflow-wrap: break-word;
+  word-break: break-word;
   white-space: pre-wrap;
+  line-height: 1.55;
   color: var(--text-primary);
-  font-family: inherit;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+  font-size: 0.8rem;
+}
+
+.server-logs-row--error .server-logs-formatted-msg {
+  color: var(--error, #ef4444);
+}
+
+.server-logs-row--warn .server-logs-formatted-msg {
+  color: var(--activity-waiting, #f97316);
+}
+
+/* ── No results ──────────────────────────────────────────────────────────── */
+
+.server-logs-no-results {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }

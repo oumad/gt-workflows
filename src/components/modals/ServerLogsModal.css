@@ -8,10 +8,10 @@
 
 /* Use double-class to beat .modal-content { max-width: 500px } regardless of import order */
 .modal-content.server-logs-modal {
-  max-width: min(760px, 96vw);
-  width: min(760px, 96vw);
-  height: min(88vh, 960px);
-  max-height: 88vh;
+  max-width: min(1100px, 96vw);
+  width: min(1100px, 96vw);
+  height: min(94vh, 1080px);
+  max-height: 94vh;
 }
 
 .server-logs-header {
@@ -94,6 +94,16 @@
 .server-logs-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.server-logs-live-dot {
+  color: var(--activity-active, #22c55e);
+  animation: activity-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes server-logs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* Body styles live in @/components/logs/ServerLogsBody.css */

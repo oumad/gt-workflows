@@ -42,6 +42,7 @@ export const config = Object.freeze({
   port: 3011,
   host: process.env.HOST || '0.0.0.0',
   adminUser: ADMIN_USER || null,
+  dataDir,
   workflowsPath: process.env.GT_WORKFLOWS_PATH
     ? path.resolve(process.env.GT_WORKFLOWS_PATH)
     : path.join(__dirname, '../data/gt-workflows'),
@@ -63,4 +64,8 @@ export const config = Object.freeze({
   guestUser: GUEST_USER || null,
   anonymiseJobStatsUsers: ANONYMIZE_JOB_STATS_USERS,
   guestStats: GUEST_STATS,
+  /** Discord webhook URL for server-down alerts. Alerting disabled when not set. */
+  discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || null,
+  /** Public app URL included in Discord alerts (optional). */
+  appUrl: process.env.APP_URL || null,
 });

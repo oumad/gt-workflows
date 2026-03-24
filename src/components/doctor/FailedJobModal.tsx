@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { X, FileText, RefreshCw } from 'lucide-react'
+import React, { useState, useCallback } from 'react'
+import { X, FileText, RefreshCw, Copy, Check } from 'lucide-react'
 import { getJobLogs, type FailedJobSummary } from '@/services/api/stats'
 
 interface FailedJobModalProps {
@@ -22,6 +22,21 @@ function formatDuration(start: number | null, end: number | null): string {
   return `${m}m ${s % 60}s`
 }
 
+function CopyButton({ text }: { text: string }): React.ReactElement {
+  const [copied, setCopied] = useState(false)
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [text])
+  return (
+    <button type="button" className="btn btn-toolbar btn-sm" onClick={copy} title="Copy to clipboard">
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+    </button>
+  )
+}
+
 export default function FailedJobModal({ job, onClose }: FailedJobModalProps): React.ReactElement {
   const [logs, setLogs] = useState<string[] | null>(null)
   const [logsLoading, setLogsLoading] = useState(false)
@@ -41,7 +56,8 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
     }
   }, [job.id])
 
-  useEffect(() => { loadLogs() }, [loadLogs])
+  const errorText = job.failedReason ?? ''
+  const stackText = job.stacktrace.join('\n')
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -49,7 +65,7 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
         <div className="failed-job-modal-header">
           <div className="failed-job-modal-title">
             <FileText size={20} />
-            <span>Failed Job</span>
+            <span>{job.name || 'Failed Job'}</span>
             <span className="failed-job-modal-id" title={job.id}>#{job.id}</span>
           </div>
           <button type="button" className="failed-job-modal-close" onClick={onClose}>
@@ -93,17 +109,23 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
             </div>
           </div>
 
-          {job.failedReason && (
+          {errorText && (
             <div className="failed-job-section">
-              <h3 className="failed-job-section-title">Error</h3>
-              <pre className="failed-job-pre failed-job-pre--error">{job.failedReason}</pre>
+              <div className="failed-job-section-header">
+                <h3 className="failed-job-section-title">Error</h3>
+                <CopyButton text={errorText} />
+              </div>
+              <pre className="failed-job-pre failed-job-pre--error">{errorText}</pre>
             </div>
           )}
 
           {job.stacktrace.length > 0 && (
             <div className="failed-job-section">
-              <h3 className="failed-job-section-title">Stacktrace</h3>
-              <pre className="failed-job-pre">{job.stacktrace.join('\n')}</pre>
+              <div className="failed-job-section-header">
+                <h3 className="failed-job-section-title">Stacktrace</h3>
+                <CopyButton text={stackText} />
+              </div>
+              <pre className="failed-job-pre">{stackText}</pre>
             </div>
           )}
 
@@ -112,13 +134,16 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
               <h3 className="failed-job-section-title">Logs</h3>
               <button type="button" className="btn btn-toolbar btn-sm" onClick={loadLogs} disabled={logsLoading}>
                 <RefreshCw size={14} className={logsLoading ? 'spin' : ''} />
+                {logs === null && !logsLoading ? 'Load' : ''}
               </button>
             </div>
-            {logsLoading && logs === null ? (
+            {logsLoading ? (
               <div className="failed-job-logs-loading">Loading logs…</div>
             ) : logsError ? (
               <div className="failed-job-logs-error">{logsError}</div>
-            ) : logs && logs.length > 0 ? (
+            ) : logs === null ? (
+              <p className="failed-job-logs-empty">Click load to fetch job logs.</p>
+            ) : logs.length > 0 ? (
               <pre className="failed-job-pre">{logs.join('\n')}</pre>
             ) : (
               <p className="failed-job-logs-empty">No log entries.</p>

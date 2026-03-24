@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/features/auth'
+import { usePreferences } from '@/hooks/usePreferences'
+import { updatePreferences } from '@/services/api/preferences'
 import {
   getDoctorStats, getFailedJobs,
   type DoctorStatsResponse, type DoctorPeriod, type DoctorRankItem, type FailedJobSummary, type WeeklyHistoryItem,
@@ -36,17 +38,22 @@ export interface DoctorState {
   refresh: () => void
   autoInterval: AutoInterval
   cycleAutoInterval: () => void
+  lastRefreshed: Date | null
   failedJobs: FailedJobSummary[]
   failedJobsTotal: number
   failedJobsPage: number
   failedJobsLoading: boolean
   failedJobsSearch: string
+  searchPending: boolean
   setFailedJobsSearch: (q: string) => void
   setFailedJobsPage: (page: number) => void
+  hideAborted: boolean
+  setHideAborted: (v: boolean) => void
 }
 
 export function useDoctor(): DoctorState {
   const { authStatus } = useAuth()
+  const { preferences, invalidate: invalidatePreferences } = usePreferences()
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,13 +64,28 @@ export function useDoctor(): DoctorState {
   const statsAbortRef = useRef<AbortController | null>(null)
   const failedJobsAbortRef = useRef<AbortController | null>(null)
 
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [failedJobs, setFailedJobs] = useState<FailedJobSummary[]>([])
   const [failedJobsTotal, setFailedJobsTotal] = useState(0)
   const [failedJobsPage, setFailedJobsPage] = useState(1)
   const [failedJobsLoading, setFailedJobsLoading] = useState(false)
   const [failedJobsSearch, setFailedJobsSearchRaw] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchPending, setSearchPending] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [hideAbortedOptimistic, setHideAbortedOptimistic] = useState<boolean | null>(null)
+  const hideAborted = hideAbortedOptimistic ?? preferences?.doctorHideAborted ?? false
+  const setHideAborted = useCallback(async (v: boolean) => {
+    setHideAbortedOptimistic(v)
+    setFailedJobsPage(1)
+    try {
+      await updatePreferences({ doctorHideAborted: v })
+    } finally {
+      invalidatePreferences()
+      setHideAbortedOptimistic(null)
+    }
+  }, [invalidatePreferences])
 
   // Cancel all in-flight requests on unmount
   useEffect(() => {
@@ -75,14 +97,16 @@ export function useDoctor(): DoctorState {
 
   const setFailedJobsSearch = useCallback((q: string) => {
     setFailedJobsSearchRaw(q)
+    setSearchPending(true)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
+      setSearchPending(false)
       setDebouncedSearch(q)
       setFailedJobsPage(1)
     }, 300)
   }, [])
 
-  const load = useCallback(async (p: DoctorPeriod) => {
+  const load = useCallback(async (p: DoctorPeriod, hideAb: boolean, force = false) => {
     statsAbortRef.current?.abort()
     const controller = new AbortController()
     statsAbortRef.current = controller
@@ -91,11 +115,11 @@ export function useDoctor(): DoctorState {
     setLoading(true)
     setError(null)
     try {
-      const res = await getDoctorStats(p, controller.signal)
+      const res = await getDoctorStats(p, controller.signal, hideAb, force)
       if (controller.signal.aborted || id !== loadIdRef.current) return
       setConfigured(res.configured)
       if (res.error) setError(res.error)
-      else setData(res)
+      else { setData(res); setLastRefreshed(new Date()) }
     } catch (err) {
       if (controller.signal.aborted || id !== loadIdRef.current) return
       setError(err instanceof Error ? err.message : String(err))
@@ -104,19 +128,20 @@ export function useDoctor(): DoctorState {
     }
   }, [])
 
+  const prefsReady = preferences !== undefined
   useEffect(() => {
-    if (authStatus !== 'ok') return
-    load(period)
-  }, [period, load, authStatus])
+    if (authStatus !== 'ok' || !prefsReady) return
+    load(period, hideAborted)
+  }, [period, hideAborted, load, authStatus, prefsReady])
 
-  const loadFailedJobs = useCallback(async (page: number, search: string) => {
+  const loadFailedJobs = useCallback(async (page: number, search: string, hideAb: boolean) => {
     failedJobsAbortRef.current?.abort()
     const controller = new AbortController()
     failedJobsAbortRef.current = controller
 
     setFailedJobsLoading(true)
     try {
-      const res = await getFailedJobs(page, FAILED_JOBS_PAGE_SIZE, search, controller.signal)
+      const res = await getFailedJobs(page, FAILED_JOBS_PAGE_SIZE, search, controller.signal, hideAb)
       if (controller.signal.aborted) return
       setFailedJobs(res.jobs ?? [])
       setFailedJobsTotal(res.total ?? 0)
@@ -130,8 +155,8 @@ export function useDoctor(): DoctorState {
 
   useEffect(() => {
     if (authStatus !== 'ok' || configured !== true) return
-    loadFailedJobs(failedJobsPage, debouncedSearch)
-  }, [failedJobsPage, debouncedSearch, loadFailedJobs, authStatus, configured])
+    loadFailedJobs(failedJobsPage, debouncedSearch, hideAborted)
+  }, [failedJobsPage, debouncedSearch, hideAborted, loadFailedJobs, authStatus, configured])
 
   const totalFailed = data?.totalFailed ?? 0
   const thisWeekFailed = data?.thisWeekFailed ?? 0
@@ -154,9 +179,9 @@ export function useDoctor(): DoctorState {
   }, [])
 
   const refresh = useCallback(() => {
-    load(period)
-    loadFailedJobs(failedJobsPage, debouncedSearch)
-  }, [load, loadFailedJobs, period, failedJobsPage, debouncedSearch])
+    load(period, hideAborted, true) // bypass server cache
+    loadFailedJobs(failedJobsPage, debouncedSearch, hideAborted)
+  }, [load, loadFailedJobs, period, failedJobsPage, debouncedSearch, hideAborted])
 
   // Stable ref so the interval doesn't reset when refresh deps change
   const refreshRef = useRef(refresh)
@@ -178,7 +203,9 @@ export function useDoctor(): DoctorState {
     topUsers: data?.topUsers ?? [],
     topErrors: data?.topErrors ?? [],
     refresh, autoInterval, cycleAutoInterval,
+    lastRefreshed,
     failedJobs, failedJobsTotal, failedJobsPage, failedJobsLoading,
-    failedJobsSearch, setFailedJobsSearch, setFailedJobsPage,
+    failedJobsSearch, searchPending, setFailedJobsSearch, setFailedJobsPage,
+    hideAborted, setHideAborted,
   }
 }

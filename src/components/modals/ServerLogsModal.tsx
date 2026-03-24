@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, FileText, RefreshCw, Timer } from 'lucide-react';
+import { X, FileText, RefreshCw, Timer, Radio } from 'lucide-react';
 import { fetchServerLogs } from '@/services/api/servers';
 import { ServerLogsBody, type ServerLogsViewMode } from '@/components/logs/ServerLogsBody';
 import './ServerLogsModal.css';
@@ -90,14 +90,14 @@ export default function ServerLogsModal({
             <div className="server-logs-auto-refresh">
               <button
                 type="button"
-                className={`btn btn-toolbar ${autoRefresh ? 'active' : ''}`}
+                className={`btn btn-toolbar ${autoRefresh ? 'btn-toolbar--active' : ''}`}
                 onClick={() => setAutoRefresh((v) => !v)}
                 title={
                   autoRefresh ? 'Stop auto-refresh' : 'Enable auto-refresh'
                 }
               >
-                <Timer size={18} />
-                <span>Auto-refresh</span>
+                {autoRefresh ? <Radio size={16} className="server-logs-live-dot" /> : <Timer size={18} />}
+                <span>{autoRefresh ? 'Live' : 'Auto'}</span>
               </button>
               <select
                 className="server-logs-interval"

@@ -75,4 +75,5 @@ export const AppPreferencesSchema = z.object({
   serverGroups: z.record(
     z.union([z.array(z.string()), z.string()]).transform((v) => (Array.isArray(v) ? v : [v]))
   ).optional(),
+  doctorHideAborted: z.boolean().optional(),
 })

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff } from 'lucide-react'
+import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff, Radio, BarChart2, Terminal } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
 import { useAuth } from '@/features/auth'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
 import { formatDateTimeMedium } from '@/utils/dateFormat'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
+import { ActivityStats } from './ActivityStats'
 import './Activity.css'
 
 const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
@@ -15,6 +16,16 @@ const HOVER_FIELD_OPTIONS: { value: 'name' | 'user' | 'server'; label: string }[
   { value: 'user', label: 'User' },
   { value: 'server', label: 'Server' },
 ]
+
+function formatElapsed(processedOn: number | null | undefined): string {
+  if (processedOn == null) return '—'
+  const elapsed = Date.now() - processedOn
+  if (elapsed < 0) return '—'
+  if (elapsed < 60_000) return `${Math.floor(elapsed / 1000)}s`
+  const m = Math.floor(elapsed / 60_000)
+  if (m < 60) return `${m}m ${Math.floor((elapsed % 60_000) / 1000)}s`
+  return `${Math.floor(m / 60)}h ${m % 60}m`
+}
 
 /** Format processedOn timestamp (ms) for display; returns "—" when missing or invalid. */
 function formatProcessedOn(processedOn: number | null | undefined): { text: string; title: string } {
@@ -72,18 +83,26 @@ function JobCard({
             onViewServerLogs(job.server)
           }}
         >
+          <Terminal size={11} className="activity-job-card-server-icon" />
           {job.server}
         </button>
       </div>
-      <div className="activity-job-card-row">
-        <span className="activity-job-card-label">Processed on</span>
-        <span
-          className="activity-job-card-value"
-          title={processedOnDisplay.title || undefined}
-        >
-          {processedOnDisplay.text}
-        </span>
-      </div>
+      {variant === 'active' ? (
+        <div className="activity-job-card-row">
+          <span className="activity-job-card-label">Running for</span>
+          <span className="activity-job-card-value activity-job-card-elapsed">{formatElapsed(job.processedOn)}</span>
+        </div>
+      ) : (
+        <div className="activity-job-card-row">
+          <span className="activity-job-card-label">Queued at</span>
+          <span
+            className="activity-job-card-value"
+            title={processedOnDisplay.title || undefined}
+          >
+            {processedOnDisplay.text}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -112,7 +131,10 @@ function JobColumn({
 }) {
   return (
     <div className={`activity-column activity-column--${variant}`}>
-      <h2 className="activity-column-title">{title}</h2>
+      <h2 className="activity-column-title">
+        {title}
+        {jobs.length > 0 && <span className="activity-column-count">{jobs.length}</span>}
+      </h2>
       <div className="activity-column-cards">
         {jobs.length === 0 ? (
           <p className="activity-column-empty">No jobs</p>
@@ -145,12 +167,15 @@ type ActivityData = {
 
 export function Activity() {
   const { authStatus } = useAuth()
+  const [view, setView] = useState<'live' | 'stats'>('live')
   const [data, setData] = useState<ActivityData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [hoverField, setHoverField] = useState<'name' | 'user' | 'server'>('server')
   const [hoveredValue, setHoveredValue] = useState<string | null>(null)
   const [logModalServerUrl, setLogModalServerUrl] = useState<string | null>(null)
   const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
+  const [, setElapsedTick] = useState(0)
 
   const cycleAutoInterval = useCallback(() => {
     setAutoInterval((cur) => {
@@ -167,6 +192,7 @@ export function Activity() {
     try {
       const queueRes = await getQueueStatsWithJobLists()
       setData({ queueRes, error: queueRes.error ?? null })
+      setLastRefreshed(new Date())
     } catch (err) {
       setData({
         queueRes: null,
@@ -193,35 +219,60 @@ export function Activity() {
     return () => clearInterval(id)
   }, [autoInterval, authStatus])
 
-  if (loading && !data) {
-    return (
-      <div className="activity-page">
-        <div className="activity-loading">
-          <span className="activity-loading-spinner" />
-          <span>data is loading, please wait :)</span>
-        </div>
-      </div>
-    )
-  }
-
   const configured = data?.queueRes?.configured ?? false
-  if (data && !configured) {
-    return (
-      <div className="activity-page">
-        <div className="activity-not-configured">
-          <p>Activity is not configured.</p>
-          <p className="activity-hint">
-            Set <code>REDIS_URL</code> (and optionally <code>BULL_QUEUE_NAME</code>) in the server environment.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   const queueRes = data?.queueRes
   const activeJobs = queueRes?.active ?? []
   const waitingJobs = queueRes?.waiting ?? []
   const showSpinner = loading && data != null
+
+  // Tick every 5 s to update elapsed times on active cards without a server call
+  useEffect(() => {
+    if (activeJobs.length === 0) return
+    const id = setInterval(() => setElapsedTick((t) => t + 1), 5_000)
+    return () => clearInterval(id)
+  }, [activeJobs.length])
+
+  const liveContent = () => {
+    if (loading && !data) return (
+      <div className="activity-loading">
+        <span className="activity-loading-spinner" />
+        <span>data is loading, please wait :)</span>
+      </div>
+    )
+    if (data && !configured) return (
+      <div className="activity-not-configured">
+        <p>Activity is not configured.</p>
+        <p className="activity-hint">
+          Set <code>REDIS_URL</code> (and optionally <code>BULL_QUEUE_NAME</code>) in the server environment.
+        </p>
+      </div>
+    )
+    return (
+      <>
+        {data?.error && <div className="activity-error">{data.error}</div>}
+        <div className="activity-columns">
+          <JobColumn
+            title="Active jobs"
+            jobs={activeJobs}
+            variant="active"
+            hoverField={hoverField}
+            hoveredValue={hoveredValue}
+            setHoveredValue={setHoveredValue}
+            onViewServerLogs={setLogModalServerUrl}
+          />
+          <JobColumn
+            title="Waiting jobs"
+            jobs={waitingJobs}
+            variant="waiting"
+            hoverField={hoverField}
+            hoveredValue={hoveredValue}
+            setHoveredValue={setHoveredValue}
+            onViewServerLogs={setLogModalServerUrl}
+          />
+        </div>
+      </>
+    )
+  }
 
   return (
     <div className="activity-page">
@@ -231,74 +282,84 @@ export function Activity() {
           Activity
         </h1>
         <div className="activity-toolbar-controls">
-          <button
-            type="button"
-            className="btn btn-toolbar"
-            onClick={load}
-            disabled={loading}
-            title="Refresh"
-          >
-            <RefreshCw size={18} className={loading ? 'spin' : ''} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            className={`btn btn-toolbar ${autoInterval ? 'btn-toolbar--active' : ''}`}
-            onClick={cycleAutoInterval}
-            title={autoInterval ? `Auto-refresh every ${autoInterval < 60 ? `${autoInterval}s` : `${autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (5s / 30s / 1m)'}
-          >
-            {autoInterval ? <Timer size={18} /> : <TimerOff size={18} />}
-            {autoInterval
-              ? autoInterval < 60 ? `Auto ${autoInterval}s` : `Auto ${autoInterval / 60}m`
-              : 'Auto'}
-          </button>
-          <label className="activity-autorefresh-label">
-            Hover
-            <select
-              className="activity-autorefresh-select"
-              value={hoverField}
-              onChange={(e) => setHoverField(e.target.value as 'name' | 'user' | 'server')}
-              disabled={loading}
+          {/* View toggle */}
+          <div className="activity-view-toggle">
+            <button
+              type="button"
+              className={`btn btn-toolbar${view === 'live' ? ' btn-toolbar--active' : ''}`}
+              onClick={() => setView('live')}
+              title="Live queue view"
             >
-              {HOVER_FIELD_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {showSpinner && (
-            <span className="activity-toolbar-loading">
-              <span className="activity-loading-spinner activity-loading-spinner--small" />
-            </span>
+              <Radio size={16} /> Live
+            </button>
+            <button
+              type="button"
+              className={`btn btn-toolbar${view === 'stats' ? ' btn-toolbar--active' : ''}`}
+              onClick={() => setView('stats')}
+              title="Completed jobs stats"
+            >
+              <BarChart2 size={16} /> Stats
+            </button>
+          </div>
+
+          {/* Live-only controls */}
+          {view === 'live' && (
+            <>
+              {lastRefreshed && (
+                <span
+                  className="doctor-last-refreshed"
+                  title={`Last refreshed at ${lastRefreshed.toLocaleTimeString()}`}
+                >
+                  {lastRefreshed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn-toolbar"
+                onClick={load}
+                disabled={loading}
+                title="Refresh"
+              >
+                <RefreshCw size={18} className={loading ? 'spin' : ''} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                className={`btn btn-toolbar ${autoInterval ? 'btn-toolbar--active' : ''}`}
+                onClick={cycleAutoInterval}
+                title={autoInterval ? `Auto-refresh every ${autoInterval < 60 ? `${autoInterval}s` : `${autoInterval / 60}m`} — click to cycle` : 'Enable auto-refresh (5s / 30s / 1m)'}
+              >
+                {autoInterval ? <Timer size={18} /> : <TimerOff size={18} />}
+                {autoInterval
+                  ? autoInterval < 60 ? `Auto ${autoInterval}s` : `Auto ${autoInterval / 60}m`
+                  : 'Auto'}
+              </button>
+              <label className="activity-autorefresh-label">
+                Highlight by
+                <select
+                  className="activity-autorefresh-select"
+                  value={hoverField}
+                  onChange={(e) => setHoverField(e.target.value as 'name' | 'user' | 'server')}
+                  disabled={loading}
+                >
+                  {HOVER_FIELD_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {showSpinner && (
+                <span className="activity-toolbar-loading">
+                  <span className="activity-loading-spinner activity-loading-spinner--small" />
+                </span>
+              )}
+            </>
           )}
         </div>
       </header>
 
-      {data?.error && (
-        <div className="activity-error">{data.error}</div>
-      )}
-
-      <div className="activity-columns">
-        <JobColumn
-          title="Active jobs"
-          jobs={activeJobs}
-          variant="active"
-          hoverField={hoverField}
-          hoveredValue={hoveredValue}
-          setHoveredValue={setHoveredValue}
-          onViewServerLogs={setLogModalServerUrl}
-        />
-        <JobColumn
-          title="Waiting jobs"
-          jobs={waitingJobs}
-          variant="waiting"
-          hoverField={hoverField}
-          hoveredValue={hoveredValue}
-          setHoveredValue={setHoveredValue}
-          onViewServerLogs={setLogModalServerUrl}
-        />
-      </div>
+      {view === 'stats' ? <ActivityStats /> : liveContent()}
 
       {logModalServerUrl != null && (
         <ServerLogsModal
