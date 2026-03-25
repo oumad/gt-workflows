@@ -1,4 +1,5 @@
 import { readMonitoringConfig, writeMonitoringConfig } from './monitoringFs.js';
+import { execFile } from 'child_process';
 
 const CHECK_TIMEOUT_MS = 8_000;
 const DISCORD_COLOR_RED = 0xE74C3C;
@@ -181,7 +182,7 @@ class MonitoringService {
     const webhookUrl = this.appConfig?.discordWebhookUrl;
     if (!webhookUrl) return;
 
-    const appUrl = this.appConfig?.appUrl;
+    const appName = this.appConfig?.appName;
     const count = unhealthyServers.length;
     const embed = {
       title: `🔴 GT Workflows — ${count} server${count > 1 ? 's' : ''} down`,
@@ -194,20 +195,33 @@ class MonitoringService {
       })),
       timestamp: new Date().toISOString(),
     };
-    if (appUrl) embed.footer = { text: appUrl };
+    if (appName) embed.footer = { text: appName };
 
-    console.log(`[Monitoring] Sending Discord alert to webhook (${unhealthyServers.length} server(s))`);
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+    const payload = JSON.stringify({ embeds: [embed] });
+    console.log(`[Monitoring] Sending Discord alert via curl (${unhealthyServers.length} server(s))`);
+    await new Promise((resolve, reject) => {
+      execFile('curl', [
+        '-s', '-o', '/dev/null', '-w', '%{http_code}',
+        '-X', 'POST',
+        '-H', 'Content-Type: application/json',
+        '-d', payload,
+        webhookUrl,
+      ], { timeout: 15_000 }, (err, stdout, stderr) => {
+        if (err) {
+          console.error(`[Monitoring] curl error: ${err.message}${stderr ? ` — ${stderr.slice(0, 200)}` : ''}`);
+          return reject(err);
+        }
+        const status = parseInt(stdout, 10);
+        if (status >= 200 && status < 300) {
+          console.log(`[Monitoring] Discord alert sent (HTTP ${status})`);
+          resolve();
+        } else {
+          const msg = `Discord webhook returned HTTP ${status}`;
+          console.error(`[Monitoring] ${msg}`);
+          reject(new Error(msg));
+        }
+      });
     });
-    if (res.ok) {
-      console.log(`[Monitoring] Discord alert sent (HTTP ${res.status})`);
-    } else {
-      const text = await res.text().catch(() => '');
-      console.error(`[Monitoring] Discord webhook returned ${res.status}: ${text.slice(0, 200)}`);
-    }
   }
 
   getStatus() {

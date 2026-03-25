@@ -66,6 +66,6 @@ export const config = Object.freeze({
   guestStats: GUEST_STATS,
   /** Discord webhook URL for server-down alerts. Alerting disabled when not set. */
   discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || null,
-  /** Public app URL included in Discord alerts (optional). */
-  appUrl: process.env.APP_URL || null,
+  /** App name included in Discord alerts footer (optional). */
+  appName: process.env.APP_NAME || null,
 });
