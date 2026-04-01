@@ -199,7 +199,17 @@ export function createStatsRouter(config) {
 
       const isAborted = (job) => job?.failedReason && job.failedReason.toLowerCase().includes('abort');
       const failedJobs = hideAborted ? rawFailedJobs.filter((j) => !isAborted(j)) : rawFailedJobs;
-      const totalFailed = hideAborted ? failedJobs.length : (counts.failed ?? 0);
+      // Count failures within the selected period only (not all-time Bull counter, which ignores period)
+      let totalFailed;
+      if (period === 'all' && !hideAborted) {
+        totalFailed = counts.failed ?? 0;
+      } else {
+        totalFailed = failedJobs.filter((j) => {
+          if (periodCutoff === 0) return true;
+          const ts = getJobTs(j);
+          return ts != null && ts >= periodCutoff;
+        }).length;
+      }
 
       for (const job of completedJobs) {
         if (!job) continue;
@@ -288,6 +298,10 @@ export function createStatsRouter(config) {
       const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 5), 100);
       const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
       const hideAborted = req.query.hideAborted === '1';
+      const filterWorkflow = typeof req.query.workflow === 'string' ? req.query.workflow : '';
+      const filterServer = typeof req.query.server === 'string' ? req.query.server : '';
+      const filterUser = typeof req.query.user === 'string' ? req.query.user : '';
+      const filterError = typeof req.query.error === 'string' ? req.query.error : '';
 
       const mapJob = (job) => {
         const data = job.data || {};
@@ -312,8 +326,8 @@ export function createStatsRouter(config) {
         };
       };
 
-      if (search || hideAborted) {
-        // search needs full scan; hideAborted-only can use a larger window for accurate counts
+      const needsScan = search || hideAborted || filterWorkflow || filterServer || filterUser || filterError;
+      if (needsScan) {
         const maxJobs = search ? 1000 : 2000;
         const allRaw = await getJobsBatched(queue, 'failed', 0, { batchSize: 200, maxJobs });
         let allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
@@ -326,6 +340,10 @@ export function createStatsRouter(config) {
             (j.failedReason && j.failedReason.toLowerCase().includes(search))
           );
         }
+        if (filterWorkflow) allMapped = allMapped.filter((j) => j.name === filterWorkflow);
+        if (filterServer) allMapped = allMapped.filter((j) => j.server === filterServer);
+        if (filterUser) allMapped = allMapped.filter((j) => j.user === filterUser);
+        if (filterError) allMapped = allMapped.filter((j) => j.failedReason && j.failedReason.toLowerCase().includes(filterError.toLowerCase()));
         if (hideAborted) {
           allMapped = allMapped.filter((j) => !(j.failedReason && j.failedReason.toLowerCase().includes('abort')));
         }
@@ -440,6 +458,14 @@ export function createStatsRouter(config) {
       const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
       const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 5), 100);
       const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+      const sortBy = typeof req.query.sort === 'string' ? req.query.sort : '';
+      const sortDir = req.query.sortDir === 'asc' ? 'asc' : 'desc';
+
+      // Filters
+      const filterUser = typeof req.query.filterUser === 'string' ? req.query.filterUser.trim() : '';
+      const filterServer = typeof req.query.filterServer === 'string' ? req.query.filterServer.trim() : '';
+      const filterWorkflow = typeof req.query.filterWorkflow === 'string' ? req.query.filterWorkflow.trim() : '';
+      const hasFilters = !!(filterUser || filterServer || filterWorkflow);
 
       const mapJob = (job) => {
         const data = job.data || {};
@@ -463,25 +489,77 @@ export function createStatsRouter(config) {
         };
       };
 
-      if (search) {
-        const allRaw = await getJobsBatched(queue, 'completed', 0, { batchSize: 200, maxJobs: 1000 });
-        const allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
-        const filtered = allMapped.filter((j) =>
-          j.id.toLowerCase().includes(search) ||
-          j.name.toLowerCase().includes(search) ||
-          j.server.toLowerCase().includes(search) ||
-          j.user.toLowerCase().includes(search)
-        );
-        const total = filtered.length;
+      const getSortValue = (job, key) => {
+        if (key === 'generation') return job.duration ?? -1;
+        if (key === 'total') {
+          return (job.finishedOn != null && job.timestamp != null) ? job.finishedOn - job.timestamp : -1;
+        }
+        if (key === 'finished') return job.finishedOn ?? -1;
+        return 0;
+      };
+
+      const needsFullSort = sortBy === 'generation' || sortBy === 'total';
+
+      // Direct job ID lookup — search any state (completed, failed, etc.)
+      const isIdSearch = search && /^\d+$/.test(search);
+      if (isIdSearch) {
+        const job = await queue.getJob(search);
+        if (job) {
+          const mapped = mapJob(job);
+          mapped.status = await job.getState();
+          res.json({ configured: true, jobs: [mapped], total: 1, page: 1, pageSize });
+        } else {
+          res.json({ configured: true, jobs: [], total: 0, page: 1, pageSize });
+        }
+      } else if (search || needsFullSort || hasFilters) {
+        // Fetch jobs for text search, custom sort, or filters (Redis sorted set is only ordered by finishedOn)
+        const maxJobs = search ? 10000 : 5000;
+        const allRaw = await getJobsBatched(queue, 'completed', 0, { batchSize: 200, maxJobs });
+        let allMapped = (allRaw || []).filter((j) => j != null).map(mapJob);
+
+        if (search) {
+          allMapped = allMapped.filter((j) =>
+            j.id.toLowerCase().includes(search) ||
+            j.name.toLowerCase().includes(search) ||
+            j.server.toLowerCase().includes(search) ||
+            j.user.toLowerCase().includes(search)
+          );
+        }
+
+        // Apply filters
+        if (filterUser) allMapped = allMapped.filter((j) => j.user === filterUser);
+        if (filterServer) allMapped = allMapped.filter((j) => j.server === filterServer);
+        if (filterWorkflow) allMapped = allMapped.filter((j) => j.name === filterWorkflow);
+
+        if (sortBy) {
+          allMapped.sort((a, b) => {
+            const va = getSortValue(a, sortBy);
+            const vb = getSortValue(b, sortBy);
+            return sortDir === 'asc' ? va - vb : vb - va;
+          });
+        }
+
+        const total = allMapped.length;
         const start = (page - 1) * pageSize;
-        res.json({ configured: true, jobs: filtered.slice(start, start + pageSize), total, page, pageSize });
+        res.json({ configured: true, jobs: allMapped.slice(start, start + pageSize), total, page, pageSize });
       } else {
+        // Default: use Redis sorted set ordering (by finishedOn desc)
         const counts = await queue.getJobCounts();
         const total = counts.completed ?? 0;
-        const start = (page - 1) * pageSize;
-        const raw = await queue.getJobs(['completed'], start, start + pageSize - 1);
-        const jobs = (raw || []).filter((j) => j != null).map(mapJob);
-        res.json({ configured: true, jobs, total, page, pageSize });
+
+        if (sortBy === 'finished' && sortDir === 'asc') {
+          // Reverse the default Redis order
+          const end = total - 1;
+          const start = (page - 1) * pageSize;
+          const raw = await queue.getJobs(['completed'], end - start - pageSize + 1, end - start);
+          const jobs = (raw || []).filter((j) => j != null).map(mapJob).reverse();
+          res.json({ configured: true, jobs, total, page, pageSize });
+        } else {
+          const start = (page - 1) * pageSize;
+          const raw = await queue.getJobs(['completed'], start, start + pageSize - 1);
+          const jobs = (raw || []).filter((j) => j != null).map(mapJob);
+          res.json({ configured: true, jobs, total, page, pageSize });
+        }
       }
     } catch (err) {
       console.error('Error fetching completed jobs:', err);
@@ -634,6 +712,49 @@ export function createStatsRouter(config) {
         serverUsage: [],
         userActivity: [],
       });
+    }
+  });
+
+  /**
+   * Fetch failed jobs in a time range for Time View analytics (failure rate, heatmap).
+   * Returns ActivityJob-shaped objects with `failedReason`.
+   */
+  router.get('/stats/failed-range', async (req, res) => {
+    if (!queue) {
+      return res.json({ configured: false, jobs: [] });
+    }
+    try {
+      const from = req.query.from ? new Date(req.query.from).getTime() : null;
+      const to = req.query.to ? new Date(req.query.to).getTime() : null;
+      if (from == null || to == null || Number.isNaN(from) || Number.isNaN(to)) {
+        return res.status(400).json({ error: 'from and to query params required (ISO dates).' });
+      }
+      const anonymise = shouldAnonymiseUsers(config, req);
+      const maxJobs = Math.min(parseInt(req.query.maxJobs, 10) || 50000, 200000);
+      const chunkSize = Math.min(parseInt(req.query.limit, 10) || 2000, 2000);
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+      const batch = await getJobsBatched(queue, 'failed', from, { batchSize: 200, maxJobs: Math.min(chunkSize, maxJobs) });
+      const jobs = [];
+      let reachedRangeStart = false;
+      for (const job of batch) {
+        if (!job) continue;
+        const ts = job.finishedOn ?? job.processedOn ?? job.timestamp;
+        if (ts == null) continue;
+        if (ts < from) { reachedRangeStart = true; break; }
+        if (ts > to) continue;
+        const mapped = toActivityJob(job, anonymise);
+        if (mapped) jobs.push(mapped);
+      }
+      res.json({
+        configured: true,
+        jobs,
+        totalScanned: offset + batch.length,
+        reachedRangeStart,
+      });
+    } catch (err) {
+      console.error('Error fetching failed-range:', err);
+      res.status(500).json({ configured: true, error: err.message, jobs: [] });
     }
   });
 

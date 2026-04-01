@@ -1,14 +1,22 @@
 import { useState } from 'react'
-import { X, FileJson, Image as ImageIcon, Archive } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, FileJson, Image as ImageIcon, Archive, Download } from 'lucide-react'
 import type { Workflow } from '@/types'
 import { downloadWorkflow, getWorkflowJson, getWorkflowParams } from '@/services/api/workflows'
 import { fetchWithAuth } from '@/utils/auth'
-import './DownloadModal.css'
 
 interface DownloadModalProps {
   workflow: Workflow
   onClose: () => void
 }
+
+const CLS_OPTION = [
+  'flex items-start gap-3 w-full px-4 py-3',
+  'bg-primary border border-default rounded-lg',
+  'cursor-pointer text-left transition-all duration-150',
+  'hover:border-accent/40 hover:bg-tertiary/30',
+  'disabled:opacity-50 disabled:cursor-not-allowed',
+].join(' ')
 
 export default function DownloadModal({
   workflow,
@@ -24,19 +32,13 @@ export default function DownloadModal({
 
       switch (type) {
         case 'all':
-          // Download all workflow files as zip
           await downloadWorkflow(workflow.name)
           break
 
         case 'workflow':
-          // Download workflow.json file only
-          if (!workflow.hasWorkflowFile) {
-            throw new Error('No workflow file found')
-          }
+          if (!workflow.hasWorkflowFile) throw new Error('No workflow file found')
           const workflowJson = await getWorkflowJson(workflow.name)
-          const workflowBlob = new Blob([JSON.stringify(workflowJson, null, 2)], {
-            type: 'application/json',
-          })
+          const workflowBlob = new Blob([JSON.stringify(workflowJson, null, 2)], { type: 'application/json' })
           const workflowUrl = URL.createObjectURL(workflowBlob)
           const workflowLink = document.createElement('a')
           workflowLink.href = workflowUrl
@@ -48,14 +50,9 @@ export default function DownloadModal({
           break
 
         case 'params':
-          // Download params.json file only (neutralize serverUrl for portability)
           const params = await getWorkflowParams(workflow.name)
-          if (params?.comfyui_config?.serverUrl) {
-            params.comfyui_config.serverUrl = 'http://127.0.0.1:8188'
-          }
-          const paramsBlob = new Blob([JSON.stringify(params, null, 2)], {
-            type: 'application/json',
-          })
+          if (params?.comfyui_config?.serverUrl) params.comfyui_config.serverUrl = 'http://127.0.0.1:8188'
+          const paramsBlob = new Blob([JSON.stringify(params, null, 2)], { type: 'application/json' })
           const paramsUrl = URL.createObjectURL(paramsBlob)
           const paramsLink = document.createElement('a')
           paramsLink.href = paramsUrl
@@ -67,18 +64,11 @@ export default function DownloadModal({
           break
 
         case 'icon':
-          // Download icon file only
-          if (!workflow.params.icon) {
-            throw new Error('No icon found')
-          }
+          if (!workflow.params.icon) throw new Error('No icon found')
           const iconPath = workflow.params.icon.replace(/^\.\//, '')
           const iconUrl = `${workflow.folderPath}/${iconPath}`
-          
-          // Fetch the icon as a blob to handle cross-origin properly
           const iconResponse = await fetchWithAuth(iconUrl)
-          if (!iconResponse.ok) {
-            throw new Error('Failed to fetch icon')
-          }
+          if (!iconResponse.ok) throw new Error('Failed to fetch icon')
           const iconBlob = await iconResponse.blob()
           const iconBlobUrl = URL.createObjectURL(iconBlob)
           const iconLink = document.createElement('a')
@@ -99,88 +89,97 @@ export default function DownloadModal({
     }
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content download-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Download Workflow</h2>
-          <button onClick={onClose} className="modal-close">
-            <X size={20} />
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div
+        className="bg-secondary border border-default rounded-xl w-full flex flex-col overflow-hidden shadow-2xl"
+        style={{ maxWidth: 480 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-default shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-accent/[0.15] flex items-center justify-center shrink-0">
+              <Download size={15} className="text-accent-light" />
+            </div>
+            <div>
+              <h2 className="text-[15px] font-semibold text-primary m-0">Download Workflow</h2>
+              <p className="text-xs text-muted mt-0.5 m-0">{workflow.params.label || workflow.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-muted hover:text-primary hover:bg-tertiary transition-colors"
+          >
+            <X size={16} />
           </button>
         </div>
 
-        <div className="modal-body">
+        {/* Body */}
+        <div className="flex-1 px-5 py-4 flex flex-col gap-2.5">
           {error && (
-            <div className="error-banner">
-              <p>{error}</p>
+            <div className="px-3 py-2 rounded-lg bg-semantic-error/[0.08] border border-semantic-error/20 text-sm text-semantic-error">
+              {error}
             </div>
           )}
 
-          <div className="download-options">
-            <button
-              onClick={() => handleDownload('all')}
-              disabled={downloading}
-              className="download-option"
-            >
-              <Archive size={24} />
-              <div className="download-option-content">
-                <h3>All Files (ZIP)</h3>
-                <p>Download all workflow files as a zip archive</p>
-              </div>
-            </button>
+          <button onClick={() => handleDownload('all')} disabled={downloading} className={CLS_OPTION}>
+            <Archive size={18} className="text-accent-light shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-primary">All Files (ZIP)</span>
+              <span className="text-xs text-muted">Download all workflow files as a zip archive</span>
+            </div>
+          </button>
 
-            <button
-              onClick={() => handleDownload('workflow')}
-              disabled={downloading || !workflow.hasWorkflowFile}
-              className="download-option"
-              title={!workflow.hasWorkflowFile ? 'No workflow file available' : ''}
-            >
-              <FileJson size={24} />
-              <div className="download-option-content">
-                <h3>Workflow File</h3>
-                <p>Download workflow.json only</p>
-                {!workflow.hasWorkflowFile && (
-                  <small className="unavailable">Not available</small>
-                )}
-              </div>
-            </button>
+          <button
+            onClick={() => handleDownload('workflow')}
+            disabled={downloading || !workflow.hasWorkflowFile}
+            className={CLS_OPTION}
+            title={!workflow.hasWorkflowFile ? 'No workflow file available' : ''}
+          >
+            <FileJson size={18} className={`shrink-0 mt-0.5 ${workflow.hasWorkflowFile ? 'text-accent-light' : 'text-muted'}`} />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-primary">Workflow File</span>
+              <span className="text-xs text-muted">Download workflow.json only</span>
+              {!workflow.hasWorkflowFile && <span className="text-xs text-muted italic">Not available</span>}
+            </div>
+          </button>
 
-            <button
-              onClick={() => handleDownload('params')}
-              disabled={downloading}
-              className="download-option"
-            >
-              <FileJson size={24} />
-              <div className="download-option-content">
-                <h3>Params File</h3>
-                <p>Download params.json only</p>
-              </div>
-            </button>
+          <button onClick={() => handleDownload('params')} disabled={downloading} className={CLS_OPTION}>
+            <FileJson size={18} className="text-accent-light shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-primary">Params File</span>
+              <span className="text-xs text-muted">Download params.json only</span>
+            </div>
+          </button>
 
-            <button
-              onClick={() => handleDownload('icon')}
-              disabled={downloading || !workflow.params.icon}
-              className="download-option"
-              title={!workflow.params.icon ? 'No icon available' : ''}
-            >
-              <ImageIcon size={24} />
-              <div className="download-option-content">
-                <h3>Icon</h3>
-                <p>Download icon image only</p>
-                {!workflow.params.icon && (
-                  <small className="unavailable">Not available</small>
-                )}
-              </div>
-            </button>
-          </div>
+          <button
+            onClick={() => handleDownload('icon')}
+            disabled={downloading || !workflow.params.icon}
+            className={CLS_OPTION}
+            title={!workflow.params.icon ? 'No icon available' : ''}
+          >
+            <ImageIcon size={18} className={`shrink-0 mt-0.5 ${workflow.params.icon ? 'text-accent-light' : 'text-muted'}`} />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-primary">Icon</span>
+              <span className="text-xs text-muted">Download icon image only</span>
+              {!workflow.params.icon && <span className="text-xs text-muted italic">Not available</span>}
+            </div>
+          </button>
         </div>
 
-        <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary" disabled={downloading}>
-            {downloading ? 'Downloading...' : 'Cancel'}
+        {/* Footer */}
+        <div className="flex justify-end px-5 py-4 border-t border-default shrink-0">
+          <button
+            onClick={onClose}
+            disabled={downloading}
+            className="px-3.5 py-1.5 text-sm rounded-lg bg-tertiary text-secondary border border-default hover:text-primary transition-colors disabled:opacity-40"
+          >
+            {downloading ? 'Downloading...' : 'Close'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

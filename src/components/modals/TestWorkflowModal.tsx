@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Play, Square, CheckCircle, XCircle, FastForward, List, ScrollText } from 'lucide-react'
+import { Play, StopCircle, CheckCircle, XCircle, FastForward, List, ScrollText, RotateCcw } from 'lucide-react'
 import type {
   TestWorkflowState,
   TestWorkflowActions,
@@ -16,7 +16,7 @@ const TAB_NODES = 'nodes' as const
 const TAB_LOGS = 'logs' as const
 type Tab = typeof TAB_NODES | typeof TAB_LOGS
 
-const IDLE_NODE_COUNT_STYLE: React.CSSProperties = { fontSize: '0.8rem' }
+const IDLE_NODE_COUNT_STYLE: React.CSSProperties = { fontSize: '0.75rem' }
 
 export interface TestWorkflowModalProps {
   state: TestWorkflowState
@@ -93,6 +93,8 @@ export function TestWorkflowModal({
     setActiveTab(TAB_NODES)
   }, [])
 
+  const isDone = phase === 'done' || phase === 'error' || phase === 'cancelled'
+
   return (
     <div
       className="modal-overlay modal-overlay--blur"
@@ -110,82 +112,65 @@ export function TestWorkflowModal({
           onClose={onClose}
         />
 
-        <TestWorkflowStatusBanner
-          phase={phase}
-          isRunning={isRunning}
-          serverUrls={serverUrls}
-          selectedServer={selectedServer}
-          doneCount={counts.done + counts.cached}
-          totalCount={counts.total}
-          errorCount={counts.errored}
-          retryAttempt={retryAttempt}
-          retryTotal={retryTotal}
-        />
+        {/* Scrollable area containing sticky bar + content */}
+        <div className="test-wf-modal-content">
+          {/* Sticky status + actions bar */}
+          <div className="test-wf-sticky-bar">
+            <TestWorkflowStatusBanner
+              phase={phase}
+              isRunning={isRunning}
+              serverUrls={serverUrls}
+              selectedServer={selectedServer}
+              doneCount={counts.done + counts.cached}
+              totalCount={counts.total}
+              errorCount={counts.errored}
+              retryAttempt={retryAttempt}
+              retryTotal={retryTotal}
+            />
 
-        <div className="modal-body test-wf-modal-content">
-          <div className="test-wf-actions">
-            {!isRunning && (
-              <button
-                type="button"
-                className="test-wf-start-btn"
-                onClick={startTest}
-              >
-                <Play size={14} />
-                {phase === 'idle' ? 'Start Test' : 'Re-run'}
-              </button>
-            )}
-            {isRunning && (
-              <button
-                type="button"
-                className="test-wf-cancel-btn"
-                onClick={cancelTest}
-              >
-                <Square size={14} />
-                Cancel
-              </button>
-            )}
-          </div>
+            <div className="test-wf-action-bar">
+              {!isRunning && (
+                <button type="button" className="test-wf-start-btn" onClick={startTest}>
+                  {isDone ? <RotateCcw size={13} /> : <Play size={13} />}
+                  {phase === 'idle' ? 'Start Test' : 'Re-run'}
+                </button>
+              )}
+              {isRunning && (
+                <button type="button" className="test-wf-cancel-btn" onClick={cancelTest}>
+                  <StopCircle size={13} />
+                  Cancel
+                </button>
+              )}
 
-          {phase === 'idle' && (
-            <div className="test-wf-idle-message">
-              Click &ldquo;Start Test&rdquo; to execute this workflow on ComfyUI
-              and check for errors.
-              <br />
-              <span style={IDLE_NODE_COUNT_STYLE}>
-                {workflowNodeCount} nodes in workflow
-              </span>
-            </div>
-          )}
-
-          {phase !== 'idle' && (
-            <>
               {counts.total > 0 && (
                 <div className="test-wf-summary">
                   {counts.done > 0 && (
                     <span className="test-wf-summary-item done">
-                      <CheckCircle size={12} /> {counts.done} done
+                      <CheckCircle size={11} /> {counts.done} done
                     </span>
                   )}
                   {counts.cached > 0 && (
                     <span className="test-wf-summary-item cached">
-                      <FastForward size={12} /> {counts.cached} cached
+                      <FastForward size={11} /> {counts.cached} cached
                     </span>
                   )}
                   {counts.errored > 0 && (
                     <span className="test-wf-summary-item error">
-                      <XCircle size={12} /> {counts.errored} error
+                      <XCircle size={11} /> {counts.errored} error
                     </span>
                   )}
                 </div>
               )}
+            </div>
 
+            {phase !== 'idle' && (
               <div className="test-wf-tabs">
                 <button
                   type="button"
                   className={`test-wf-tab ${activeTab === TAB_NODES ? 'active' : ''}`}
                   onClick={handleNodesTabClick}
                 >
-                  <List size={14} />
+                  <List size={13} />
                   Nodes
                   {counts.total > 0 && (
                     <span className="test-wf-tab-badge">
@@ -198,38 +183,56 @@ export function TestWorkflowModal({
                   className={`test-wf-tab ${activeTab === TAB_LOGS ? 'active' : ''}`}
                   onClick={handleLogsTabClick}
                 >
-                  <ScrollText size={14} />
+                  <ScrollText size={13} />
                   Logs
                 </button>
               </div>
+            )}
+          </div>
 
-              {activeTab === TAB_NODES && sortedNodes.length > 0 && (
-                <TestWorkflowNodeList sortedNodes={sortedNodes} />
-              )}
+          {/* Scrollable content */}
+          <div className="test-wf-scroll-area">
+            {phase === 'idle' && (
+              <div className="test-wf-idle-message">
+                Click &ldquo;Start Test&rdquo; to execute this workflow on ComfyUI
+                and check for errors.
+                <br />
+                <span style={IDLE_NODE_COUNT_STYLE}>
+                  {workflowNodeCount} nodes in workflow
+                </span>
+              </div>
+            )}
 
-              {activeTab === TAB_LOGS && (
-                <TestWorkflowLogsPanel
-                  logContent={logContent}
-                  logContentType={logContentType}
-                  logLoading={logLoading}
-                  logError={logError}
-                  viewMode={logsViewMode}
-                  onViewModeChange={setLogsViewMode}
-                  onRefresh={loadLogs}
-                />
-              )}
-            </>
-          )}
+            {phase !== 'idle' && (
+              <>
+                {activeTab === TAB_NODES && sortedNodes.length > 0 && (
+                  <TestWorkflowNodeList sortedNodes={sortedNodes} />
+                )}
 
-          {errorInfo && (
-            <TestWorkflowErrorPanel
-              message={errorInfo.message}
-              nodeId={errorInfo.node_id}
-              nodeType={errorInfo.node_type}
-              details={errorInfo.details}
-              traceback={errorInfo.traceback}
-            />
-          )}
+                {activeTab === TAB_LOGS && (
+                  <TestWorkflowLogsPanel
+                    logContent={logContent}
+                    logContentType={logContentType}
+                    logLoading={logLoading}
+                    logError={logError}
+                    viewMode={logsViewMode}
+                    onViewModeChange={setLogsViewMode}
+                    onRefresh={loadLogs}
+                  />
+                )}
+              </>
+            )}
+
+            {errorInfo && (
+              <TestWorkflowErrorPanel
+                message={errorInfo.message}
+                nodeId={errorInfo.node_id}
+                nodeType={errorInfo.node_type}
+                details={errorInfo.details}
+                traceback={errorInfo.traceback}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

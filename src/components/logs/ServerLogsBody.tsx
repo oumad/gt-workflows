@@ -43,6 +43,7 @@ export function ServerLogsBody({
 }: ServerLogsBodyProps): React.ReactElement {
   const [search, setSearch] = useState('')
   const [copied, setCopied] = useState(false)
+  const [isAtBottom, setIsAtBottom] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
   const wasAtBottomRef = useRef(true)
 
@@ -70,7 +71,9 @@ export function ServerLogsBody({
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    wasAtBottomRef.current = atBottom;
+    setIsAtBottom(atBottom);
   }, []);
 
   // Auto-scroll to bottom when content refreshes (only if already at bottom)
@@ -78,10 +81,12 @@ export function ServerLogsBody({
     const el = scrollRef.current;
     if (!el || !wasAtBottomRef.current) return;
     el.scrollTop = el.scrollHeight;
+    setIsAtBottom(true);
   }, [content]);
 
   const scrollToBottom = useCallback(() => {
     wasAtBottomRef.current = true;
+    setIsAtBottom(true);
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, []);
 
@@ -187,6 +192,7 @@ export function ServerLogsBody({
       </div>
 
       {/* Scrollable content */}
+      <div className="server-logs-scroll-wrap">
       <div className="server-logs-scroll" ref={scrollRef} onScroll={handleScroll}>
         {showFormattedView ? (
           <div className="server-logs-formatted">
@@ -216,6 +222,18 @@ export function ServerLogsBody({
         ) : (
           <pre className="server-logs-pre">{displayContent}</pre>
         )}
+      </div>
+      {!isAtBottom && (
+        <button
+          type="button"
+          className="server-logs-jump-btn"
+          onClick={scrollToBottom}
+          title="Scroll to bottom"
+        >
+          <ArrowDownToLine size={13} />
+          <span>Jump to bottom</span>
+        </button>
+      )}
       </div>
     </div>
   );

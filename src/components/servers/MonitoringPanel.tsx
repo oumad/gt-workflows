@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Bell, ChevronDown, ChevronUp, RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
+import { Bell, BellOff, ChevronDown, ChevronUp, RefreshCw, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
 import type { MonitoringConfig } from '@/hooks/useMonitoring'
 
 const INTERVAL_OPTIONS = [
@@ -45,7 +45,6 @@ export function MonitoringPanel({
   const [expanded, setExpanded] = useState(false)
   const [, setTick] = useState(0)
 
-  // Tick every 15s so relative times stay fresh
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 15_000)
     return () => clearInterval(id)
@@ -60,52 +59,66 @@ export function MonitoringPanel({
 
   if (watchedCount === 0) {
     return (
-      <div className="monitoring-panel monitoring-panel--empty">
-        <Bell size={15} className="monitoring-panel-empty-icon" />
-        <span className="monitoring-panel-empty-text">
-          No servers being monitored. Click the <Bell size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> icon on a server card to enable background monitoring.
-        </span>
+      <div className="monitoring-strip monitoring-strip--empty">
+        <BellOff size={13} className="monitoring-strip-empty-icon" />
+        <span className="monitoring-strip-empty-text">No servers monitored — use the ⋮ menu on a card to enable background monitoring</span>
       </div>
     )
   }
 
   return (
-    <div className={`monitoring-panel${hasDown ? ' monitoring-panel--alert' : ''}`}>
-      <div className="monitoring-panel-header" onClick={() => setExpanded((e) => !e)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setExpanded((v) => !v)}>
-        <div className="monitoring-panel-header-left">
-          <Bell size={15} className={`monitoring-panel-bell${hasDown ? ' monitoring-panel-bell--alert' : ''}`} />
-          <span className="monitoring-panel-title">Background Monitoring</span>
-          <span className={`monitoring-panel-badge${hasDown ? ' monitoring-panel-badge--down' : ' monitoring-panel-badge--ok'}`}>
+    <div className={`monitoring-strip${hasDown ? ' monitoring-strip--alert' : ''}`}>
+      {/* ── Header bar ── */}
+      <div
+        className="monitoring-strip-header"
+        onClick={() => setExpanded((e) => !e)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && setExpanded((v) => !v)}
+      >
+        <div className="monitoring-strip-left">
+          <Bell size={13} className={`monitoring-strip-bell${hasDown ? ' monitoring-strip-bell--alert' : ''}`} />
+          <span className="monitoring-strip-title">Monitoring</span>
+          <span className={`monitoring-strip-badge${hasDown ? ' monitoring-strip-badge--ok' : ' monitoring-strip-badge--ok'}`}>
             {watchedCount} watched
           </span>
           {hasDown && (
-            <span className="monitoring-panel-badge monitoring-panel-badge--down">
+            <span className="monitoring-strip-badge monitoring-strip-badge--down">
               {downCount} down
             </span>
           )}
           {!running && watchedCount > 0 && (
-            <span className="monitoring-panel-badge monitoring-panel-badge--warn">not started</span>
+            <span className="monitoring-strip-badge monitoring-strip-badge--warn">paused</span>
           )}
         </div>
-        <div className="monitoring-panel-header-right">
+
+        <div className="monitoring-strip-right">
           <button
             type="button"
-            className="btn btn-toolbar btn-sm"
+            className="monitoring-strip-interval"
+            onClick={(e) => { e.stopPropagation(); onUpdateInterval(cycleInterval(intervalSeconds)) }}
+            title="Click to cycle check interval"
+          >
+            every {intervalLabel(intervalSeconds)}
+          </button>
+          <button
+            type="button"
+            className="monitoring-strip-btn"
             onClick={(e) => { e.stopPropagation(); onCheckNow() }}
             disabled={checking}
             title="Run checks now"
           >
-            {checking ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-            Check now
+            {checking ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
           </button>
-          <span className="monitoring-panel-chevron">
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          <span className="monitoring-strip-chevron">
+            {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </span>
         </div>
       </div>
 
+      {/* ── Expanded table ── */}
       {expanded && (
-        <div className="monitoring-panel-body">
+        <div className="monitoring-strip-body">
           <table className="monitoring-table">
             <thead>
               <tr>
@@ -154,30 +167,13 @@ export function MonitoringPanel({
             </tbody>
           </table>
 
-          <div className="monitoring-panel-footer">
-            <div className="monitoring-panel-footer-left">
-              <span className="monitoring-footer-label">Check every</span>
-              <button
-                type="button"
-                className="btn btn-toolbar monitoring-interval-btn"
-                onClick={() => onUpdateInterval(cycleInterval(intervalSeconds))}
-                title="Click to cycle check interval"
-              >
-                {intervalLabel(intervalSeconds)}
-              </button>
+          {discordEnabled !== undefined && (
+            <div className="monitoring-strip-footer">
+              <span className={`monitoring-discord${discordEnabled ? ' monitoring-discord--enabled' : ' monitoring-discord--disabled'}`}>
+                {discordEnabled ? 'Discord alerts on' : 'Discord alerts off'}
+              </span>
             </div>
-            <div className="monitoring-panel-footer-right">
-              {discordEnabled ? (
-                <span className="monitoring-discord monitoring-discord--enabled">
-                  Discord alerts enabled
-                </span>
-              ) : (
-                <span className="monitoring-discord monitoring-discord--disabled">
-                  Discord alerts disabled — set DISCORD_WEBHOOK_URL
-                </span>
-              )}
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

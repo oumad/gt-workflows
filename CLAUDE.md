@@ -1,4 +1,4 @@
-# GT Workflows - Agent Guide
+# GT Cofee Maker - Agent Guide
 
 This is the authoritative reference for creating, modifying, and debugging ComfyUI workflows for Gear Tracker's Workflow Studio plugin. Follow these patterns exactly.
 

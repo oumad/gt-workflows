@@ -114,6 +114,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.5rem;
+  scroll-margin-top: 8rem;
 }
 
 .section-header {
@@ -237,7 +238,7 @@
 }
 
 .general-info-badge {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
@@ -305,7 +306,7 @@
 }
 
 .info-item label {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -350,26 +351,62 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 0.5rem 0 0;
 }
 
-.info-input-with-action .info-input {
+.info-input-with-action .info-input,
+.info-input-with-action .server-url-editor .info-input {
   flex: 1;
   min-width: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.info-input-with-action .info-input:focus,
+.info-input-with-action .server-url-editor .info-input:focus {
+  border: none;
+  box-shadow: none;
+}
+
+.info-input-with-action:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(122, 77, 176, 0.15);
+}
+
+.info-input-with-action .server-url-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-input-with-action .server-url-add-btn {
+  border: none;
+  padding: 6px;
+  color: var(--text-muted);
+  border-radius: 4px;
+}
+
+.info-input-with-action .server-url-add-btn:hover {
+  color: var(--accent);
+  background: var(--bg-tertiary);
 }
 
 .workflow-detail-logs-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--bg-tertiary);
+  padding: 0.35rem 0.65rem;
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .workflow-detail-logs-btn:hover {
@@ -469,9 +506,43 @@
 }
 
 .checkbox-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 18px;
   height: 18px;
+  border: 2px solid var(--border, #2d3a4a);
+  border-radius: 4px;
+  background: var(--bg-primary, #0f1419);
   cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.checkbox-label input[type="checkbox"]:hover {
+  border-color: #7a4db0;
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+  background: #7a4db0;
+  border-color: #7a4db0;
+}
+
+.checkbox-label input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-label input[type="checkbox"]:focus-visible {
+  outline: 2px solid #7a4db0;
+  outline-offset: 2px;
 }
 
 .file-upload-area {
@@ -580,7 +651,7 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
@@ -603,8 +674,8 @@
 }
 
 .tags-input-list:focus-within {
-  border-color: var(--accent, #6366f1);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  border-color: var(--accent, #7a4db0);
+  box-shadow: 0 0 0 2px rgba(122, 77, 176, 0.2);
 }
 
 .tag-badge-removable {
@@ -615,7 +686,7 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-primary);
 }
 
@@ -656,7 +727,7 @@
 .tags-hint {
   display: block;
   margin-top: 6px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-muted, #6b7280);
 }
 

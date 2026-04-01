@@ -141,14 +141,14 @@ vite.config.ts.timestamp-*
 # data
 data/
 
-# GT Workflows Manager
+# GT Coffee Maker
 node_modules/
 dist/
 *.log
 .DS_Store
 gt-plugins
 gt-plugins-master
-gt-workflows-manager-e2e
+gt-coffee-maker-e2e
 
 # Claude Code
 .claude/*

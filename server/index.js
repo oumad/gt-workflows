@@ -2,6 +2,8 @@ import { config } from './config.js';
 import { createApp } from './app.js';
 import './lib/queue.js'; // ensure queue is initialized
 import { monitoringService } from './lib/monitoringService.js';
+import { eventReminderService } from './lib/eventReminderService.js';
+import { weeklyRestartCheckService } from './lib/weeklyRestartCheckService.js';
 
 const app = createApp();
 const { port, host, workflowsPath } = config;
@@ -15,4 +17,6 @@ app.listen(port, host, () => {
   monitoringService.init(config.dataDir, config).catch((err) =>
     console.error('[Monitoring] Init error:', err.message)
   );
+  eventReminderService.init(config.dataDir, config);
+  weeklyRestartCheckService.init(config.dataDir, config);
 });

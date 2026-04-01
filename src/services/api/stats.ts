@@ -79,6 +79,9 @@ export interface ActivityJob {
   processedOn: number
   finishedOn?: number
   timestamp?: number
+  timeout?: number
+  failedReason?: string
+  data?: Record<string, unknown>
 }
 
 export interface ActivityResponse {
@@ -159,6 +162,7 @@ export interface CompletedJobSummary {
   processedOn: number | null
   finishedOn: number | null
   duration: number | null
+  status?: string
 }
 
 export interface CompletedJobsResponse {
@@ -262,10 +266,14 @@ export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: Abort
   return response.json()
 }
 
-export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, hideAborted = false): Promise<FailedJobsResponse> {
+export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, hideAborted = false, filters?: JobFilters): Promise<FailedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
   if (hideAborted) params.set('hideAborted', '1')
+  if (filters?.workflow) params.set('workflow', filters.workflow)
+  if (filters?.server) params.set('server', filters.server)
+  if (filters?.user) params.set('user', filters.user)
+  if (filters?.error) params.set('error', filters.error)
   const response = await fetchWithTimeout(
     `/api/stats/doctor/failed-jobs?${params.toString()}`,
     STATS_REQUEST_TIMEOUT_MS,
@@ -289,9 +297,21 @@ export async function getCompletedStats(period = '1w', signal?: AbortSignal, for
   return response.json()
 }
 
-export async function getCompletedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal): Promise<CompletedJobsResponse> {
+export interface JobFilters {
+  user?: string
+  server?: string
+  workflow?: string
+  error?: string
+}
+
+export async function getCompletedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, sort = '', sortDir = '', filters?: JobFilters): Promise<CompletedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
+  if (sort) params.set('sort', sort)
+  if (sortDir) params.set('sortDir', sortDir)
+  if (filters?.user) params.set('filterUser', filters.user)
+  if (filters?.server) params.set('filterServer', filters.server)
+  if (filters?.workflow) params.set('filterWorkflow', filters.workflow)
   const response = await fetchWithTimeout(`/api/stats/completed/jobs?${params.toString()}`, STATS_REQUEST_TIMEOUT_MS, signal)
   if (!response.ok) {
     const body = await response.text()
@@ -466,6 +486,44 @@ export async function getUsageStatsTimeRangeWithJobs(
     if (res.reachedRangeStart) break
     // Use raw jobs scanned (not time-filtered count) to detect true end of queue.
     // chunk.length < limit would misfire when the batch contains jobs outside the time range.
+    if (res.totalScanned != null && res.totalScanned - offset < limit) break
+  }
+  return { jobs: allJobs, configured: true }
+}
+
+/** Fetches failed jobs in a time range for failure rate / heatmap analytics. */
+export async function getFailedJobsTimeRange(
+  from: string,
+  to: string,
+  onProgress?: (scanned: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<TimeViewJobsResult> {
+  const scanLimit = 200000
+  const allJobs: ActivityJob[] = []
+  for (let offset = 0; offset < scanLimit; offset += TIME_VIEW_CHUNK_SIZE) {
+    if (signal?.aborted) break
+    const limit = Math.min(TIME_VIEW_CHUNK_SIZE, scanLimit - offset)
+    const params = new URLSearchParams({
+      from,
+      to,
+      offset: String(offset),
+      limit: String(limit),
+    })
+    const response = await fetchWithTimeout(
+      `/api/stats/failed-range?${params.toString()}`,
+      STATS_REQUEST_TIMEOUT_MS,
+      signal,
+    )
+    if (!response.ok) {
+      const body = await response.text()
+      return { jobs: [], configured: true, error: `Failed range fetch failed (${response.status}): ${body}` }
+    }
+    const res = await response.json()
+    if (!res.configured) return { jobs: [], configured: false }
+    if (res.error) return { jobs: [], configured: true, error: res.error }
+    allJobs.push(...(res.jobs ?? []))
+    onProgress?.(offset + limit, scanLimit)
+    if (res.reachedRangeStart) break
     if (res.totalScanned != null && res.totalScanned - offset < limit) break
   }
   return { jobs: allJobs, configured: true }

@@ -1,4 +1,4 @@
-# GT Workflows Manager
+# GT Coffee Maker
 
 A modern web UI for visualizing and managing ComfyUI workflows and default workflows for the Gear Tracker Workflow Studio.
 

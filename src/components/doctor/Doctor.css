@@ -1,471 +1,59 @@
-.doctor-page {
-  padding: 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
-}
+/*
+ * Doctor.css — minimal residual styles
+ * Only contains pseudo-elements, scrollbar customization, and complex
+ * descendant selectors that cannot be expressed as inline Tailwind classes.
+ * All other Doctor styles live in Doctor.tsx as Tailwind utility classes.
+ */
 
-.doctor-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
+/* ── Column resize separator line (::before pseudo-element) ─────────────────── */
 
-.doctor-header-title {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.doctor-description {
-  color: var(--text-secondary, #888);
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.doctor-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.doctor-last-refreshed {
-  font-size: 0.75rem;
-  color: var(--text-muted, #666);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.doctor-period-select {
-  padding: 0.35rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid var(--border, #2e2e3e);
-  background: var(--bg-card, #1e1e2e);
-  color: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.doctor-loading,
-.doctor-not-configured {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--text-secondary, #888);
-}
-
-.doctor-hint {
-  font-size: 0.85rem;
-}
-
-.doctor-error {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  color: var(--color-error, #ef4444);
-  background: var(--bg-error, rgba(239, 68, 68, 0.08));
-  border-radius: 8px;
-}
-
-/* ---- Top row ---- */
-
-.doctor-top-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  align-items: stretch;
-}
-
-.doctor-summary-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-@media (max-width: 900px) {
-  .doctor-top-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-.doctor-card {
-  background: var(--bg-card, #1e1e2e);
-  border: 1px solid var(--border, #2e2e3e);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.doctor-card-header {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary, #888);
-}
-
-.doctor-card-value {
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1.2;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.doctor-card-footer {
-  font-size: 0.78rem;
-  color: var(--text-secondary, #888);
-}
-
-/* ---- Weekly trend card ---- */
-
-.doctor-card--trend {
-  display: flex;
-  flex-direction: column;
-}
-
-.doctor-card-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.doctor-trend-mode-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.2rem;
-  background: transparent;
-  border: 1px solid var(--border, #2e2e3e);
-  border-radius: 5px;
-  color: var(--text-secondary, #888);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-
-.doctor-trend-mode-btn:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
-  color: var(--text-primary, #fff);
-}
-
-.doctor-trend-mode-btn--active {
-  background: var(--bg-primary-highlight, rgba(99, 102, 241, 0.15));
-  border-color: var(--color-primary, #6366f1);
-  color: var(--color-primary, #6366f1);
-}
-
-.doctor-trend-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 1;
-  min-height: 0;
-}
-
-.doctor-trend-nav-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.3rem;
-  background: transparent;
-  border: 1px solid var(--border, #2e2e3e);
-  border-radius: 6px;
-  color: var(--text-secondary, #888);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.12s, color 0.12s;
-}
-
-.doctor-trend-nav-btn:hover:not(:disabled) {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
-  color: var(--text-primary, #fff);
-}
-
-.doctor-trend-nav-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.doctor-trend-center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  text-align: center;
-}
-
-.doctor-trend-value {
-  font-size: 2rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-
-.doctor-trend-label {
-  font-size: 0.78rem;
-  color: var(--text-secondary, #888);
-}
-
-.doctor-trend-compare {
-  font-size: 0.72rem;
-  color: var(--text-secondary, #888);
-  margin-top: 0.15rem;
-}
-
-.doctor-trend-indicator {
-  flex-shrink: 0;
-}
-
-.doctor-trend-indicator--up {
-  color: var(--color-error, #ef4444);
-}
-
-.doctor-trend-indicator--down {
-  color: var(--color-success, #22c55e);
-}
-
-.doctor-trend-indicator--neutral {
-  color: var(--text-secondary, #888);
-}
-
-/* ---- Ranking cards ---- */
-
-.doctor-rankings {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
-}
-
-.doctor-card--ranking {
-  min-height: 180px;
-  max-height: 360px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.doctor-rank-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary, #888);
-  font-size: 0.85rem;
-  padding: 1.5rem 0;
-}
-
-.doctor-rank-list {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0 0.75rem 0.75rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.doctor-rank-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  align-items: center;
-  font-size: 0.84rem;
-}
-
-.doctor-rank-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doctor-rank-count {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  min-width: 2.5rem;
-}
-
-.doctor-rank-bar-track {
-  grid-column: 1 / -1;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--bg-muted, rgba(136, 136, 136, 0.12));
-  overflow: hidden;
-}
-
-.doctor-rank-bar {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--color-error, #ef4444);
-  transition: width 0.3s ease;
-}
-
-/* ---- Failed jobs panel ---- */
-
-.doctor-failed-panel {
-  margin-top: 1.5rem;
-  background: var(--bg-card, #1e1e2e);
-  border: 1px solid var(--border, #2e2e3e);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.doctor-failed-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem 0.75rem;
-  flex-wrap: wrap;
-}
-
-.doctor-failed-panel-left {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-}
-
-.doctor-failed-panel-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.doctor-failed-panel-count {
-  font-size: 0.78rem;
-  color: var(--text-secondary, #888);
-}
-
-.doctor-failed-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.doctor-failed-search-icon {
-  position: absolute;
-  left: 0.6rem;
-  color: var(--text-secondary, #888);
+.doctor-col-resize::before {
+  content: '';
+  width: 1px;
+  height: 50%;
+  background: rgba(74, 93, 115, 0.7);
   pointer-events: none;
 }
 
-.doctor-failed-search-input {
-  padding: 0.4rem 0.6rem 0.4rem 1.85rem;
-  font-size: 0.82rem;
-  border: 1px solid var(--border, #2e2e3e);
-  border-radius: 6px;
-  background: var(--bg-primary, #141420);
-  color: inherit;
-  width: 280px;
-  max-width: 100%;
+/* Hide separator on last header column */
+.doctor-table-scroll .doctor-failed-table thead th:last-child .doctor-col-resize::before,
+.doctor-table-scroll table thead th:last-child .doctor-col-resize::before {
+  content: none;
 }
 
-.doctor-failed-search-input::placeholder {
-  color: var(--text-secondary, #888);
+/* ── Table scroll container — sticky thead + custom scrollbar ───────────────── */
+
+.doctor-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #354556 transparent;
+}
+.doctor-table-scroll::-webkit-scrollbar { width: 6px; height: 4px; }
+.doctor-table-scroll::-webkit-scrollbar-track { background: transparent; }
+.doctor-table-scroll::-webkit-scrollbar-thumb { background: #354556; border-radius: 3px; }
+.doctor-table-scroll::-webkit-scrollbar-thumb:hover { background: #4a5d73; }
+
+/* Sticky thead inside scroll container */
+.doctor-table-scroll thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.doctor-table-scroll thead th {
+  background: #1a2332; /* --bg-secondary */
 }
 
-.doctor-failed-search-input:focus {
-  outline: none;
-  border-color: var(--color-primary, #6366f1);
+/* Last table row — no bottom border */
+.doctor-failed-row:last-child td {
+  border-bottom: none;
 }
 
-.doctor-failed-search-input--busy {
-  opacity: 0.7;
-}
+/* ── Ranking list scrollbar ─────────────────────────────────────────────────── */
 
-.doctor-failed-empty {
-  padding: 2rem 1rem;
-  text-align: center;
-  color: var(--text-secondary, #888);
-  font-size: 0.85rem;
+.doctor-rank-list {
+  scrollbar-width: thin;
+  scrollbar-color: #354556 transparent;
 }
-
-.doctor-failed-table-wrap {
-  overflow-x: auto;
-}
-
-.doctor-failed-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.84rem;
-}
-
-.doctor-failed-table th {
-  text-align: left;
-  padding: 0.5rem 1rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary, #888);
-  border-bottom: 1px solid var(--border, #2e2e3e);
-  white-space: nowrap;
-}
-
-.doctor-failed-table td {
-  padding: 0.55rem 1rem;
-  border-bottom: 1px solid var(--border, #2e2e3e);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doctor-failed-row {
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-.doctor-failed-row:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
-}
-
-.doctor-failed-cell-id {
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-  color: var(--text-muted, #666);
-  max-width: 80px;
-}
-
-.doctor-failed-cell-ts {
-  white-space: nowrap;
-  color: var(--text-secondary, #888);
-  font-size: 0.8rem;
-}
-
-.doctor-failed-cell-error {
-  max-width: 260px;
-  color: var(--color-error, #ef4444);
-  font-size: 0.8rem;
-  opacity: 0.85;
-}
-
-/* ---- Pagination ---- */
-
-.doctor-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-}
-
-.doctor-pagination-label {
-  font-size: 0.82rem;
-  color: var(--text-secondary, #888);
-  font-variant-numeric: tabular-nums;
-}
+.doctor-rank-list::-webkit-scrollbar { width: 5px; }
+.doctor-rank-list::-webkit-scrollbar-track { background: transparent; }
+.doctor-rank-list::-webkit-scrollbar-thumb { background: #354556; border-radius: 3px; }
+.doctor-rank-list::-webkit-scrollbar-thumb:hover { background: #4a5d73; }

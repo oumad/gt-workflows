@@ -127,7 +127,7 @@ export default function NodeParserEditor({ nodeId, nodeType, nodeInputs, current
         </div>
 
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={onClose} className="btn btn-cancel">Cancel</button>
           <button onClick={ed.handleSave} className="btn btn-primary"><Save size={16} />Save Parser Config</button>
         </div>
       </div>

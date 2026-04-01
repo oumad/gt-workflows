@@ -25,12 +25,13 @@ export function toActivityJob(job, anonymiseUser = false) {
   const processedOn = job.processedOn != null ? job.processedOn : undefined;
   const finishedOn = job.finishedOn != null ? job.finishedOn : undefined;
   const timestamp = job.timestamp != null ? job.timestamp : undefined;
+  const timeout = workflow.config?.timeout ?? workflow.timeout ?? undefined;
   let user = '';
   if (userObj) {
     user = userObj.name || userObj.email || userObj.id || '';
   }
   const userStr = String(user || '—');
-  return {
+  const result = {
     id: String(job.id),
     name: typeof wfName === 'string' ? wfName : (job.name || ''),
     user: anonymiseUser ? anonymiseUserName(userStr) : userStr,
@@ -38,7 +39,10 @@ export function toActivityJob(job, anonymiseUser = false) {
     processedOn,
     finishedOn,
     timestamp,
+    timeout: typeof timeout === 'number' ? timeout : undefined,
   };
+  if (job.failedReason != null) result.failedReason = job.failedReason;
+  return result;
 }
 
 export function jobMatchesUser(job, userFilter) {

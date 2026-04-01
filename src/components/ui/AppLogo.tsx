@@ -9,11 +9,10 @@ export function AppLogo({ size = 32, className }: AppLogoProps) {
   return (
     <img
       src={logoSrc}
-      height={size}
-      alt="GT Workflows Manager"
+      alt="GT Coffee Maker"
       className={className}
       aria-hidden="true"
-      style={{ width: 'auto' }}
+      style={{ height: `${size}px`, width: 'auto', maxHeight: `${size}px` }}
     />
   )
 }

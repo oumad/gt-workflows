@@ -1,8 +1,8 @@
 import React from 'react'
-import { Routes, Route, Link, Navigate, useLocation, Outlet, useOutletContext } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate, Outlet, useOutletContext } from 'react-router-dom'
 import type { Workflow } from '@/types'
 import { ROUTES } from '@/app/routes'
-import { LogOut } from 'lucide-react'
+import { LogOut, User, LayoutGrid, Activity as ActivityIcon, BarChart3, Stethoscope, Server, AlertTriangle } from 'lucide-react'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuth, Login, clearStoredAuth } from '@/features/auth'
 import { useWorkflows } from '@/features/workflows'
@@ -11,6 +11,8 @@ import { Servers } from '@/features/servers'
 import { Dashboard, DashboardTimeView } from '@/features/dashboard'
 import { Activity } from '@/features/activity'
 import { Doctor } from '@/features/doctor'
+import { UserProfile } from '@/features/user'
+import { useNavGuard } from '@/contexts/NavGuardContext'
 import '@/App.css'
 
 export interface MainOutletContext {
@@ -60,28 +62,55 @@ function WorkflowsOutlet(): React.ReactElement {
 
 const FIRST_LOGIN_KEY = 'gt-workflows-first-login'
 
-function LogoutButton(): React.ReactElement | null {
-  const { authEnabled, username, setAuthStatus } = useAuth()
-  const [showWelcome, setShowWelcome] = React.useState(() => {
-    try {
-      return sessionStorage.getItem(FIRST_LOGIN_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
+function getGreeting(username: string): string[] {
+  const hour = new Date().getHours()
+  const timeGreeting = hour < 12 ? 'good morning' : hour < 18 ? 'good afternoon' : 'good evening'
+  return [
+    `${timeGreeting}, ${username}`,
+    `let's monitor stuff, ${username}`,
+    `any good workflow ideas, ${username}?`,
+    `welcome back, ${username}`,
+    `hey ${username}, let's go`,
+    `let's see what users are up to`,
+    `wonder what is top workflow, ${username}?`,
+    `servers are looking good, ${username}`,
+    `any server issues, ${username}?`,
+    `lets see what is going on, ${username}`,
+  ]
+}
+
+function AnimatedGreeting({ username }: { username: string }): React.ReactElement {
+  const greetings = React.useMemo(() => getGreeting(username), [username])
+  const [index, setIndex] = React.useState(0)
+  const [fade, setFade] = React.useState(true)
 
   React.useEffect(() => {
-    if (!showWelcome || !username) return
-    const t = setTimeout(() => {
-      try {
-        sessionStorage.removeItem(FIRST_LOGIN_KEY)
-      } catch (err) {
-        console.debug('Failed to remove FIRST_LOGIN_KEY from sessionStorage', err)
-      }
-      setShowWelcome(false)
-    }, 4000)
-    return () => clearTimeout(t)
-  }, [showWelcome, username])
+    const interval = setInterval(() => {
+      setFade(false)
+      setTimeout(() => {
+        setIndex(i => (i + 1) % greetings.length)
+        setFade(true)
+      }, 300)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [greetings.length])
+
+  return (
+    <span
+      className="text-xs text-[#8b9aab] transition-opacity duration-300 whitespace-nowrap"
+      style={{ opacity: fade ? 1 : 0 }}
+      aria-label={`Logged in as ${username}`}
+    >
+      {greetings[index]}
+    </span>
+  )
+}
+
+function LogoutButton(): React.ReactElement | null {
+  const { authEnabled, username, setAuthStatus } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isProfileActive = location.pathname === ROUTES.user
 
   if (!authEnabled) return null
   const handleLogout = (): void => {
@@ -89,22 +118,90 @@ function LogoutButton(): React.ReactElement | null {
     setAuthStatus('required')
   }
   return (
-    <div className="header-auth">
+    <div className="flex items-center gap-3">
       {username != null && username !== '' && (
-        <span className="header-auth-user" aria-label={`Logged in as ${username}`}>
-          {showWelcome ? `Welcome, ${username}!` : `Welcome, ${username}`}
-        </span>
+        <AnimatedGreeting username={username} />
       )}
       <button
         type="button"
+        onClick={() => navigate(ROUTES.user)}
+        className={`p-1.5 rounded-md transition-all duration-150 ${
+          isProfileActive
+            ? 'text-purple-400 bg-[#243044]'
+            : 'text-[#697784] hover:bg-[#243044] hover:text-[#e8ecf1]'
+        }`}
+        title="Profile"
+        aria-label="Profile"
+      >
+        <User size={16} />
+      </button>
+      <button
+        type="button"
         onClick={handleLogout}
-        className="logout-btn"
+        className="p-1.5 rounded-md text-[#697784] hover:bg-[#243044] hover:text-[#e8ecf1] transition-all duration-150"
         title="Disconnect"
         aria-label="Disconnect"
       >
-        <LogOut size={20} />
+        <LogOut size={16} />
       </button>
     </div>
+  )
+}
+
+function GuardedNavLink({ to, active, children, className }: { to: string; active: boolean; children: React.ReactNode; className: string }) {
+  const navigate = useNavigate()
+  const { isBlocked } = useNavGuard()
+  const [pendingNav, setPendingNav] = React.useState<string | null>(null)
+
+  return (
+    <>
+      <a
+        href={to}
+        onClick={(e) => {
+          e.preventDefault()
+          if (active) return
+          if (isBlocked()) {
+            setPendingNav(to)
+          } else {
+            navigate(to)
+          }
+        }}
+        className={className}
+      >
+        {children}
+      </a>
+      {pendingNav && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[#1a2332] border border-[#2d3a4a] rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center gap-3 mb-3">
+              <AlertTriangle size={20} className="text-amber-400 flex-shrink-0" />
+              <h3 className="text-base font-semibold text-[#e8ecf1]">Unsaved Changes</h3>
+            </div>
+            <p className="text-sm text-[#8b9aab] mb-5">
+              You have unsaved changes in edit mode. What would you like to do?
+            </p>
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                onClick={() => setPendingNav(null)}
+                className="text-sm py-2 px-4 rounded-lg text-[#b8c4d0] hover:bg-[#243044] transition-colors border border-[#2d3a4a]"
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => {
+                  const target = pendingNav
+                  setPendingNav(null)
+                  navigate(target)
+                }}
+                className="text-sm py-2 px-4 rounded-lg text-[#d16b6b] hover:bg-red-900/20 transition-colors border border-red-900/30"
+              >
+                Discard & Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -123,35 +220,61 @@ function MainLayoutWithData(): React.ReactElement {
   }
   const { workflows, loading, error, loadWorkflows } = useWorkflows()
 
+  const navItems = isAdmin ? [
+    { to: '/workflows', label: 'Workflows', icon: LayoutGrid, active: navActive.workflows },
+    { to: '/activity', label: 'Activity', icon: ActivityIcon, active: navActive.activity },
+    { to: ROUTES.jobStats, label: 'Analytics', icon: BarChart3, active: navActive.dashboard },
+    { to: ROUTES.doctor, label: 'Doctor', icon: Stethoscope, active: navActive.doctor },
+    { to: '/servers', label: 'Servers', icon: Server, active: navActive.servers },
+  ] : [
+    { to: ROUTES.jobStats, label: 'Analytics', icon: BarChart3, active: navActive.dashboard },
+  ]
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="header-left">
-            <div className="app-brand">
-              <AppLogo size={20} className="app-brand-logo" />
-              <h1>GT Workflows Manager</h1>
-            </div>
-            <nav>
-              {isAdmin && (
-                <>
-                  <Link to="/workflows" className={`nav-link${navActive.workflows ? ' nav-link--active' : ''}`}>Workflows</Link>
-                  <Link to="/workflows/new" className={`nav-link${navActive.create ? ' nav-link--active' : ''}`}>Create New</Link>
-                  <Link to="/activity" className={`nav-link${navActive.activity ? ' nav-link--active' : ''}`}>Activity</Link>
-                  <Link to={ROUTES.jobStats} className={`nav-link${navActive.dashboard ? ' nav-link--active' : ''}`}>Job stats</Link>
-                  <Link to={ROUTES.doctor} className={`nav-link${navActive.doctor ? ' nav-link--active' : ''}`}>Doctor</Link>
-                  <Link to="/servers" className={`nav-link${navActive.servers ? ' nav-link--active' : ''}`}>Servers</Link>
-                </>
-              )}
-            </nav>
+    <div className="min-h-screen flex flex-col bg-[#0f1419]">
+      {/* Header — icon+label centered nav */}
+      <header className="bg-[#1a2332] border-b border-[#2d3a4a] sticky top-0 z-50">
+        <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center relative">
+          {/* Brand — left-aligned */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <AppLogo size={28} />
+            <span className="text-base font-semibold text-[#e8ecf1] hidden sm:inline">GT Coffee Maker</span>
           </div>
-          <LogoutButton />
+
+          {/* Centered Navigation — absolutely positioned to stay centered regardless of brand/logout widths */}
+          <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
+            {navItems.map(({ to, label, icon: Icon, active }) => (
+              <GuardedNavLink
+                key={to}
+                to={to}
+                active={active}
+                className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-all duration-150 min-w-[64px] relative ${
+                  active
+                    ? 'text-purple-400'
+                    : 'text-[#697784] hover:text-[#b8c4d0] hover:bg-[#243044]/50'
+                }`}
+              >
+                <Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
+                <span className={`text-[10px] uppercase tracking-widest ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+                {active && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-purple-400" />}
+              </GuardedNavLink>
+            ))}
+          </nav>
+
+          {/* Right side — pushed to end */}
+          <div className="flex-shrink-0 ml-auto">
+            <LogoutButton />
+          </div>
         </div>
       </header>
-      <main className="app-main">
+
+      {/* Main Content */}
+      <main className="flex-1 w-full max-w-[1400px] mx-auto">
         <Outlet context={{ workflows, loading, error, loadWorkflows }} />
       </main>
-      <footer className="app-footer">
+
+      {/* Footer */}
+      <footer className="text-center py-2 px-4 text-[11px] text-[#697784]/60 flex-shrink-0">
         GEAR Productions — 2026
       </footer>
     </div>
@@ -213,6 +336,7 @@ export function AppRoutes(): React.ReactElement {
         </Route>
         <Route path="doctor" element={<RequireAdmin><Doctor /></RequireAdmin>} />
         <Route path="servers" element={<RequireAdmin><Servers /></RequireAdmin>} />
+        <Route path="user" element={<UserProfile />} />
       </Route>
       <Route path="*" element={<CatchAllRedirect />} />
     </Routes>

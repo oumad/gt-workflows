@@ -253,7 +253,7 @@ export function SelectOptionsEditor({ options, onChange }: SelectOptionsEditorPr
                           }}
                           className="btn btn-secondary btn-small"
                         >Save</button>
-                        <button onClick={() => setEditingIndex(null)} className="btn btn-secondary btn-small">Cancel</button>
+                        <button onClick={() => setEditingIndex(null)} className="btn btn-cancel btn-small">Cancel</button>
                       </div>
                     </div>
                   )}

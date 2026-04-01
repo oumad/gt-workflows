@@ -11,6 +11,8 @@ import { createServersRouter } from './routes/servers/index.js';
 import { createWorkflowsRouter } from './routes/workflows/index.js';
 import { createStatsRouter } from './routes/stats.js';
 import { createPreferencesRouter } from './routes/preferences.js';
+import { createEventsRouter } from './routes/events.js';
+import { createWeeklyRestartCheckRouter } from './routes/weeklyRestartCheck.js';
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -63,6 +65,8 @@ export function createApp() {
   );
   app.use('/api', createStatsRouter(config));
   app.use('/api', createPreferencesRouter(config));
+  app.use('/api', createEventsRouter(config));
+  app.use('/api', createWeeklyRestartCheckRouter(config));
 
   app.use('/data/gt-workflows', express.static(config.workflowsPath));
 
