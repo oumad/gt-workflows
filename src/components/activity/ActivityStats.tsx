@@ -4,8 +4,12 @@ import { AlertCircle, ChevronLeft, ChevronRight, Search, Loader2, TrendingUp, Tr
 import { useActivityStats, ACTIVITY_STATS_PAGE_SIZE, type DoctorRankItem, type ActivityStatsPeriod } from './useActivityStats'
 import { listWorkflows } from '@/services/api/workflows'
 import type { CompletedJobSummary } from '@/services/api/stats'
-import JobLogsModal from '@/components/modals/JobLogsModal'
+import UnifiedJobModal from '@/components/modals/UnifiedJobModal'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
+import UserServerPanel from './UserServerPanel'
+import SlowJobsPanel from './SlowJobsPanel'
+import WorkflowPerformancePanel from './WorkflowPerformancePanel'
+import { durationColorClass, formatDurationMs } from '@/utils/failureClassifier'
 
 // ── localStorage keys ────────────────────────────────────────────────────────
 
@@ -27,17 +31,23 @@ function saveTableHeight(h: number) {
 }
 
 const COL_ORDER_KEY = 'activity-job-history-col-order'
-const DEFAULT_COLUMNS: ColumnKey[] = ['name', 'total', 'generation', 'server', 'user', 'finished']
+const DEFAULT_COLUMNS: ColumnKey[] = ['id', 'name', 'total', 'generation', 'server', 'user', 'finished']
 
-type ColumnKey = 'name' | 'total' | 'generation' | 'server' | 'user' | 'finished'
+type ColumnKey = 'id' | 'name' | 'total' | 'generation' | 'server' | 'user' | 'finished'
 
 const COLUMN_LABELS: Record<ColumnKey, string> = {
+  id: 'Job ID',
   name: 'Workflow',
-  total: 'Total',
-  generation: 'Generation',
+  total: 'Total Time',
+  generation: 'Gen. Time',
   server: 'Server',
   user: 'User',
   finished: 'Completed',
+}
+
+const COLUMN_TOOLTIPS: Partial<Record<ColumnKey, string>> = {
+  total: 'Queue wait + generation time',
+  generation: 'ComfyUI processing time only',
 }
 
 // Migration: convert old column order that used 'duration' to new keys
@@ -88,7 +98,7 @@ const CLS_PANEL = 'bg-primary border border-default rounded-[10px] p-[1rem_1.15r
 const CLS_PANEL_HEADER = 'text-sm font-semibold uppercase tracking-[0.04em] text-muted mb-1'
 const CLS_PANEL_EMPTY = 'flex-1 flex items-center justify-center text-muted text-sm py-4'
 const CLS_PAG_BTN = 'inline-flex items-center justify-center w-7 h-7 rounded-md border border-default bg-transparent text-muted cursor-pointer transition-all duration-150 hover:bg-tertiary hover:text-primary disabled:opacity-30 disabled:cursor-default'
-const CLS_FILTER_BTN = 'inline-flex items-center justify-center w-[18px] h-[18px] p-0 border-none bg-transparent text-muted rounded cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-150 shrink-0 hover:text-accent-light hover:bg-accent/[0.12]'
+const CLS_FILTER_BTN = 'inline-flex items-center justify-center w-[18px] h-[18px] p-0 border-none bg-transparent text-muted rounded cursor-pointer opacity-40 group-hover:opacity-100 transition-all duration-150 shrink-0 hover:text-accent-light hover:bg-accent/[0.12]'
 const CLS_WF_LINK = 'bg-transparent border-none p-0 m-0 font-[inherit] text-sm text-primary cursor-pointer text-left max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap block transition-colors hover:text-accent-light hover:underline hover:underline-offset-2 hover:decoration-accent/40'
 const CLS_TD_BASE = 'px-4 py-[0.5rem] border-b border-default/50 text-sm overflow-hidden text-ellipsis whitespace-nowrap max-w-[220px]'
 const CLS_FILTER_CHIP = 'inline-flex items-center gap-1 py-[3px] pl-[10px] pr-[8px] bg-accent/[0.12] border border-accent/25 rounded-[14px] text-sm text-[#c4b5d9] whitespace-nowrap max-w-[260px] overflow-hidden text-ellipsis'
@@ -331,6 +341,19 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
 
   const renderCell = useCallback((col: ColumnKey, job: CompletedJobSummary) => {
     switch (col) {
+      case 'id':
+        return (
+          <td
+            key={col}
+            className={`${CLS_TD_BASE} text-muted`}
+            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(job.id) }}
+            title={`${job.id} — click to copy`}
+          >
+            <span className="font-mono text-xs cursor-pointer hover:text-primary transition-colors select-none">
+              {job.id.slice(0, 8)}…
+            </span>
+          </td>
+        )
       case 'name':
         return (
           <td key={col} className={`${CLS_TD_BASE} text-primary`}>
@@ -361,23 +384,27 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
             )}
           </td>
         )
-      case 'server':
+      case 'server': {
+        const shortSrv = job.server && job.server !== '—' ? (() => {
+          try { const u = new URL(job.server); return `${u.hostname}${u.port ? `:${u.port}` : ''}` }
+          catch { return job.server.replace(/^https?:\/\//, '').replace(/\/$/, '') }
+        })() : null
         return (
           <td key={col} className={`${CLS_TD_BASE} text-primary`}>
             <span className="inline-flex items-center gap-[3px]">
-              {job.server && job.server !== '—' ? (
+              {shortSrv ? (
                 <button
                   type="button"
                   className={CLS_WF_LINK}
                   title={`View logs for ${job.server}`}
                   onClick={(e) => { e.stopPropagation(); setLogsServerUrl(job.server) }}
                 >
-                  {job.server}
+                  {shortSrv}
                 </button>
               ) : (
                 <span className="text-sm text-primary">{job.server}</span>
               )}
-              {job.server && job.server !== '—' && (
+              {shortSrv && (
                 <button type="button" className={CLS_FILTER_BTN} title="Filter by server" onClick={(e) => { e.stopPropagation(); s.setJobsFilter('server', job.server) }}>
                   <Filter size={11} />
                 </button>
@@ -385,6 +412,7 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
             </span>
           </td>
         )
+      }
       case 'user':
         return (
           <td key={col} className={`${CLS_TD_BASE} text-primary`}>
@@ -400,10 +428,17 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
         )
       case 'total': {
         const total = (job.finishedOn != null && job.timestamp != null) ? job.finishedOn - job.timestamp : null
-        return <td key={col} className={`${CLS_TD_BASE} tabular-nums text-muted`}>{formatDuration(total)}</td>
+        return <td key={col} className={`${CLS_TD_BASE} tabular-nums ${durationColorClass(total)}`}>{formatDuration(total)}</td>
       }
       case 'generation':
-        return <td key={col} className={`${CLS_TD_BASE} tabular-nums text-muted`}>{formatDuration(job.duration)}</td>
+        return (
+          <td key={col} className={`${CLS_TD_BASE} tabular-nums ${durationColorClass(job.duration)}`}>
+            {formatDuration(job.duration)}
+            {job.duration != null && job.duration >= 600_000 && (
+              <span className="ml-1 text-[10px] font-semibold text-red-400 bg-red-400/10 border border-red-400/20 rounded px-1 py-px align-middle">SLOW</span>
+            )}
+          </td>
+        )
       case 'finished': {
         const rel = formatRelativeTime(job.finishedOn)
         return <td key={col} className={`${CLS_TD_BASE} text-muted`} title={rel.title}>{rel.text}</td>
@@ -529,6 +564,7 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
                       onClick={SORTABLE_COLS.includes(col) ? () => toggleSort(col as SortKey) : undefined}
                       className={`relative text-left px-4 py-[0.5rem] text-sm font-semibold uppercase tracking-[0.04em] text-muted border-b border-default whitespace-nowrap${SORTABLE_COLS.includes(col) ? ' cursor-pointer select-none hover:text-primary' : ''}`}
                       style={colWidths[col] ? { width: `${colWidths[col]}px` } : undefined}
+                      title={COLUMN_TOOLTIPS[col]}
                     >
                       <span className="inline-flex items-center gap-[0.3rem]">
                         {COLUMN_LABELS[col]}
@@ -580,7 +616,7 @@ export function RecentJobs({ refreshTrigger }: { refreshTrigger?: number }) {
         </>
       )}
 
-      {logsJob && <JobLogsModal jobId={logsJob.id} job={logsJob} onClose={() => setLogsJob(null)} />}
+      {logsJob && <UnifiedJobModal jobId={logsJob.id} jobSummary={logsJob} onClose={() => setLogsJob(null)} />}
       {logsServerUrl && <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />}
     </div>
   )
@@ -634,6 +670,9 @@ export function StatsPanels({ period, setPeriod }: { period: ActivityStatsPeriod
           <RankingCard title="Top Servers" items={s.topServers} emptyLabel="No server activity in this period" onItemClick={setLogsServerUrl} />
           <RankingCard title="Top Users" items={s.topUsers} emptyLabel="No user activity in this period" />
         </div>
+        <WorkflowPerformancePanel period={period} />
+        <UserServerPanel period={period} />
+        <SlowJobsPanel period={period} />
       </div>
       {logsServerUrl && (
         <ServerLogsModal serverUrl={logsServerUrl} onClose={() => setLogsServerUrl(null)} />

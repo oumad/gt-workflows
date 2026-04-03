@@ -6,6 +6,8 @@ import type { ServerHealthStatus } from '@/hooks/useServerHealthCheck'
 import type { QueueDepth } from '@/services/api/servers'
 import { restartServer } from '@/services/api/servers'
 import { formatRelativeTime } from '@/utils/dateFormat'
+import { useToast } from '@/contexts/ToastContext'
+import { useIncidentTimeline } from '@/contexts/IncidentTimelineContext'
 
 function RelativeTime({ iso }: { iso: string }) {
   const [label, setLabel] = useState(() => formatRelativeTime(iso))
@@ -43,19 +45,21 @@ interface ServerCardProps {
   onViewJobs: (url: string) => void
   onToggleWatch?: (url: string) => void
   onTagClick?: (tag: string) => void
+  onViewDetail?: (url: string) => void
 }
 
 export function ServerCard({
   server, index, serverAliases, serverGroups, health, wfCount, isServerChecking,
   isDuplicate, queueDepth, showDragHandle, isWatched, activeTag,
-  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs, onToggleWatch, onTagClick,
+  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs, onToggleWatch, onTagClick, onViewDetail,
 }: ServerCardProps) {
+  const { addToast } = useToast()
+  const { addEvent } = useIncidentTimeline()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
   const showOverlay = confirmRemove || confirmRestart
   const [restarting, setRestarting] = useState(false)
   const [restartDone, setRestartDone] = useState(false)
-  const [restartError, setRestartError] = useState<string | null>(null)
 
   const [showMenu, setShowMenu] = useState(false)
   const [menuUp, setMenuUp] = useState(false)
@@ -82,15 +86,14 @@ export function ServerCard({
     setConfirmRestart(false)
     setRestarting(true)
     setRestartDone(false)
-    setRestartError(null)
     try {
       await restartServer(norm)
       setRestartDone(true)
+      addEvent('server.restart', norm)
       setTimeout(() => setRestartDone(false), 4000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Restart failed'
-      setRestartError(msg)
-      setTimeout(() => setRestartError(null), 6000)
+      addToast(msg, 'error')
     } finally {
       setRestarting(false)
     }
@@ -126,12 +129,7 @@ export function ServerCard({
         ? 'server-card-dot--healthy'
         : 'server-card-dot--unhealthy'
 
-  const queueLabel = queueDepth
-    ? [
-        queueDepth.running > 0 ? `${queueDepth.running} running` : '',
-        queueDepth.pending > 0 ? `${queueDepth.pending} queued` : '',
-      ].filter(Boolean).join(' · ')
-    : null
+  const hasQueue = queueDepth && (queueDepth.running > 0 || queueDepth.pending > 0)
 
   const info = health?.systemInfo
   const showSysInfo = health?.healthy === true && info && (info.comfyVersion || info.gpuName)
@@ -193,9 +191,16 @@ export function ServerCard({
 
         <div className="server-card-info">
           <div className="server-card-name-line">
-            <span className="server-card-name" title={server}>
+            <span
+              className={`server-card-name${onViewDetail ? ' cursor-pointer hover:text-accent-light transition-colors' : ''}`}
+              title={onViewDetail ? `${server} — click to view queue & stats` : server}
+              onClick={onViewDetail ? (e) => { e.stopPropagation(); onViewDetail(server) } : undefined}
+            >
               {hasAlias ? alias : bareUrl}
             </span>
+            {queueDepth && queueDepth.running > 0 && (
+              <span className="server-card-running-dot" title={`${queueDepth.running} job${queueDepth.running !== 1 ? 's' : ''} running now`} />
+            )}
             {isDuplicate && (
               <AlertTriangle size={11} className="server-card-dup-icon" title="Duplicate URL" />
             )}
@@ -297,14 +302,23 @@ export function ServerCard({
             {wfCount} wf
           </button>
         )}
-        {queueLabel && health?.healthy === true && (
+        {hasQueue && health?.healthy === true && (
           <button
             type="button"
             className="server-card-badge server-card-badge--queue"
             onClick={() => onViewJobs(norm)}
             title="View current jobs"
           >
-            {queueLabel}
+            {queueDepth!.running > 0 && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2em' }}>
+                ▶{' '}
+                {queueDepth!.runningJobName
+                  ? <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'bottom' }}>{queueDepth!.runningJobName}</span>
+                  : queueDepth!.running}
+              </span>
+            )}
+            {queueDepth!.running > 0 && queueDepth!.pending > 0 && ' · '}
+            {queueDepth!.pending > 0 && `${queueDepth!.pending} queued`}
           </button>
         )}
 
@@ -324,9 +338,6 @@ export function ServerCard({
 
       {health?.healthy === false && health.error && (
         <div className="server-card-error">{health.error}</div>
-      )}
-      {restartError && (
-        <div className="server-card-error">{restartError}</div>
       )}
     </div>
   )

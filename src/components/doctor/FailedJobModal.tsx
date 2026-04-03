@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react'
+import { useState, useCallback, type ReactElement } from 'react'
 import { X, FileText, RefreshCw, Copy, Check } from 'lucide-react'
 import { getJobLogs, type FailedJobSummary } from '@/services/api/stats'
+import { SearchableLogLines, ColoredJsonPre } from '@/components/logs/LogPrimitives'
 
 interface FailedJobModalProps {
   job: FailedJobSummary
@@ -22,7 +23,7 @@ function formatDuration(start: number | null, end: number | null): string {
   return `${m}m ${s % 60}s`
 }
 
-function CopyButton({ text }: { text: string }): React.ReactElement {
+function CopyButton({ text }: { text: string }): ReactElement {
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
     navigator.clipboard.writeText(text).then(() => {
@@ -37,7 +38,7 @@ function CopyButton({ text }: { text: string }): React.ReactElement {
   )
 }
 
-export default function FailedJobModal({ job, onClose }: FailedJobModalProps): React.ReactElement {
+export default function FailedJobModal({ job, onClose }: FailedJobModalProps): ReactElement {
   const [logs, setLogs] = useState<string[] | null>(null)
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
@@ -144,7 +145,7 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
             ) : logs === null ? (
               <p className="failed-job-logs-empty">Click load to fetch job logs.</p>
             ) : logs.length > 0 ? (
-              <pre className="failed-job-pre">{logs.join('\n')}</pre>
+              <SearchableLogLines lines={logs} maxHeight="240px" autoScroll />
             ) : (
               <p className="failed-job-logs-empty">No log entries.</p>
             )}
@@ -152,7 +153,7 @@ export default function FailedJobModal({ job, onClose }: FailedJobModalProps): R
 
           <details className="failed-job-section">
             <summary className="failed-job-section-title failed-job-details-summary">Job Data</summary>
-            <pre className="failed-job-pre">{JSON.stringify(job.data, null, 2)}</pre>
+            <ColoredJsonPre json={JSON.stringify(job.data, null, 2)} maxHeight="240px" />
           </details>
         </div>
       </div>

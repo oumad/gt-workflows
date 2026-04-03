@@ -13,6 +13,10 @@ import { Activity } from '@/features/activity'
 import { Doctor } from '@/features/doctor'
 import { UserProfile } from '@/features/user'
 import { useNavGuard } from '@/contexts/NavGuardContext'
+import { PeriodProvider } from '@/contexts/PeriodContext'
+import { ToastProvider } from '@/contexts/ToastContext'
+import { IncidentTimelineProvider } from '@/contexts/IncidentTimelineContext'
+import IncidentTimeline from '@/components/ui/IncidentTimeline'
 import '@/App.css'
 
 export interface MainOutletContext {
@@ -277,6 +281,8 @@ function MainLayoutWithData(): React.ReactElement {
       <footer className="text-center py-2 px-4 text-[11px] text-[#697784]/60 flex-shrink-0">
         GEAR Productions — 2026
       </footer>
+
+      <IncidentTimeline />
     </div>
   )
 }
@@ -314,31 +320,37 @@ function CatchAllRedirect(): React.ReactElement {
 
 export function AppRoutes(): React.ReactElement {
   return (
-    <Routes>
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="/login" element={<LoginRoute />} />
-      <Route
-        element={
-          <RequireAuth>
-            <MainLayoutWithData />
-          </RequireAuth>
-        }
-      >
-        <Route path="workflows" element={<RequireAdmin><WorkflowsOutlet /></RequireAdmin>}>
-          <Route index element={<WorkflowListFromContext />} />
-          <Route path="new" element={<WorkflowCreateWithContext />} />
-          <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />
-        </Route>
-        <Route path="activity" element={<RequireAdmin><Activity /></RequireAdmin>} />
-        <Route path="job-stats" element={<Outlet />}>
-          <Route index element={<Dashboard />} />
-          <Route path="timeview" element={<DashboardTimeView />} />
-        </Route>
-        <Route path="doctor" element={<RequireAdmin><Doctor /></RequireAdmin>} />
-        <Route path="servers" element={<RequireAdmin><Servers /></RequireAdmin>} />
-        <Route path="user" element={<UserProfile />} />
-      </Route>
-      <Route path="*" element={<CatchAllRedirect />} />
-    </Routes>
+    <ToastProvider>
+      <IncidentTimelineProvider>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginRoute />} />
+          <Route
+            element={
+              <RequireAuth>
+                <PeriodProvider>
+                  <MainLayoutWithData />
+                </PeriodProvider>
+              </RequireAuth>
+            }
+          >
+            <Route path="workflows" element={<RequireAdmin><WorkflowsOutlet /></RequireAdmin>}>
+              <Route index element={<WorkflowListFromContext />} />
+              <Route path="new" element={<WorkflowCreateWithContext />} />
+              <Route path="workflow/:name" element={<WorkflowDetailWithContext />} />
+            </Route>
+            <Route path="activity" element={<RequireAdmin><Activity /></RequireAdmin>} />
+            <Route path="job-stats" element={<Outlet />}>
+              <Route index element={<Dashboard />} />
+              <Route path="timeview" element={<DashboardTimeView />} />
+            </Route>
+            <Route path="doctor" element={<RequireAdmin><Doctor /></RequireAdmin>} />
+            <Route path="servers" element={<RequireAdmin><Servers /></RequireAdmin>} />
+            <Route path="user" element={<UserProfile />} />
+          </Route>
+          <Route path="*" element={<CatchAllRedirect />} />
+        </Routes>
+      </IncidentTimelineProvider>
+    </ToastProvider>
   )
 }

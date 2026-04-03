@@ -97,6 +97,24 @@
   flex-shrink: 0;
 }
 
+/* ── Running-now pulse indicator ─────────────────────────────────────────── */
+
+.server-card-running-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 50%, transparent);
+  animation: running-pulse 1.8s ease-out infinite;
+}
+
+@keyframes running-pulse {
+  0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--success) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 0%,  transparent); }
+  100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--success) 0%,  transparent); }
+}
+
 .server-card-tags {
   display: flex;
   flex-wrap: wrap;

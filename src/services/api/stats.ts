@@ -153,6 +153,100 @@ export interface FailedJobsResponse {
   error?: string
 }
 
+export interface JobFullData {
+  id: string
+  name: string
+  status: string
+  timestamp: number | null
+  processedOn: number | null
+  finishedOn: number | null
+  failedReason: string | null
+  data: Record<string, unknown> | null
+}
+
+export type FailureCategory = 'timeout' | 'oom' | 'cancelled' | 'network' | 'server_error' | 'unknown'
+
+export interface SlowJob {
+  id: string
+  name: string
+  server: string
+  user: string
+  status: 'completed' | 'failed'
+  processedOn: number | null
+  finishedOn: number | null
+  timestamp: number | null
+  duration: number | null       // ms — generation time
+  queueWait: number | null      // ms — time in Bull queue before processing
+  failedReason: string | null
+  reasonCategory: FailureCategory | null
+  timeoutMs: number | null
+}
+
+export interface SlowJobsResponse {
+  configured: boolean
+  jobs: SlowJob[]
+  thresholdSec: number
+  error?: string
+}
+
+export async function getSlowJobs(thresholdSec = 600, limit = 100, period?: string): Promise<SlowJobsResponse> {
+  const params = new URLSearchParams({ threshold: String(thresholdSec), limit: String(limit) })
+  if (period) params.set('period', period)
+  const res = await fetchWithAuth(`/api/stats/slow-jobs?${params}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export interface ServerComparisonEntry {
+  server: string
+  totalCount: number
+  failCount: number
+  failRate: number   // percentage 0-100
+  avgMs: number | null
+}
+
+export interface ServerComparisonResponse {
+  configured: boolean
+  servers: ServerComparisonEntry[]
+  period: string
+  error?: string
+}
+
+export async function getServerComparison(period = '1d', signal?: AbortSignal): Promise<ServerComparisonResponse> {
+  const res = await fetchWithAuth(`/api/stats/server-comparison?period=${period}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export interface WorkflowPerfEntry {
+  name: string
+  totalCount: number
+  failCount: number
+  failRate: number    // percentage 0-100
+  avgMs: number | null
+  p95Ms: number | null
+  maxMs: number | null
+}
+
+export interface WorkflowPerfResponse {
+  configured: boolean
+  workflows: WorkflowPerfEntry[]
+  period: string
+  error?: string
+}
+
+export async function getWorkflowPerformance(period = 'all', signal?: AbortSignal): Promise<WorkflowPerfResponse> {
+  const res = await fetchWithAuth(`/api/stats/workflow-performance?period=${period}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getJobFullData(jobId: string): Promise<JobFullData> {
+  const res = await fetchWithAuth(`/api/stats/job/${jobId}/data`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
 export interface CompletedJobSummary {
   id: string
   name: string
@@ -286,6 +380,48 @@ export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal
   return response.json()
 }
 
+export interface UserServerEntry {
+  user: string
+  total: number
+  totalDurationMs?: number
+  servers: { server: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+  workflows?: { name: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+}
+
+export interface ServerUserEntry {
+  server: string
+  total: number
+  totalDurationMs?: number
+  users: { user: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+}
+
+export interface ServerWorkflowEntry {
+  server: string
+  total: number
+  workflows: { name: string; count: number; pct: number }[]
+}
+
+export interface UserServerStats {
+  configured: boolean
+  byUser: UserServerEntry[]
+  byServer: ServerUserEntry[]
+  byServerWorkflow: ServerWorkflowEntry[]
+  period: string
+  error?: string
+}
+
+export async function getUserServerStats(
+  period: ActivityStatsPeriod = '1w',
+  signal?: AbortSignal,
+  force = false
+): Promise<UserServerStats> {
+  const params = new URLSearchParams({ period })
+  if (force) params.set('force', '1')
+  const res = await fetchWithAuth(`/api/stats/usage/user-server?${params}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
 export async function getCompletedStats(period = '1w', signal?: AbortSignal, force = false): Promise<CompletedStatsResponse> {
   const params = new URLSearchParams({ period })
   if (force) params.set('force', '1')
@@ -343,6 +479,13 @@ export async function getQueueStatsWithJobLists(): Promise<QueueStatsWithJobsRes
     active: Array.isArray(data.active) ? data.active : [],
     waiting: Array.isArray(data.waiting) ? data.waiting : [],
   }
+}
+
+export async function getPromptMap(serverUrl: string): Promise<{ promptId: string; bullJobId: string }[]> {
+  const res = await fetchWithAuth(`/api/stats/prompt-map?server=${encodeURIComponent(serverUrl)}`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.map ?? []
 }
 
 export async function getJobLogs(jobId: string): Promise<JobLogsResponse> {

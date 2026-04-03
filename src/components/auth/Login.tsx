@@ -163,7 +163,7 @@ export function Login({ onSuccess }: LoginProps) {
 
           {/* Footer */}
           <div className="text-center text-xs text-[#697784] pt-4 border-t border-[#354556]">
-            <p>GT Coffee Maker v1.0.0</p>
+            <p>GT Coffee Maker v2.0.0</p>
           </div>
         </div>
       </div>

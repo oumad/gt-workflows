@@ -108,6 +108,7 @@ export async function testWorkflow(
 export interface QueueDepth {
   running: number
   pending: number
+  runningJobName?: string | null
 }
 
 export async function fetchQueueDepth(serverUrl: string): Promise<QueueDepth> {
@@ -119,6 +120,44 @@ export async function fetchQueueDepth(serverUrl: string): Promise<QueueDepth> {
   return response.json()
 }
 
+export interface ComfyQueueJob {
+  promptId: string
+  name: string | null
+  position: number
+}
+
+export interface ComfyQueue {
+  running: ComfyQueueJob[]
+  pending: ComfyQueueJob[]
+}
+
+export async function fetchComfyQueue(serverUrl: string, signal?: AbortSignal): Promise<ComfyQueue> {
+  const res = await fetchWithAuth(`/api/servers/comfy-queue?url=${encodeURIComponent(serverUrl)}`, { signal })
+  if (!res.ok) throw new Error(await extractApiError(res, `Failed to fetch queue (${res.status})`))
+  return res.json()
+}
+
+export async function interruptComfyServer(serverUrl: string): Promise<void> {
+  const res = await fetchWithAuth('/api/servers/comfy-interrupt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serverUrl }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || `Failed to interrupt (${res.status})`)
+  }
+}
+
+export async function deleteComfyQueueJobs(serverUrl: string, ids: string[]): Promise<void> {
+  const res = await fetchWithAuth('/api/servers/comfy-queue-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serverUrl, ids }),
+  })
+  if (!res.ok) throw new Error(await extractApiError(res, `Failed to delete jobs (${res.status})`))
+}
+
 export async function restartServer(serverUrl: string): Promise<void> {
   const response = await fetchWithAuth('/api/servers/restart', {
     method: 'POST',
@@ -127,6 +166,21 @@ export async function restartServer(serverUrl: string): Promise<void> {
   })
   if (!response.ok) {
     throw new Error(await extractApiError(response, `Failed to restart server (${response.status})`))
+  }
+}
+
+export async function freeComfyServer(
+  serverUrl: string,
+  options: { unloadModels?: boolean; freeMemory?: boolean },
+): Promise<void> {
+  const res = await fetchWithAuth('/api/servers/free', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serverUrl, ...options }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || `Failed (${res.status})`)
   }
 }
 

@@ -9,6 +9,10 @@ import ServerJobsModal from '@/components/modals/ServerJobsModal'
 import ServerWorkflowsModal from '@/components/modals/ServerWorkflowsModal'
 import { ServerCard } from './ServerCard'
 import { MonitoringPanel } from './MonitoringPanel'
+import { ServerWorkflowStats } from './ServerWorkflowStats'
+import { ServerLiveStatus } from './ServerLiveStatus'
+import ServerComparisonTable from './ServerComparisonTable'
+import ServerDetailModal from '@/components/modals/ServerDetailModal'
 import { useServers } from './useServers'
 import { useMonitoring } from '@/hooks/useMonitoring'
 import type { StatusFilter, SortBy } from './useServers'
@@ -37,6 +41,7 @@ export function Servers() {
   const [importPreview, setImportPreview] = useState<{ url: string; name?: string; tags?: string[] }[] | null>(null)
   const [editingServerUrl, setEditingServerUrl] = useState<string | null>(null)
   const [jobsServerUrl, setJobsServerUrl] = useState<string | null>(null)
+  const [detailServerUrl, setDetailServerUrl] = useState<string | null>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -324,6 +329,7 @@ export function Servers() {
                           onViewWorkflows={s.setWorkflowsServerUrl}
                           onViewJobs={setJobsServerUrl}
                           onToggleWatch={monitoring.toggleWatched}
+                          onViewDetail={setDetailServerUrl}
                         />
                       )
                     })}
@@ -331,6 +337,14 @@ export function Servers() {
                 </SortableContext>
               </DndContext>
             )}
+            <ServerLiveStatus
+              servers={s.monitoredServers}
+              onViewDetail={setDetailServerUrl}
+            />
+            <ServerComparisonTable
+              onViewDetail={setDetailServerUrl}
+            />
+            <ServerWorkflowStats />
           </div>
         ) : null}
       </div>
@@ -352,6 +366,12 @@ export function Servers() {
           serverUrl={jobsServerUrl}
           serverAliases={s.serverAliases}
           onClose={() => setJobsServerUrl(null)}
+        />
+      )}
+      {detailServerUrl && (
+        <ServerDetailModal
+          serverUrl={detailServerUrl}
+          onClose={() => setDetailServerUrl(null)}
         />
       )}
       {s.addServerOpen && (

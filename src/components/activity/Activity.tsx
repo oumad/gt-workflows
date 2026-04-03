@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff, Radio, BarChart2, Terminal, ChevronDown, ChevronUp } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff, Radio, BarChart2, Terminal, ChevronDown, ChevronUp, X, Stethoscope } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
 import { useAuth } from '@/features/auth'
 import type { ActivityJob, QueueStatsWithJobsResponse } from '@/services/api/stats'
 import { ACTIVITY_STATS_PERIODS, type ActivityStatsPeriod } from './useActivityStats'
 import { formatDateTimeMedium } from '@/utils/dateFormat'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
-import ActivityJobModal from '@/components/modals/ActivityJobModal'
+import UnifiedJobModal from '@/components/modals/UnifiedJobModal'
 import { RecentJobs, StatsPanels } from './ActivityStats'
+import { usePeriod } from '@/contexts/PeriodContext'
 import './Activity.css'
 
 const AUTO_INTERVALS = [5, 30, 60, 300, null] as const
@@ -225,6 +227,10 @@ type ActivityData = {
 
 export function Activity() {
   const { authStatus } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const appliedLocationStateRef = useRef(false)
+  const { period: statsPeriod, setPeriod: setStatsPeriod } = usePeriod()
   const [view, setView] = useState<'live' | 'stats'>('live')
   const [data, setData] = useState<ActivityData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -236,8 +242,18 @@ export function Activity() {
   const [autoInterval, setAutoInterval] = useState<AutoInterval>(5)
   const [, setElapsedTick] = useState(0)
   const [queueCollapsed, setQueueCollapsed] = useState(false)
-  const [statsPeriod, setStatsPeriod] = useState<ActivityStatsPeriod>('1d')
+  const [userFilter, setUserFilter] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  // Apply location state filter once on mount (e.g. navigated from Doctor)
+  useEffect(() => {
+    if (appliedLocationStateRef.current) return
+    appliedLocationStateRef.current = true
+    const state = location.state as { filterUser?: string } | null
+    if (state?.filterUser) {
+      setUserFilter(state.filterUser)
+    }
+  }, []) // empty deps — run once
 
   // Align toolbar to right-edge of view toggle
   const viewToggleRef = useRef<HTMLDivElement>(null)
@@ -330,8 +346,10 @@ export function Activity() {
 
   const configured = data?.queueRes?.configured ?? false
   const queueRes = data?.queueRes
-  const activeJobs = queueRes?.active ?? []
-  const waitingJobs = queueRes?.waiting ?? []
+  const activeJobsRaw = queueRes?.active ?? []
+  const waitingJobsRaw = queueRes?.waiting ?? []
+  const activeJobs = userFilter ? activeJobsRaw.filter((j) => j.user === userFilter) : activeJobsRaw
+  const waitingJobs = userFilter ? waitingJobsRaw.filter((j) => j.user === userFilter) : waitingJobsRaw
   const showSpinner = loading && data != null
 
   useEffect(() => {
@@ -361,6 +379,20 @@ export function Activity() {
     )
     return (
       <>
+        {userFilter && (
+          <div className="flex items-center gap-2 py-[0.5rem] px-4 mb-4 bg-accent/[0.08] border border-accent/25 rounded-lg text-sm text-accent-light">
+            <span>Filtered by user:</span>
+            <strong>{userFilter}</strong>
+            <button
+              type="button"
+              className="ml-auto inline-flex items-center gap-1 text-muted hover:text-primary transition-colors bg-transparent border-none cursor-pointer p-0"
+              onClick={() => setUserFilter(null)}
+              title="Clear user filter"
+            >
+              <X size={14} /> Clear
+            </button>
+          </div>
+        )}
         {data?.error && (
           <div className="py-[0.6rem] px-4 mb-4 bg-semantic-error/[0.06] border border-semantic-error/20 rounded-lg text-semantic-error text-[15px]">
             {data.error}
@@ -473,6 +505,15 @@ export function Activity() {
               </button>
             </div>
             <div className="flex-1 h-px bg-default/50 ml-3" />
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary transition-colors duration-150 shrink-0"
+              onClick={() => navigate('/doctor')}
+              title="Go to Doctor diagnostics"
+            >
+              <Stethoscope size={14} />
+              Doctor
+            </button>
           </div>
         </div>
 
@@ -552,7 +593,7 @@ export function Activity() {
         />
       )}
       {selectedJob != null && (
-        <ActivityJobModal
+        <UnifiedJobModal
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
         />
