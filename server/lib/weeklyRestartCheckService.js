@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { readWeeklyRestartCheckConfig, writeWeeklyRestartCheckConfig } from './weeklyRestartCheckFs.js';
+import { sendDiscordWebhook } from './discordWebhook.js';
 
 const CHECK_INTERVAL_MS = 60_000; // check every minute
 const FIRE_WINDOW_MS = 10 * 60_000; // 10-minute window after delay expires
@@ -222,23 +223,8 @@ class WeeklyRestartCheckService {
     const payload = JSON.stringify({ embeds: [embed] });
     console.log('[WeeklyRestartCheck] Sending Discord notification');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        console.log(`[WeeklyRestartCheck] Discord notification sent (HTTP ${res.status})`);
-      } else {
-        throw new Error(`Discord webhook returned HTTP ${res.status}`);
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
+    await sendDiscordWebhook(webhookUrl, payload);
+    console.log('[WeeklyRestartCheck] Discord notification sent');
   }
 }
 

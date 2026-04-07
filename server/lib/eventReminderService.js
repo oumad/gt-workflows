@@ -1,4 +1,5 @@
 import { readEvents, updateEvent } from './eventsFs.js';
+import { sendDiscordWebhook } from './discordWebhook.js';
 
 const CHECK_INTERVAL_MS = 60_000; // check every minute
 const DISCORD_COLOR_PURPLE = 0x7A4DB0;
@@ -111,23 +112,8 @@ class EventReminderService {
     const payload = JSON.stringify({ embeds: [embed] });
     console.log(`[EventReminder] Sending Discord reminder for "${event.title}" (in ${timeLabel})`);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        console.log(`[EventReminder] Reminder sent (HTTP ${res.status})`);
-      } else {
-        throw new Error(`Discord webhook returned HTTP ${res.status}`);
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
+    await sendDiscordWebhook(webhookUrl, payload);
+    console.log(`[EventReminder] Reminder sent`);
   }
 }
 

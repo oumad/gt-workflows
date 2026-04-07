@@ -1,4 +1,5 @@
 import { readMonitoringConfig, writeMonitoringConfig } from './monitoringFs.js';
+import { sendDiscordWebhook } from './discordWebhook.js';
 
 const CHECK_TIMEOUT_MS = 8_000;
 const DISCORD_COLOR_RED = 0xE74C3C;
@@ -199,25 +200,8 @@ class MonitoringService {
     const payload = JSON.stringify({ embeds: [embed] });
     console.log(`[Monitoring] Sending Discord alert (${unhealthyServers.length} server(s))`);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        console.log(`[Monitoring] Discord alert sent (HTTP ${res.status})`);
-      } else {
-        const msg = `Discord webhook returned HTTP ${res.status}`;
-        console.error(`[Monitoring] ${msg}`);
-        throw new Error(msg);
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
+    await sendDiscordWebhook(webhookUrl, payload);
+    console.log('[Monitoring] Discord alert sent');
   }
 
   getStatus() {
