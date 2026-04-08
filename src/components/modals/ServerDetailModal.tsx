@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, RefreshCw, Zap, Square, Trash2, Cpu, Activity, Clock, Loader2, FileText, HardDriveDownload, Wind } from 'lucide-react'
+import { X, RefreshCw, Zap, Square, Trash2, Cpu, Activity, Clock, Loader2, FileText, HardDriveDownload, Wind, RotateCcw, MoreHorizontal } from 'lucide-react'
 import {
   fetchComfyQueue,
   interruptComfyServer,
   deleteComfyQueueJobs,
   freeComfyServer,
+  restartServer,
   type ComfyQueueJob,
 } from '@/services/api/servers'
 import { getCompletedJobs, getFailedJobs, getUserServerStats, getPromptMap } from '@/services/api/stats'
@@ -215,6 +216,9 @@ export default function ServerDetailModal({ serverUrl, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [actioning, setActioning] = useState(false)
   const [freeing, setFreeing] = useState<'unload' | 'memory' | null>(null)
+  const [restarting, setRestarting] = useState(false)
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const actionsMenuRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<LocalHealth | null>(null)
   const [logsJobId, setLogsJobId] = useState<string | null>(null)
   const [logsServerOpen, setLogsServerOpen] = useState(false)
@@ -346,6 +350,17 @@ export default function ServerDetailModal({ serverUrl, onClose }: Props) {
     return () => { cancelled = true }
   }, [serverUrl])
 
+  useEffect(() => {
+    if (!showActionsMenu) return
+    const handler = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showActionsMenu])
+
   const handleInterrupt = useCallback(async () => {
     setActioning(true)
     try {
@@ -407,6 +422,21 @@ export default function ServerDetailModal({ serverUrl, onClose }: Props) {
     }
   }, [serverUrl, load, health, addToast, addEvent])
 
+  const handleRestart = useCallback(async () => {
+    setRestarting(true)
+    try {
+      await restartServer(serverUrl)
+      addToast('ComfyUI restarting…', 'success')
+      addEvent('server.restart', serverUrl)
+      // Re-fetch after a short delay to reflect new state
+      setTimeout(() => load(true), 3000)
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Restart failed', 'error')
+    } finally {
+      setRestarting(false)
+    }
+  }, [serverUrl, load, addToast, addEvent])
+
   const handleDelete = useCallback(async (id: string) => {
     setActioning(true)
     try {
@@ -461,24 +491,52 @@ export default function ServerDetailModal({ serverUrl, onClose }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => handleFree('unload')}
-            disabled={loading || actioning || freeing !== null}
-            title="Unload models from VRAM to RAM/disk (POST /free unload_models)"
-            className="flex items-center gap-1 px-2 py-[0.3rem] bg-tertiary border border-default rounded-md text-muted text-sm cursor-pointer hover:text-amber-400 hover:border-amber-400/40 transition-colors disabled:opacity-40"
+            onClick={() => setLogsServerOpen(true)}
+            className="flex items-center gap-1 px-2 py-[0.3rem] bg-tertiary border border-default rounded-md text-muted text-sm cursor-pointer hover:text-primary transition-colors"
           >
-            {freeing === 'unload' ? <Loader2 size={13} className="animate-spin" /> : <HardDriveDownload size={13} />}
-            Unload
+            <FileText size={13} />
+            Logs
           </button>
-          <button
-            type="button"
-            onClick={() => handleFree('memory')}
-            disabled={loading || actioning || freeing !== null}
-            title="Free VRAM — runs Python GC + empties CUDA cache (POST /free free_memory)"
-            className="flex items-center gap-1 px-2 py-[0.3rem] bg-tertiary border border-default rounded-md text-muted text-sm cursor-pointer hover:text-sky-400 hover:border-sky-400/40 transition-colors disabled:opacity-40"
-          >
-            {freeing === 'memory' ? <Loader2 size={13} className="animate-spin" /> : <Wind size={13} />}
-            Free VRAM
-          </button>
+          <div ref={actionsMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowActionsMenu((v) => !v)}
+              disabled={loading || actioning || freeing !== null || restarting}
+              title="Server actions"
+              className="flex items-center justify-center w-7 h-7 bg-tertiary border border-default rounded-md text-muted cursor-pointer hover:text-primary hover:bg-[#2a3a4a] transition-colors disabled:opacity-40"
+            >
+              {(freeing !== null || restarting) ? <Loader2 size={13} className="animate-spin" /> : <MoreHorizontal size={14} />}
+            </button>
+            {showActionsMenu && (
+              <div className="absolute right-0 top-full mt-1 z-10 w-44 bg-secondary border border-default rounded-lg shadow-xl py-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => { handleFree('unload'); setShowActionsMenu(false) }}
+                  disabled={freeing !== null}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-muted hover:text-amber-400 hover:bg-[#2a3a4a] transition-colors disabled:opacity-40"
+                >
+                  <HardDriveDownload size={13} /> Unload models
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { handleFree('memory'); setShowActionsMenu(false) }}
+                  disabled={freeing !== null}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-muted hover:text-sky-400 hover:bg-[#2a3a4a] transition-colors disabled:opacity-40"
+                >
+                  <Wind size={13} /> Free VRAM
+                </button>
+                <div className="my-1 border-t border-default" />
+                <button
+                  type="button"
+                  onClick={() => { handleRestart(); setShowActionsMenu(false) }}
+                  disabled={restarting}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-muted hover:text-orange-400 hover:bg-[#2a3a4a] transition-colors disabled:opacity-40"
+                >
+                  <RotateCcw size={13} /> Restart ComfyUI
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
