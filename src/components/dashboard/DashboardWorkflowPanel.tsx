@@ -41,7 +41,7 @@ const BADGE_STYLES: Record<number, React.CSSProperties> = {
 interface WorkflowUsageItem {
   name: string
   count: number
-  users?: string[]
+  users?: { user: string; count: number }[]
 }
 
 interface DashboardWorkflowPanelProps {
@@ -63,6 +63,7 @@ interface DashboardWorkflowPanelProps {
   expandedJobId: string | null
   onToggleJobExpand: (id: string | null) => void
   getDisplayName: (userId: string | null) => string
+  onWorkflowUsersClick: (item: WorkflowUsageItem) => void
 }
 
 const SORT_BTN = 'px-[0.4rem] py-[0.1rem] text-sm font-medium bg-transparent border-none rounded-[3px] text-muted cursor-pointer transition-all duration-150 whitespace-nowrap normal-case tracking-normal hover:text-secondary'
@@ -76,6 +77,7 @@ export function DashboardWorkflowPanel({
   maxWorkflow, maxWorkflowByUsers,
   loading, userJobs, userJobsLoading,
   expandedJobId, onToggleJobExpand, getDisplayName,
+  onWorkflowUsersClick,
 }: DashboardWorkflowPanelProps) {
   const byUsers = workflowSortMode === 'users'
   const navigate = useNavigate()
@@ -183,10 +185,26 @@ export function DashboardWorkflowPanel({
                 </button>
                 <span className="font-medium tabular-nums text-right text-sm text-muted">
                   {byUsers ? (
-                    <>{userCount} user{userCount !== 1 ? 's' : ''}</>
+                    userCount > 0 ? (
+                      <button
+                        type="button"
+                        className="all-unset cursor-pointer text-muted hover:text-[#b88ae6] transition-colors"
+                        onClick={() => onWorkflowUsersClick(item)}
+                      >
+                        {userCount} user{userCount !== 1 ? 's' : ''}
+                      </button>
+                    ) : <>{userCount} users</>
                   ) : (
                     <>
-                      {userCount > 0 && <span className="text-muted text-sm">{userCount} user{userCount !== 1 ? 's' : ''} · </span>}
+                      {userCount > 0 && (
+                        <button
+                          type="button"
+                          className="all-unset cursor-pointer text-muted hover:text-[#b88ae6] transition-colors mr-[0.2rem]"
+                          onClick={() => onWorkflowUsersClick(item)}
+                        >
+                          {userCount} user{userCount !== 1 ? 's' : ''} ·{' '}
+                        </button>
+                      )}
                       {item.count}
                       <span className="inline-block ml-[0.3rem] text-sm text-muted font-normal">{pctOfTotal}%</span>
                     </>

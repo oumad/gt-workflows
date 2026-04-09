@@ -18,7 +18,7 @@ export interface QueueStatsResponse {
 export interface WorkflowUsageItem {
   name: string
   count: number
-  users?: string[]
+  users?: { user: string; count: number }[]
 }
 
 export interface ServerUsageItem {
@@ -298,23 +298,17 @@ function fetchWithTimeout(url: string, timeoutMs: number, externalSignal?: Abort
 
 function mergeWorkflowUsage(a: WorkflowUsageItem[], b: WorkflowUsageItem[]): WorkflowUsageItem[] {
   const countBy = new Map<string, number>()
-  const usersBy = new Map<string, Set<string>>()
-  for (const item of a) {
+  const usersBy = new Map<string, Map<string, number>>()
+  for (const item of [...a, ...b]) {
     countBy.set(item.name, (countBy.get(item.name) ?? 0) + item.count)
-    const set = usersBy.get(item.name) ?? new Set<string>()
-    for (const u of item.users ?? []) set.add(u)
-    usersBy.set(item.name, set)
-  }
-  for (const item of b) {
-    countBy.set(item.name, (countBy.get(item.name) ?? 0) + item.count)
-    const set = usersBy.get(item.name) ?? new Set<string>()
-    for (const u of item.users ?? []) set.add(u)
-    usersBy.set(item.name, set)
+    const map = usersBy.get(item.name) ?? new Map<string, number>()
+    for (const u of item.users ?? []) map.set(u.user, (map.get(u.user) ?? 0) + u.count)
+    usersBy.set(item.name, map)
   }
   return Array.from(countBy.entries(), ([name, count]) => ({
     name,
     count,
-    users: Array.from(usersBy.get(name) ?? []),
+    users: Array.from(usersBy.get(name) ?? [], ([user, c]) => ({ user, count: c })).sort((x, y) => y.count - x.count),
   })).sort((x, y) => y.count - x.count)
 }
 

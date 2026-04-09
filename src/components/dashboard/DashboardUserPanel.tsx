@@ -15,6 +15,8 @@ interface DashboardUserPanelProps {
   onToggleAnonymise: () => void
   onClearUser: () => void
   onSelectUser: (user: string) => void
+  filterLabel?: string | null
+  onClearFilter?: () => void
 }
 
 const BADGE_STYLES: Record<number, React.CSSProperties> = {
@@ -26,6 +28,7 @@ const BADGE_STYLES: Record<number, React.CSSProperties> = {
 export function DashboardUserPanel({
   isAdmin, anonymiseUsers, selectedUser, userActivity,
   getDisplayName, onToggleAnonymise, onClearUser, onSelectUser,
+  filterLabel, onClearFilter,
 }: DashboardUserPanelProps) {
   const [search, setSearch] = useState('')
 
@@ -86,6 +89,18 @@ export function DashboardUserPanel({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search users"
           />
+        </div>
+      )}
+
+      {/* Workflow filter badge */}
+      {filterLabel && (
+        <div className="flex items-center gap-1 text-sm text-muted px-[0.45rem] py-1 bg-[rgba(45,58,74,0.35)] rounded border-l-[3px] border-[#7a4db0]">
+          <span className="flex-1 truncate">Workflow: <strong className="text-primary">{filterLabel}</strong></span>
+          {onClearFilter && (
+            <button type="button" onClick={onClearFilter} className="shrink-0 text-muted hover:text-primary transition-colors" title="Show all users">
+              <X size={11} />
+            </button>
+          )}
         </div>
       )}
 

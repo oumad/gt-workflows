@@ -35,6 +35,10 @@ export function Dashboard(): React.ReactElement {
   // Resizable split
   const [split, setSplit] = useState(loadSplit)
   const [dragging, setDragging] = useState(false)
+
+  // Workflow user filter — overrides the user panel list when set
+  const [workflowUserFilter, setWorkflowUserFilter] = useState<{ name: string; users: { user: string; count: number }[] } | null>(null)
+  const userActivityDisplay = workflowUserFilter ? workflowUserFilter.users : d.userActivity
   const containerRef = useRef<HTMLDivElement>(null)
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -211,11 +215,13 @@ export function Dashboard(): React.ReactElement {
                   isAdmin={d.isAdmin}
                   anonymiseUsers={d.anonymiseUsers}
                   selectedUser={d.selectedUser}
-                  userActivity={d.userActivity}
+                  userActivity={userActivityDisplay}
                   getDisplayName={d.getDisplayName}
                   onToggleAnonymise={d.toggleAnonymise}
                   onClearUser={() => d.setSelectedUser(null)}
-                  onSelectUser={d.setSelectedUser}
+                  onSelectUser={(user) => { setWorkflowUserFilter(null); d.setSelectedUser(user) }}
+                  filterLabel={workflowUserFilter?.name}
+                  onClearFilter={() => setWorkflowUserFilter(null)}
                 />
               </div>
 
@@ -249,6 +255,7 @@ export function Dashboard(): React.ReactElement {
                   expandedJobId={d.expandedJobId}
                   onToggleJobExpand={d.setExpandedJobId}
                   getDisplayName={d.getDisplayName}
+                  onWorkflowUsersClick={(item) => setWorkflowUserFilter({ name: item.name, users: item.users ?? [] })}
                 />
               </div>
             </div>

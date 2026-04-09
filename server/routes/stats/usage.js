@@ -96,10 +96,13 @@ export function createUsageRouter(config) {
         }
         if (wfName && typeof wfName === 'string') {
           if (!byWorkflowName[wfName]) {
-            byWorkflowName[wfName] = { count: 0, users: new Set() };
+            byWorkflowName[wfName] = { count: 0, users: {} };
           }
           byWorkflowName[wfName].count += 1;
-          if (keyForUser) byWorkflowName[wfName].users.add(String(keyForUser));
+          if (keyForUser) {
+            const k = String(keyForUser);
+            byWorkflowName[wfName].users[k] = (byWorkflowName[wfName].users[k] || 0) + 1;
+          }
         }
         const serverUrl = workflow?.config?.comfyui_config?.serverUrl;
         if (serverUrl && typeof serverUrl === 'string') {
@@ -112,7 +115,11 @@ export function createUsageRouter(config) {
         }
       }
       const workflowUsage = Object.entries(byWorkflowName)
-        .map(([name, { count, users }]) => ({ name, count, users: Array.from(users) }))
+        .map(([name, { count, users }]) => ({
+          name,
+          count,
+          users: Object.entries(users).map(([user, c]) => ({ user, count: c })).sort((a, b) => b.count - a.count),
+        }))
         .sort((a, b) => b.count - a.count);
       const serverUsage = Object.entries(byServer)
         .map(([server, count]) => ({ server, count }))
