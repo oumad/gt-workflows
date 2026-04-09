@@ -18,7 +18,7 @@ export interface QueueStatsResponse {
 export interface WorkflowUsageItem {
   name: string
   count: number
-  users?: string[]
+  users?: { user: string; count: number }[]
 }
 
 export interface ServerUsageItem {
@@ -79,6 +79,9 @@ export interface ActivityJob {
   processedOn: number
   finishedOn?: number
   timestamp?: number
+  timeout?: number
+  failedReason?: string
+  data?: Record<string, unknown>
 }
 
 export interface ActivityResponse {
@@ -150,6 +153,100 @@ export interface FailedJobsResponse {
   error?: string
 }
 
+export interface JobFullData {
+  id: string
+  name: string
+  status: string
+  timestamp: number | null
+  processedOn: number | null
+  finishedOn: number | null
+  failedReason: string | null
+  data: Record<string, unknown> | null
+}
+
+export type FailureCategory = 'timeout' | 'oom' | 'cancelled' | 'network' | 'server_error' | 'unknown'
+
+export interface SlowJob {
+  id: string
+  name: string
+  server: string
+  user: string
+  status: 'completed' | 'failed'
+  processedOn: number | null
+  finishedOn: number | null
+  timestamp: number | null
+  duration: number | null       // ms — generation time
+  queueWait: number | null      // ms — time in Bull queue before processing
+  failedReason: string | null
+  reasonCategory: FailureCategory | null
+  timeoutMs: number | null
+}
+
+export interface SlowJobsResponse {
+  configured: boolean
+  jobs: SlowJob[]
+  thresholdSec: number
+  error?: string
+}
+
+export async function getSlowJobs(thresholdSec = 600, limit = 100, period?: string): Promise<SlowJobsResponse> {
+  const params = new URLSearchParams({ threshold: String(thresholdSec), limit: String(limit) })
+  if (period) params.set('period', period)
+  const res = await fetchWithAuth(`/api/stats/slow-jobs?${params}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export interface ServerComparisonEntry {
+  server: string
+  totalCount: number
+  failCount: number
+  failRate: number   // percentage 0-100
+  avgMs: number | null
+}
+
+export interface ServerComparisonResponse {
+  configured: boolean
+  servers: ServerComparisonEntry[]
+  period: string
+  error?: string
+}
+
+export async function getServerComparison(period = '1d', signal?: AbortSignal): Promise<ServerComparisonResponse> {
+  const res = await fetchWithAuth(`/api/stats/server-comparison?period=${period}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export interface WorkflowPerfEntry {
+  name: string
+  totalCount: number
+  failCount: number
+  failRate: number    // percentage 0-100
+  avgMs: number | null
+  p95Ms: number | null
+  maxMs: number | null
+}
+
+export interface WorkflowPerfResponse {
+  configured: boolean
+  workflows: WorkflowPerfEntry[]
+  period: string
+  error?: string
+}
+
+export async function getWorkflowPerformance(period = 'all', signal?: AbortSignal): Promise<WorkflowPerfResponse> {
+  const res = await fetchWithAuth(`/api/stats/workflow-performance?period=${period}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getJobFullData(jobId: string): Promise<JobFullData> {
+  const res = await fetchWithAuth(`/api/stats/job/${jobId}/data`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
 export interface CompletedJobSummary {
   id: string
   name: string
@@ -159,6 +256,7 @@ export interface CompletedJobSummary {
   processedOn: number | null
   finishedOn: number | null
   duration: number | null
+  status?: string
 }
 
 export interface CompletedJobsResponse {
@@ -200,23 +298,17 @@ function fetchWithTimeout(url: string, timeoutMs: number, externalSignal?: Abort
 
 function mergeWorkflowUsage(a: WorkflowUsageItem[], b: WorkflowUsageItem[]): WorkflowUsageItem[] {
   const countBy = new Map<string, number>()
-  const usersBy = new Map<string, Set<string>>()
-  for (const item of a) {
+  const usersBy = new Map<string, Map<string, number>>()
+  for (const item of [...a, ...b]) {
     countBy.set(item.name, (countBy.get(item.name) ?? 0) + item.count)
-    const set = usersBy.get(item.name) ?? new Set<string>()
-    for (const u of item.users ?? []) set.add(u)
-    usersBy.set(item.name, set)
-  }
-  for (const item of b) {
-    countBy.set(item.name, (countBy.get(item.name) ?? 0) + item.count)
-    const set = usersBy.get(item.name) ?? new Set<string>()
-    for (const u of item.users ?? []) set.add(u)
-    usersBy.set(item.name, set)
+    const map = usersBy.get(item.name) ?? new Map<string, number>()
+    for (const u of item.users ?? []) map.set(u.user, (map.get(u.user) ?? 0) + u.count)
+    usersBy.set(item.name, map)
   }
   return Array.from(countBy.entries(), ([name, count]) => ({
     name,
     count,
-    users: Array.from(usersBy.get(name) ?? []),
+    users: Array.from(usersBy.get(name) ?? [], ([user, c]) => ({ user, count: c })).sort((x, y) => y.count - x.count),
   })).sort((x, y) => y.count - x.count)
 }
 
@@ -262,10 +354,14 @@ export async function getDoctorStats(period: DoctorPeriod = '1w', signal?: Abort
   return response.json()
 }
 
-export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, hideAborted = false): Promise<FailedJobsResponse> {
+export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, hideAborted = false, filters?: JobFilters): Promise<FailedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
   if (hideAborted) params.set('hideAborted', '1')
+  if (filters?.workflow) params.set('workflow', filters.workflow)
+  if (filters?.server) params.set('server', filters.server)
+  if (filters?.user) params.set('user', filters.user)
+  if (filters?.error) params.set('error', filters.error)
   const response = await fetchWithTimeout(
     `/api/stats/doctor/failed-jobs?${params.toString()}`,
     STATS_REQUEST_TIMEOUT_MS,
@@ -276,6 +372,48 @@ export async function getFailedJobs(page = 1, pageSize = 25, search = '', signal
     throw new Error(`Failed jobs fetch failed (${response.status}): ${body || response.statusText}`)
   }
   return response.json()
+}
+
+export interface UserServerEntry {
+  user: string
+  total: number
+  totalDurationMs?: number
+  servers: { server: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+  workflows?: { name: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+}
+
+export interface ServerUserEntry {
+  server: string
+  total: number
+  totalDurationMs?: number
+  users: { user: string; count: number; pct: number; durationMs?: number; durationPct?: number }[]
+}
+
+export interface ServerWorkflowEntry {
+  server: string
+  total: number
+  workflows: { name: string; count: number; pct: number }[]
+}
+
+export interface UserServerStats {
+  configured: boolean
+  byUser: UserServerEntry[]
+  byServer: ServerUserEntry[]
+  byServerWorkflow: ServerWorkflowEntry[]
+  period: string
+  error?: string
+}
+
+export async function getUserServerStats(
+  period: ActivityStatsPeriod = '1w',
+  signal?: AbortSignal,
+  force = false
+): Promise<UserServerStats> {
+  const params = new URLSearchParams({ period })
+  if (force) params.set('force', '1')
+  const res = await fetchWithAuth(`/api/stats/usage/user-server?${params}`, { signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
 }
 
 export async function getCompletedStats(period = '1w', signal?: AbortSignal, force = false): Promise<CompletedStatsResponse> {
@@ -289,9 +427,21 @@ export async function getCompletedStats(period = '1w', signal?: AbortSignal, for
   return response.json()
 }
 
-export async function getCompletedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal): Promise<CompletedJobsResponse> {
+export interface JobFilters {
+  user?: string
+  server?: string
+  workflow?: string
+  error?: string
+}
+
+export async function getCompletedJobs(page = 1, pageSize = 25, search = '', signal?: AbortSignal, sort = '', sortDir = '', filters?: JobFilters): Promise<CompletedJobsResponse> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   if (search) params.set('search', search)
+  if (sort) params.set('sort', sort)
+  if (sortDir) params.set('sortDir', sortDir)
+  if (filters?.user) params.set('filterUser', filters.user)
+  if (filters?.server) params.set('filterServer', filters.server)
+  if (filters?.workflow) params.set('filterWorkflow', filters.workflow)
   const response = await fetchWithTimeout(`/api/stats/completed/jobs?${params.toString()}`, STATS_REQUEST_TIMEOUT_MS, signal)
   if (!response.ok) {
     const body = await response.text()
@@ -323,6 +473,13 @@ export async function getQueueStatsWithJobLists(): Promise<QueueStatsWithJobsRes
     active: Array.isArray(data.active) ? data.active : [],
     waiting: Array.isArray(data.waiting) ? data.waiting : [],
   }
+}
+
+export async function getPromptMap(serverUrl: string): Promise<{ promptId: string; bullJobId: string }[]> {
+  const res = await fetchWithAuth(`/api/stats/prompt-map?server=${encodeURIComponent(serverUrl)}`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.map ?? []
 }
 
 export async function getJobLogs(jobId: string): Promise<JobLogsResponse> {
@@ -466,6 +623,44 @@ export async function getUsageStatsTimeRangeWithJobs(
     if (res.reachedRangeStart) break
     // Use raw jobs scanned (not time-filtered count) to detect true end of queue.
     // chunk.length < limit would misfire when the batch contains jobs outside the time range.
+    if (res.totalScanned != null && res.totalScanned - offset < limit) break
+  }
+  return { jobs: allJobs, configured: true }
+}
+
+/** Fetches failed jobs in a time range for failure rate / heatmap analytics. */
+export async function getFailedJobsTimeRange(
+  from: string,
+  to: string,
+  onProgress?: (scanned: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<TimeViewJobsResult> {
+  const scanLimit = 200000
+  const allJobs: ActivityJob[] = []
+  for (let offset = 0; offset < scanLimit; offset += TIME_VIEW_CHUNK_SIZE) {
+    if (signal?.aborted) break
+    const limit = Math.min(TIME_VIEW_CHUNK_SIZE, scanLimit - offset)
+    const params = new URLSearchParams({
+      from,
+      to,
+      offset: String(offset),
+      limit: String(limit),
+    })
+    const response = await fetchWithTimeout(
+      `/api/stats/failed-range?${params.toString()}`,
+      STATS_REQUEST_TIMEOUT_MS,
+      signal,
+    )
+    if (!response.ok) {
+      const body = await response.text()
+      return { jobs: [], configured: true, error: `Failed range fetch failed (${response.status}): ${body}` }
+    }
+    const res = await response.json()
+    if (!res.configured) return { jobs: [], configured: false }
+    if (res.error) return { jobs: [], configured: true, error: res.error }
+    allJobs.push(...(res.jobs ?? []))
+    onProgress?.(offset + limit, scanLimit)
+    if (res.reachedRangeStart) break
     if (res.totalScanned != null && res.totalScanned - offset < limit) break
   }
   return { jobs: allJobs, configured: true }

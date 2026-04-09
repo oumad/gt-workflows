@@ -12,13 +12,6 @@ const PHASE_LABELS: Record<Phase, string> = {
   cancelled: 'Cancelled',
 }
 
-const SERVER_URL_STYLE: React.CSSProperties = {
-  marginLeft: 'auto',
-  fontSize: '0.75rem',
-  opacity: 0.6,
-  fontFamily: "'Courier New', monospace",
-}
-
 interface TestWorkflowModalHeaderProps {
   serverUrls: string[]
   selectedServer: string
@@ -37,7 +30,7 @@ export function TestWorkflowModalHeader({
   return (
     <div className="test-wf-modal-header">
       <div className="test-wf-modal-title">
-        <Play size={20} />
+        <Play size={18} />
         <h2 id="test-workflow-modal-title">Test Workflow</h2>
       </div>
       <div className="test-wf-modal-actions">
@@ -61,7 +54,7 @@ export function TestWorkflowModalHeader({
           onClick={onClose}
           aria-label="Close"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </div>
     </div>
@@ -104,15 +97,15 @@ export function TestWorkflowStatusBanner({
     <div className={`test-wf-status-banner ${phase}`}>
       {isRunning && (
         <span className="icon-spinner-wrap">
-          <Loader size={14} className="spinner" />
+          <Loader size={13} className="spinner" />
         </span>
       )}
-      {phase === 'done' && errorCount === 0 && <CheckCircle size={14} />}
-      {phase === 'done' && errorCount > 0 && <XCircle size={14} />}
-      {phase === 'error' && <XCircle size={14} />}
+      {phase === 'done' && errorCount === 0 && <CheckCircle size={13} />}
+      {phase === 'done' && errorCount > 0 && <XCircle size={13} />}
+      {phase === 'error' && <XCircle size={13} />}
       <span>{label}</span>
       {serverUrls.length <= 1 && selectedServer && (
-        <span style={SERVER_URL_STYLE}>{selectedServer}</span>
+        <span className="test-wf-status-url">{selectedServer}</span>
       )}
     </div>
   )

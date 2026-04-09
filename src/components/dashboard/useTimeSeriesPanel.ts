@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { TimeSeriesItem } from '@/features/dashboard/useTimeViewSeries'
 
-export const CHART_HEIGHT = 260
-export const CHART_PADDING = { top: 12, right: 12, bottom: 32, left: 36 }
-/** Fixed viewBox width so x/y axis text stays the same size for day, month, year, etc. */
-const CHART_VIEWBOX_WIDTH = 800
+export const CHART_HEIGHT = 280
+export const CHART_PADDING = { top: 16, right: 16, bottom: 36, left: 44 }
+/** Fallback viewBox width — overridden by measured container width to avoid text stretching. */
+const CHART_VIEWBOX_WIDTH_FALLBACK = 800
 const Y_AXIS_TICKS = 5
 const DOWNLOAD_LEGEND_HEIGHT = 44
 const DOWNLOAD_LEGEND_ITEM_GAP = 14
@@ -23,6 +23,7 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
   const [search, setSearch] = useState('')
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const chartWrapRef = useRef<HTMLDivElement>(null)
@@ -56,6 +57,24 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Measure container width for 1:1 viewBox (no text stretching)
+  const [measuredWidth, setMeasuredWidth] = useState<number>(0)
+  useEffect(() => {
+    const el = chartWrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.round(entry.contentRect.width)
+        if (w > 0) setMeasuredWidth(w)
+      }
+    })
+    ro.observe(el)
+    // Initial measure
+    const w = el.getBoundingClientRect().width
+    if (w > 0) setMeasuredWidth(Math.round(w))
+    return () => ro.disconnect()
+  }, [])
+
   const visibleSeries = useMemo(
     () => series.filter((s) => selectedKeys.has(s.name)),
     [series, selectedKeys]
@@ -68,7 +87,7 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
     return m || 1
   }, [visibleSeries])
 
-  const chartWidth = CHART_VIEWBOX_WIDTH
+  const chartWidth = measuredWidth || CHART_VIEWBOX_WIDTH_FALLBACK
   const innerWidth = chartWidth - CHART_PADDING.left - CHART_PADDING.right
   const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom
 
@@ -86,6 +105,7 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
   }, [maxVal])
 
   const handleChartMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (pinnedIndex != null) return // Don't update hover when pinned
     const svg = svgRef.current
     if (!svg || dates.length === 0) return
     const ctm = svg.getScreenCTM()
@@ -100,13 +120,24 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
     const idx = Math.round(((svgPt.x - CHART_PADDING.left) * (dates.length - 1)) / innerWidth)
     setHoveredIndex(Math.max(0, Math.min(idx, dates.length - 1)))
     setTooltipPos({ x: e.clientX, y: e.clientY })
-  }, [dates.length, innerWidth])
+  }, [dates.length, innerWidth, pinnedIndex])
 
-  const handleChartMouseLeave = useCallback(() => { setHoveredIndex(null); setTooltipPos(null) }, [])
+  const handleChartMouseLeave = useCallback(() => {
+    if (pinnedIndex == null) { setHoveredIndex(null); setTooltipPos(null) }
+  }, [pinnedIndex])
 
-  const hoveredDate = hoveredIndex != null ? dates[hoveredIndex] : null
-  const hoveredValues = hoveredIndex != null
-    ? visibleSeries.map((s) => ({ name: s.name, color: s.color, value: s.values[hoveredIndex] ?? 0 }))
+  const handleChartClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (hoveredIndex != null) {
+      setPinnedIndex(pinnedIndex === hoveredIndex ? null : hoveredIndex)
+    }
+  }, [hoveredIndex, pinnedIndex])
+
+  const displayIndex = pinnedIndex != null ? pinnedIndex : hoveredIndex
+  const hoveredDate = displayIndex != null ? dates[displayIndex] : null
+  const hoveredValues = displayIndex != null
+    ? visibleSeries
+        .map((s) => ({ name: s.name, color: s.color, value: s.values[displayIndex] ?? 0 }))
+        .filter((v) => v.value > 0) // Filter out zero values
     : []
 
   const handleDownload = useCallback(() => {
@@ -183,11 +214,11 @@ export function useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelec
 
   return {
     dropdownOpen, setDropdownOpen, search, setSearch,
-    hoveredIndex, tooltipPos, dropdownRef, svgRef, chartWrapRef,
+    hoveredIndex, tooltipPos, pinnedIndex, setPinnedIndex, dropdownRef, svgRef, chartWrapRef,
     filteredNames, handleSelectAll, handleSelectNone, toggleOne,
     visibleSeries, maxVal, chartWidth, innerWidth, innerHeight,
     scaleY, scaleX, yTickValues,
-    handleChartMouseMove, handleChartMouseLeave, handleDownload,
+    handleChartMouseMove, handleChartMouseLeave, handleChartClick, handleDownload,
     hoveredDate, hoveredValues,
   }
 }

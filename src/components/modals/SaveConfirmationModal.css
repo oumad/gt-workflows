@@ -96,7 +96,7 @@
 .change-type-badge {
   padding: 4px 8px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
   color: white;
@@ -104,7 +104,7 @@
 
 .change-path {
   font-family: 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   word-break: break-all;
 }
@@ -128,13 +128,13 @@
 .change-value strong {
   display: block;
   margin-bottom: 4px;
-  font-size: 12px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
 .change-value pre {
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   white-space: pre-wrap;
   word-break: break-all;
   font-family: 'Courier New', monospace;

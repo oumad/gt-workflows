@@ -11,6 +11,8 @@ interface ServerUrlEditorProps {
   onViewLogs?: (url: string) => void
 }
 
+const compactInputCls = 'w-full px-2 py-1 bg-[#0f1419] border border-[#2d3a4a] rounded text-[#e8ecf1] text-xs focus:outline-none focus:border-purple-500/60'
+
 export default function ServerUrlEditor({
   value,
   onChange,
@@ -64,38 +66,38 @@ export default function ServerUrlEditor({
   // Single string mode
   if (!isArray) {
     return (
-      <div className={`server-url-editor ${compact ? 'server-url-editor--compact' : ''} ${className}`}>
-        <div className="server-url-row">
-          <input
-            type="text"
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => handleSingleChange(e.target.value)}
-            placeholder={placeholder}
-            className={compact ? 'quick-info-edit-input' : 'info-input'}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            type="button"
-            className="server-url-add-btn"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              handleAddServer()
-            }}
-            title="Add another server URL"
-          >
-            <Plus size={compact ? 12 : 14} />
-          </button>
-        </div>
+      <div className={`${compact ? 'flex items-center gap-1.5 w-full' : 'server-url-editor'} ${className}`}>
+        <input
+          type="text"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => handleSingleChange(e.target.value)}
+          placeholder={placeholder}
+          className={compact ? `${compactInputCls} flex-1 min-w-0` : 'info-input'}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button
+          type="button"
+          className={compact
+            ? 'flex-shrink-0 flex items-center justify-center px-2 py-1 bg-[#0f1419] border border-[#2d3a4a] rounded text-[#697784] hover:text-purple-400 hover:border-purple-500/60 transition-colors text-xs'
+            : 'server-url-add-btn'}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleAddServer()
+          }}
+          title="Add another server URL"
+        >
+          <Plus size={compact ? 12 : 14} />
+        </button>
       </div>
     )
   }
 
   // Array mode
   return (
-    <div className={`server-url-editor ${compact ? 'server-url-editor--compact' : ''} ${className}`}>
+    <div className={`${compact ? 'flex flex-col gap-1.5 w-full' : 'server-url-editor'} ${className}`}>
       {urls.map((url, index) => (
-        <div key={index} className="server-url-row">
+        <div key={index} className={compact ? 'flex items-center gap-1.5' : 'server-url-row'}>
           {!compact && <span className="server-url-index">{index + 1}.</span>}
           <input
             ref={index === urls.length - 1 ? newFieldRef : undefined}
@@ -103,12 +105,14 @@ export default function ServerUrlEditor({
             value={url}
             onChange={(e) => handleUrlChange(index, e.target.value)}
             placeholder={placeholder}
-            className={compact ? 'quick-info-edit-input' : 'info-input'}
+            className={compact ? `${compactInputCls} flex-1 min-w-0` : 'info-input'}
             onClick={(e) => e.stopPropagation()}
           />
           <button
             type="button"
-            className="server-url-remove-btn"
+            className={compact
+              ? 'flex-shrink-0 flex items-center justify-center px-2 py-1 bg-[#0f1419] border border-[#2d3a4a] rounded text-[#697784] hover:text-red-400 hover:border-red-500/60 transition-colors text-xs'
+              : 'server-url-remove-btn'}
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -122,7 +126,9 @@ export default function ServerUrlEditor({
       ))}
       <button
         type="button"
-        className="server-url-add-btn"
+        className={compact
+          ? 'w-full flex items-center justify-center gap-1 px-2 py-1 bg-[#0f1419] border border-dashed border-[#2d3a4a] rounded text-[#697784] hover:text-purple-400 hover:border-purple-500/60 transition-colors text-xs'
+          : 'server-url-add-btn'}
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()

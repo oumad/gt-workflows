@@ -64,7 +64,7 @@
 }
 
 .config-row label {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -103,7 +103,7 @@
 }
 
 .config-row small {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-top: -0.25rem;
 }
@@ -153,7 +153,7 @@
   background: var(--bg-tertiary);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-family: 'Courier New', monospace;
   color: var(--text-secondary);
 }
@@ -173,7 +173,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-family: 'Courier New', monospace;
   cursor: pointer;
   transition: all 0.2s;
@@ -215,7 +215,7 @@
   text-align: center;
   padding: 1.5rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .condition-item {
@@ -253,7 +253,7 @@
   height: 24px;
   background: var(--bg-tertiary);
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -269,7 +269,7 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .condition-main strong {
@@ -282,7 +282,7 @@
   padding: 0.125rem 0.375rem;
   border-radius: 3px;
   font-family: 'Courier New', monospace;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--accent);
 }
 
@@ -315,7 +315,7 @@
 
 .condition-edit-row label {
   min-width: 100px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
@@ -352,7 +352,7 @@
   text-align: center;
   padding: 1.5rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .option-item {
@@ -390,7 +390,7 @@
   height: 24px;
   background: var(--bg-tertiary);
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -406,7 +406,7 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .option-main strong {
@@ -419,7 +419,7 @@
   padding: 0.125rem 0.375rem;
   border-radius: 3px;
   font-family: 'Courier New', monospace;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--accent);
 }
 
@@ -430,7 +430,7 @@
 
 .option-meta {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .option-actions {
@@ -457,7 +457,7 @@
 
 .option-edit-row label {
   min-width: 120px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
@@ -467,7 +467,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-family: inherit;
 }
 

@@ -17,7 +17,7 @@ export default defineConfig({
     host: '0.0.0.0', // Allow connections from network
     port: 3010,
     strictPort: true, // Fail if port is in use instead of falling back
-    open: true,
+    open: false,
     allowedHosts: true, // Allow all hosts (e.g. when accessing via IP or custom hostname)
     proxy: {
       // SSE endpoint needs selfHandleResponse to prevent http-proxy from buffering the stream

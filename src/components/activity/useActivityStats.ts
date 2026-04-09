@@ -3,9 +3,10 @@ import { useAuth } from '@/features/auth'
 import {
   getCompletedStats, getCompletedJobs, getQueueStatsWithJobLists,
   type CompletedStatsResponse, type DoctorRankItem, type CompletedJobSummary, type ActivityJob,
+  type JobFilters,
 } from '@/services/api/stats'
 
-export type { DoctorRankItem, CompletedJobSummary, ActivityJob }
+export type { DoctorRankItem, CompletedJobSummary, ActivityJob, JobFilters }
 
 export const ACTIVITY_STATS_PERIODS = [
   { id: '1h', label: 'Last hour' },
@@ -45,19 +46,27 @@ export interface ActivityStatsState {
   searchPending: boolean
   setJobsSearch: (q: string) => void
   setJobsPage: (page: number) => void
+  jobsSort: string
+  jobsSortDir: string
+  setJobsSort: (sort: string, dir: string) => void
+  jobsFilters: JobFilters
+  setJobsFilter: (key: keyof JobFilters, value: string) => void
+  clearJobsFilters: () => void
   // Live queue
   activeJobs: ActivityJob[]
   waitingCount: number
   queueLoading: boolean
 }
 
-export function useActivityStats(): ActivityStatsState {
+export function useActivityStats(externalPeriod?: ActivityStatsPeriod, externalSetPeriod?: (p: ActivityStatsPeriod) => void): ActivityStatsState {
   const { authStatus } = useAuth()
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<CompletedStatsResponse | null>(null)
-  const [period, setPeriod] = useState<ActivityStatsPeriod>('1d')
+  const [internalPeriod, setInternalPeriod] = useState<ActivityStatsPeriod>('1d')
+  const period = externalPeriod ?? internalPeriod
+  const setPeriod = externalSetPeriod ?? setInternalPeriod
   const [autoInterval, setAutoInterval] = useState<AutoInterval>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const loadIdRef = useRef(0)
@@ -72,6 +81,25 @@ export function useActivityStats(): ActivityStatsState {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [searchPending, setSearchPending] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [jobsSort, setJobsSortKey] = useState('')
+  const [jobsSortDir, setJobsSortDir] = useState('')
+  const setJobsSort = useCallback((sort: string, dir: string) => {
+    setJobsSortKey(sort)
+    setJobsSortDir(dir)
+    setJobsPage(1)
+  }, [])
+
+  const [jobsFilters, setJobsFilters] = useState<JobFilters>({})
+
+  const setJobsFilter = useCallback((key: keyof JobFilters, value: string) => {
+    setJobsFilters((prev) => ({ ...prev, [key]: value }))
+    setJobsPage(1)
+  }, [])
+
+  const clearJobsFilters = useCallback(() => {
+    setJobsFilters({})
+    setJobsPage(1)
+  }, [])
 
   const [activeJobs, setActiveJobs] = useState<ActivityJob[]>([])
   const [waitingCount, setWaitingCount] = useState(0)
@@ -139,13 +167,13 @@ export function useActivityStats(): ActivityStatsState {
     loadQueue()
   }, [loadQueue, authStatus])
 
-  const loadJobs = useCallback(async (page: number, search: string) => {
+  const loadJobs = useCallback(async (page: number, search: string, sort = '', sortDir = '', filters?: JobFilters) => {
     jobsAbortRef.current?.abort()
     const controller = new AbortController()
     jobsAbortRef.current = controller
     setJobsLoading(true)
     try {
-      const res = await getCompletedJobs(page, ACTIVITY_STATS_PAGE_SIZE, search, controller.signal)
+      const res = await getCompletedJobs(page, ACTIVITY_STATS_PAGE_SIZE, search, controller.signal, sort, sortDir, filters)
       if (controller.signal.aborted) return
       setJobs(res.jobs ?? [])
       setJobsTotal(res.total ?? 0)
@@ -159,8 +187,8 @@ export function useActivityStats(): ActivityStatsState {
 
   useEffect(() => {
     if (authStatus !== 'ok' || configured !== true) return
-    loadJobs(jobsPage, debouncedSearch)
-  }, [jobsPage, debouncedSearch, loadJobs, authStatus, configured])
+    loadJobs(jobsPage, debouncedSearch, jobsSort, jobsSortDir, jobsFilters)
+  }, [jobsPage, debouncedSearch, jobsSort, jobsSortDir, jobsFilters, loadJobs, authStatus, configured])
 
   const cycleAutoInterval = useCallback(() => {
     setAutoInterval((cur) => {
@@ -171,9 +199,9 @@ export function useActivityStats(): ActivityStatsState {
 
   const refresh = useCallback(() => {
     load(period, true)
-    loadJobs(jobsPage, debouncedSearch)
+    loadJobs(jobsPage, debouncedSearch, jobsSort, jobsSortDir, jobsFilters)
     loadQueue()
-  }, [load, loadJobs, loadQueue, period, jobsPage, debouncedSearch])
+  }, [load, loadJobs, loadQueue, period, jobsPage, debouncedSearch, jobsSort, jobsSortDir, jobsFilters])
 
   const refreshRef = useRef(refresh)
   useEffect(() => { refreshRef.current = refresh }, [refresh])
@@ -196,6 +224,8 @@ export function useActivityStats(): ActivityStatsState {
     autoInterval, cycleAutoInterval,
     jobs, jobsTotal, jobsPage, jobsLoading,
     jobsSearch, searchPending, setJobsSearch, setJobsPage,
+    jobsSort, jobsSortDir, setJobsSort,
+    jobsFilters, setJobsFilter, clearJobsFilters,
     activeJobs, waitingCount, queueLoading,
   }
 }

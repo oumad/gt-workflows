@@ -12,4 +12,5 @@ export const ROUTES = {
   doctor: '/doctor',
   servers: '/servers',
   login: '/login',
+  user: '/user',
 } as const

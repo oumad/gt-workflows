@@ -1,93 +1,34 @@
-import { Info, Image as ImageIcon, Upload, X } from 'lucide-react'
+import { Info, Upload, X } from 'lucide-react'
 import type { WorkflowParams, IconBadge } from '@/types'
-import AuthImage from '@/components/ui/AuthImage'
-import { formatDateTimeShort } from '@/utils/dateFormat'
 
 interface WorkflowGeneralInfoProps {
-  name: string
   params: WorkflowParams
   handleParamsUpdate: (p: WorkflowParams) => void
   isFieldChanged: (field: string) => boolean
-  iconError: boolean
-  setIconError: (v: boolean) => void
   iconDragOver: boolean
   setIconDragOver: (v: boolean) => void
-  iconVersion: number
   handleIconDelete: () => Promise<void>
   handleIconUpload: (file: File) => Promise<void>
-  lastTestRun: string | null
-  lastTestRunStatus: 'passed' | 'failed' | null
-  lastAuditRun: string | null
-  lastAuditRunStatus: 'passed' | 'failed' | null
 }
 
 export function WorkflowGeneralInfo({
-  name,
   params,
   handleParamsUpdate,
   isFieldChanged,
-  iconError,
-  setIconError,
   iconDragOver,
   setIconDragOver,
-  iconVersion,
   handleIconDelete,
   handleIconUpload,
-  lastTestRun,
-  lastTestRunStatus,
-  lastAuditRun,
-  lastAuditRunStatus,
 }: WorkflowGeneralInfoProps) {
   return (
     <div className="detail-section">
-      <div className="section-header section-header-with-badges">
-        <div className="section-header-title">
-          <Info size={20} />
-          <h2>General Info</h2>
-        </div>
-        <div className="general-info-badges">
-          <span
-            className={`general-info-badge general-info-badge-test status-${lastTestRun != null && lastTestRunStatus != null ? lastTestRunStatus : 'unknown'}`}
-            title={lastTestRun ? `Last run (test): ${formatDateTimeShort(lastTestRun)}` : 'Not run yet'}
-          >
-            {lastTestRun != null && lastTestRunStatus != null
-              ? (lastTestRunStatus === 'passed' ? 'TEST PASSING' : 'TEST FAILED')
-              : 'TEST UNKNOWN'}
-          </span>
-          <span
-            className={`general-info-badge general-info-badge-audit status-${lastAuditRun != null && lastAuditRunStatus != null ? lastAuditRunStatus : 'unknown'}`}
-            title={lastAuditRun ? `Last run (audit): ${formatDateTimeShort(lastAuditRun)}` : 'Not run yet'}
-          >
-            {lastAuditRun != null && lastAuditRunStatus != null
-              ? (lastAuditRunStatus === 'passed' ? 'AUDIT PASSING' : 'AUDIT FAILED')
-              : 'AUDIT UNKNOWN'}
-          </span>
-        </div>
+      <div className="section-header">
+        <Info size={20} />
+        <h2>General Info</h2>
       </div>
       <div className="general-info-content">
-        {(params.icon || !iconError) && (
-          <div className="workflow-icon-large">
-            {params.icon && !iconError ? (
-              <AuthImage
-                workflowName={name}
-                iconPath={params.icon}
-                alt={`${name} icon`}
-                className="workflow-icon-image"
-                version={iconVersion}
-                onError={() => setIconError(true)}
-              />
-            ) : (
-              <div className="workflow-icon-placeholder-large">
-                <ImageIcon size={48} />
-              </div>
-            )}
-          </div>
-        )}
         <div className="info-grid">
-          <div className="info-item">
-            <label>Parser Type</label>
-            <span>{params.parser === 'comfyui' ? 'ComfyUI' : 'Default'}</span>
-          </div>
+          {/* ── Identity ── */}
           <div className="info-item">
             <label>Label</label>
             <input
@@ -109,46 +50,14 @@ export function WorkflowGeneralInfo({
               className="info-input"
             />
           </div>
-          <div className="info-item">
+          <div className="info-item info-item-full">
             <label>Description</label>
-            <input
-              type="text"
+            <textarea
               value={params.description || ''}
               onChange={(e) => handleParamsUpdate({ ...params, description: e.target.value || undefined })}
-              placeholder="Workflow description"
-              className={`info-input ${isFieldChanged('description') ? 'field-changed' : ''}`}
-            />
-          </div>
-          <div className="info-item">
-            <label>Scope</label>
-            <select
-              value={params.scope || ''}
-              onChange={(e) => handleParamsUpdate({ ...params, scope: e.target.value || undefined })}
-              className={`info-input ${isFieldChanged('scope') ? 'field-changed' : ''}`}
-            >
-              <option value="">None</option>
-              <option value="item">Item</option>
-            </select>
-          </div>
-          <div className="info-item">
-            <label>Execution Name</label>
-            <input
-              type="text"
-              value={params.executionName || ''}
-              onChange={(e) => handleParamsUpdate({ ...params, executionName: e.target.value || undefined })}
-              placeholder="Execute button label"
-              className="info-input"
-            />
-          </div>
-          <div className="info-item">
-            <label>Timeout (seconds)</label>
-            <input
-              type="number"
-              value={params.timeout || ''}
-              onChange={(e) => handleParamsUpdate({ ...params, timeout: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Not set"
-              className="info-input"
-              min="0"
+              placeholder="Brief description of what this workflow does..."
+              rows={3}
+              className={`w-full px-2.5 py-1.5 bg-[#0f1419] border border-[#2d3a4a] rounded text-[#e8ecf1] text-sm placeholder-[#697784] focus:outline-none focus:border-purple-500/60 transition-colors resize-y ${isFieldChanged('description') ? 'field-changed' : ''}`}
             />
           </div>
           <div className="info-item info-item-full">
@@ -219,6 +128,46 @@ export function WorkflowGeneralInfo({
               <small className="tags-hint">Add tags with Enter or comma; remove with × or Backspace</small>
             </div>
           </div>
+
+          {/* ── Execution ── */}
+          <div className="info-item">
+            <label>Parser Type</label>
+            <span>{params.parser === 'comfyui' ? 'ComfyUI' : 'Default'}</span>
+          </div>
+          <div className="info-item">
+            <label>Scope</label>
+            <select
+              value={params.scope || ''}
+              onChange={(e) => handleParamsUpdate({ ...params, scope: e.target.value || undefined })}
+              className={`info-input ${isFieldChanged('scope') ? 'field-changed' : ''}`}
+            >
+              <option value="">None</option>
+              <option value="item">Item</option>
+            </select>
+          </div>
+          <div className="info-item">
+            <label>Execution Name</label>
+            <input
+              type="text"
+              value={params.executionName || ''}
+              onChange={(e) => handleParamsUpdate({ ...params, executionName: e.target.value || undefined })}
+              placeholder="Execute button label"
+              className="info-input"
+            />
+          </div>
+          <div className="info-item">
+            <label>Timeout (seconds)</label>
+            <input
+              type="number"
+              value={params.timeout || ''}
+              onChange={(e) => handleParamsUpdate({ ...params, timeout: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Not set"
+              className="info-input"
+              min="0"
+            />
+          </div>
+
+          {/* ── Display ── */}
           <div className="info-item">
             <label>Order</label>
             <input
@@ -251,17 +200,6 @@ export function WorkflowGeneralInfo({
               <span>Enabled</span>
             </label>
             <small>Force execution locally even in HTTP mode</small>
-          </div>
-          <div className="info-item info-item-full">
-            <label>Documentation</label>
-            <input
-              type="text"
-              value={params.documentation || ''}
-              onChange={(e) => handleParamsUpdate({ ...params, documentation: e.target.value || undefined })}
-              placeholder="Path to .md documentation file (absolute path)"
-              className="info-input"
-            />
-            <small>Path to markdown file for workflow documentation</small>
           </div>
           <div className="info-item info-item-full">
             <label>Icon Badge</label>
@@ -306,6 +244,19 @@ export function WorkflowGeneralInfo({
               )}
             </div>
             <small>Badge displayed on workflow card</small>
+          </div>
+
+          {/* ── Files ── */}
+          <div className="info-item info-item-full">
+            <label>Documentation</label>
+            <input
+              type="text"
+              value={params.documentation || ''}
+              onChange={(e) => handleParamsUpdate({ ...params, documentation: e.target.value || undefined })}
+              placeholder="Path to .md documentation file (absolute path)"
+              className="info-input"
+            />
+            <small>Path to markdown file for workflow documentation</small>
           </div>
           <div className="info-item info-item-full">
             <label>Icon</label>

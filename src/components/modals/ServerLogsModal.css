@@ -43,7 +43,7 @@
 }
 
 .server-logs-url {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 400;
   color: var(--text-muted);
   overflow: hidden;
@@ -66,7 +66,7 @@
 
 .server-logs-interval {
   padding: 0.3rem 0.4rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 5px;

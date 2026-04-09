@@ -1,8 +1,15 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { ChevronDown, Download } from 'lucide-react'
 import type { TimeSeriesItem } from '@/features/dashboard/useTimeViewSeries'
 import { useTimeSeriesPanel, CHART_HEIGHT, CHART_PADDING } from './useTimeSeriesPanel'
 import './Dashboard.css'
+
+export interface Annotation {
+  id: string
+  date: string
+  text: string
+  color: string
+}
 
 export interface TimeSeriesPanelProps {
   title: string
@@ -12,13 +19,40 @@ export interface TimeSeriesPanelProps {
   onSelectionChange: (selected: Set<string>) => void
   dropdownLabel?: string
   loading?: boolean
+  annotations?: Annotation[]
 }
 
 export function TimeSeriesPanel({
   title, series, dates, selectedKeys, onSelectionChange,
-  dropdownLabel = 'Filter', loading = false,
+  dropdownLabel = 'Filter', loading = false, annotations = [],
 }: TimeSeriesPanelProps): React.ReactElement {
   const p = useTimeSeriesPanel({ title, series, dates, selectedKeys, onSelectionChange })
+  const tooltipRef = React.useRef<HTMLDivElement>(null)
+
+  // Auto-unpin on page scroll (not tooltip scroll)
+  React.useEffect(() => {
+    const handlePageScroll = (e: Event) => {
+      if (p.pinnedIndex == null) return
+      if (tooltipRef.current?.contains(e.target as Node)) return
+      p.setPinnedIndex(null)
+    }
+    document.addEventListener('scroll', handlePageScroll, true)
+    return () => document.removeEventListener('scroll', handlePageScroll, true)
+  }, [p.pinnedIndex, p.setPinnedIndex])
+
+  // Annotation indices mapped to chart positions
+  const annotationIndices = useMemo(() => {
+    const dateSet = new Map(dates.map((d, i) => [d, i]))
+    return annotations
+      .map((ann) => ({ ...ann, index: dateSet.get(ann.date) }))
+      .filter((ann) => ann.index != null)
+  }, [annotations, dates])
+
+  // Annotations for the currently hovered/pinned date
+  const hoveredDateAnnotations = useMemo(() => {
+    if (!p.hoveredDate) return []
+    return annotations.filter((a) => a.date === p.hoveredDate)
+  }, [annotations, p.hoveredDate])
 
   return (
     <section className="dashboard-timeseries-panel">
@@ -104,11 +138,12 @@ export function TimeSeriesPanel({
               ref={p.svgRef}
               className="dashboard-timeseries-chart dashboard-timeseries-chart--hover"
               viewBox={`0 0 ${p.chartWidth} ${CHART_HEIGHT}`}
-              preserveAspectRatio="none"
-              style={{ width: '100%', height: CHART_HEIGHT }}
+              preserveAspectRatio="xMidYMid meet"
+              style={{ width: '100%', height: 'auto', cursor: 'pointer' }}
               aria-label={`Time series: ${title}`}
               onMouseMove={p.handleChartMouseMove}
               onMouseLeave={p.handleChartMouseLeave}
+              onClick={p.handleChartClick}
             >
               <rect x={CHART_PADDING.left} y={CHART_PADDING.top} width={p.innerWidth} height={p.innerHeight} fill="transparent" aria-hidden />
               {p.yTickValues.map((tickVal) => {
@@ -120,6 +155,21 @@ export function TimeSeriesPanel({
                   </g>
                 )
               })}
+
+              {/* Annotation vertical lines */}
+              {annotationIndices.map((ann) => (
+                <line
+                  key={`ann-${ann.id}`}
+                  x1={p.scaleX(ann.index!)}
+                  y1={CHART_PADDING.top}
+                  x2={p.scaleX(ann.index!)}
+                  y2={CHART_PADDING.top + p.innerHeight}
+                  stroke={ann.color}
+                  strokeWidth={2}
+                  opacity={0.6}
+                  strokeDasharray="4 4"
+                />
+              ))}
               {p.visibleSeries.map((s) => (
                 <polyline key={s.name} fill="none" stroke={s.color} strokeWidth={2} points={s.values.map((v, i) => `${p.scaleX(i)},${p.scaleY(v)}`).join(' ')} />
               ))}
@@ -138,17 +188,44 @@ export function TimeSeriesPanel({
               })}
             </svg>
             {p.tooltipPos != null && p.hoveredDate && (
-              <div className="dashboard-timeseries-tooltip" style={{ left: p.tooltipPos.x + 12, top: p.tooltipPos.y + 12 }} role="tooltip">
-                <div className="dashboard-timeseries-tooltip-date">{p.hoveredDate}</div>
-                <ul className="dashboard-timeseries-tooltip-list">
-                  {p.hoveredValues.map(({ name, color, value }) => (
-                    <li key={name} className="dashboard-timeseries-tooltip-row">
-                      <span className="dashboard-timeseries-tooltip-color" style={{ backgroundColor: color }} />
-                      <span className="dashboard-timeseries-tooltip-name">{name}</span>
-                      <span className="dashboard-timeseries-tooltip-value">{value}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div
+                ref={tooltipRef}
+                className="dashboard-timeseries-tooltip"
+                style={{
+                  left: p.tooltipPos.x + 12,
+                  top: p.tooltipPos.y + 12,
+                  maxHeight: p.pinnedIndex != null ? '220px' : 'auto',
+                  overflowY: p.pinnedIndex != null ? 'auto' : 'visible',
+                }}
+                role="tooltip"
+              >
+                <div className="dashboard-timeseries-tooltip-header">
+                  <span className="dashboard-timeseries-tooltip-date">{p.hoveredDate}</span>
+                  {p.pinnedIndex != null && (
+                    <button type="button" className="dashboard-timeseries-tooltip-close" onClick={() => p.setPinnedIndex(null)} title="Unpin">×</button>
+                  )}
+                </div>
+                {p.hoveredValues.length > 0 && (
+                  <ul className="dashboard-timeseries-tooltip-list">
+                    {p.hoveredValues.map(({ name, color, value }) => (
+                      <li key={name} className="dashboard-timeseries-tooltip-row">
+                        <span className="dashboard-timeseries-tooltip-color" style={{ backgroundColor: color }} />
+                        <span className="dashboard-timeseries-tooltip-name">{name}</span>
+                        <span className="dashboard-timeseries-tooltip-value">{value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {hoveredDateAnnotations.length > 0 && (
+                  <div className="dashboard-timeseries-tooltip-annotations">
+                    {hoveredDateAnnotations.map((ann) => (
+                      <div key={ann.id} className="dashboard-timeseries-tooltip-annotation-row">
+                        <span className="dashboard-timeseries-tooltip-annotation-dot" style={{ backgroundColor: ann.color }} />
+                        <span className="dashboard-timeseries-tooltip-annotation-text">{ann.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, Server, Plus, X, ListPlus, FileText, Check } from 'lucide-react'
+import { Save, Server, Plus, X, ListPlus, FileText, Check, Settings as SettingsIcon, AlertCircle } from 'lucide-react'
 import { getSettings } from '@/utils/settings'
 import { updatePreferences } from '@/services/api/preferences'
 import { usePreferences } from '@/hooks/usePreferences'
 import ServerLogsModal from '@/components/modals/ServerLogsModal'
 import AddServerModal from '@/components/modals/AddServerModal'
-import './Settings.css'
 
 function normalizeServerUrl(s: string): string {
   let u = s.trim()
@@ -148,131 +147,168 @@ export function Settings() {
   const displayServers = !prefsLoaded ? getSettings().monitoredServers : monitoredServers
 
   return (
-    <div className="servers-page">
-      <header className="servers-header">
-        <div className="servers-header-title">
-          <h1 className="page-title">
-            <Server size={24} />
-            Servers
-          </h1>
-          <p className="servers-description">
-            ComfyUI servers to monitor. Health status appears on workflow cards after running &quot;Check Health&quot; from the Workflows tab.
-          </p>
+    <div className="flex flex-col h-full">
+      {/* ── Page title ─────────────────────────────────────────────── */}
+      <div className="px-6 pt-5 pb-2">
+        <div className="flex items-center gap-3">
+          <SettingsIcon size={22} className="text-purple-500/70" />
+          <h1 className="text-xl font-semibold text-[#e8ecf1]">Settings</h1>
+          <div className="flex-1 h-px bg-[#2d3a4a]/50 ml-3" />
         </div>
-        <div className="servers-header-actions">
-          <button onClick={handleSave} className="btn btn-primary" disabled={!hasChanges}>
-            <Save size={16} />
-            Save
-          </button>
-          {saved && (
-            <span className="save-message">
-              <Check size={14} /> Saved
-            </span>
-          )}
-          {saveError && (
-            <span className="save-error-message" role="alert">
-              {saveError}
-            </span>
-          )}
-        </div>
-      </header>
+      </div>
 
-      <div className="servers-list-wrap">
-        {displayServers.length > 0 ? (
-          <div className="servers-list-rows">
-            <div className="servers-list-columns-header">
-              <span className="servers-col-label">URL</span>
-              <span className="servers-col-label">Display name</span>
+      {/* ── Sticky toolbar ─────────────────────────────────────────── */}
+      <div className="sticky top-14 z-20 bg-[#0f1419] px-6 py-3 border-b border-[#2d3a4a]/40">
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-[#697784] flex-1">
+            ComfyUI servers to monitor. Health status appears on workflow cards after running &ldquo;Check Health&rdquo;.
+          </p>
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            {saved && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-green-400/90 font-medium">
+                <Check size={14} /> Saved
+              </span>
+            )}
+            {saveError && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-red-400 max-w-[280px] truncate" role="alert">
+                <AlertCircle size={14} className="flex-shrink-0" /> {saveError}
+              </span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges}
+              className="text-sm bg-purple-700 hover:bg-purple-800 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Save size={15} /> Save
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content ────────────────────────────────────────────────── */}
+      <div className="flex-1 px-6 py-4 max-w-3xl">
+        <div className="flex flex-col gap-4">
+
+          {/* Server list */}
+          {displayServers.length > 0 ? (
+            <div className="flex flex-col gap-0.5 bg-[#1a2332] border border-[#2d3a4a] rounded-xl p-4">
+              {/* Column headers */}
+              <div className="grid gap-2 px-1 pb-2 mb-1 border-b border-[#2d3a4a]/50" style={{ gridTemplateColumns: '1fr 200px auto auto' }}>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#697784]">URL</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#697784]">Display name</span>
+                <span />
+                <span />
+              </div>
+
+              {/* Rows */}
+              {displayServers.map((server, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 px-2.5 py-2 bg-[#0f1419] border border-[#2d3a4a] rounded-lg focus-within:border-purple-500/60 focus-within:shadow-[0_0_0_2px_rgba(107,155,209,0.1)] transition-all"
+                >
+                  <Server size={14} className="text-[#697784] flex-shrink-0" aria-hidden />
+                  <input
+                    type="text"
+                    value={server}
+                    onChange={(e) => handleServerUrlChange(index, e.target.value)}
+                    placeholder="http://127.0.0.1:8188"
+                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-[#e8ecf1] placeholder-[#697784]"
+                    aria-label="Server URL"
+                  />
+                  <input
+                    type="text"
+                    value={serverAliases[server] || ''}
+                    onChange={(e) => handleServerAliasChange(server, e.target.value)}
+                    placeholder="Optional name…"
+                    className="w-[180px] flex-shrink-0 bg-transparent border-none outline-none text-sm text-[#b8c4d0] placeholder-[#697784] italic"
+                    aria-label="Display name"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogsServerUrl(server)}
+                    className="p-1.5 rounded text-[#697784] hover:text-[#b8c4d0] hover:bg-[#243044] transition-colors flex-shrink-0"
+                    title="View server logs"
+                  >
+                    <FileText size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveServer(index)}
+                    className="p-1.5 rounded text-[#697784] hover:text-red-400 hover:bg-red-900/10 transition-colors flex-shrink-0"
+                    title="Remove server"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
-            {displayServers.map((server, index) => (
-              <div key={index} className="server-row">
-                <Server size={15} className="server-row-icon" aria-hidden />
-                <input
-                  type="text"
-                  value={server}
-                  onChange={(e) => handleServerUrlChange(index, e.target.value)}
-                  placeholder="http://127.0.0.1:8188"
-                  className="server-row-url"
-                  aria-label="Server URL"
-                />
-                <input
-                  type="text"
-                  value={serverAliases[server] || ''}
-                  onChange={(e) => handleServerAliasChange(server, e.target.value)}
-                  placeholder="Optional name…"
-                  className="server-row-alias"
-                  aria-label="Display name"
-                />
+          ) : (
+            prefsLoaded && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center bg-[#1a2332] border border-dashed border-[#2d3a4a] rounded-xl">
+                <Server size={32} className="text-[#697784]" />
+                <p className="text-[#8b9aab] font-medium">No servers yet</p>
+                <p className="text-sm text-[#697784] max-w-[40ch]">Add a ComfyUI server URL to monitor its health from the Workflows tab.</p>
+              </div>
+            )
+          )}
+
+          {/* Add row */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setAddServerOpen(true)}
+              className="text-sm py-2 px-3 rounded-lg text-[#b8c4d0] hover:bg-[#243044] transition-colors duration-150 flex items-center gap-1.5 border border-[#2d3a4a]"
+            >
+              <Plus size={15} /> Add Server
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkOpen((o) => !o)}
+              className={`text-sm py-2 px-3 rounded-lg flex items-center gap-1.5 border transition-colors duration-150 ${
+                bulkOpen
+                  ? 'bg-purple-700/15 border-purple-600/40 text-purple-400'
+                  : 'border-[#2d3a4a] text-[#b8c4d0] hover:bg-[#243044]'
+              }`}
+            >
+              <ListPlus size={15} /> Add Multiple
+            </button>
+          </div>
+
+          {/* Bulk add panel */}
+          {bulkOpen && (
+            <div className="bg-[#1a2332] border border-[#2d3a4a] rounded-xl p-4 flex flex-col gap-3">
+              <p className="text-sm text-[#8b9aab] leading-relaxed m-0">
+                One entry per line —{' '}
+                <code className="px-1.5 py-0.5 bg-[#0f1419] border border-[#2d3a4a] rounded text-xs font-mono">url</code>
+                {' '}or{' '}
+                <code className="px-1.5 py-0.5 bg-[#0f1419] border border-[#2d3a4a] rounded text-xs font-mono">url, display name</code>
+              </p>
+              <textarea
+                className="w-full px-3 py-2.5 bg-[#0f1419] border border-[#2d3a4a] rounded-lg text-[#e8ecf1] text-sm font-[inherit] resize-y min-h-[110px] focus:outline-none focus:border-purple-500/60 placeholder-[#697784] box-border"
+                placeholder={`http://127.0.0.1:8188\nhttp://server2:8188, Production\nhttp://server3:8188, Staging`}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={5}
+              />
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setLogsServerUrl(server)}
-                  className="server-action-btn"
-                  title="View server logs"
+                  onClick={handleBulkAdd}
+                  className="text-sm bg-purple-700 hover:bg-purple-800 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150"
                 >
-                  <FileText size={15} />
+                  Add servers
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleRemoveServer(index)}
-                  className="server-action-btn server-action-remove"
-                  title="Remove server"
+                  onClick={() => { setBulkOpen(false); setBulkText('') }}
+                  className="text-sm py-2 px-4 rounded-lg text-[#b8c4d0] hover:bg-[#243044] transition-colors border border-[#2d3a4a]"
                 >
-                  <X size={15} />
+                  Cancel
                 </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          prefsLoaded && (
-            <div className="servers-empty">
-              <Server size={36} />
-              <p>No servers yet</p>
-              <p className="servers-empty-sub">Add a ComfyUI server URL to monitor its health from the Workflows tab.</p>
             </div>
-          )
-        )}
-
-        <div className="servers-add-row">
-          <button type="button" onClick={() => setAddServerOpen(true)} className="btn btn-secondary">
-            <Plus size={16} />
-            Add Server
-          </button>
-          <button
-            type="button"
-            onClick={() => setBulkOpen((o) => !o)}
-            className="btn btn-secondary"
-          >
-            <ListPlus size={16} />
-            Add Multiple
-          </button>
+          )}
         </div>
-
-        {bulkOpen && (
-          <div className="servers-bulk-panel">
-            <p className="servers-bulk-hint">
-              One entry per line — <code>url</code> or <code>url, display name</code>
-            </p>
-            <textarea
-              className="servers-bulk-textarea"
-              placeholder={`http://127.0.0.1:8188\nhttp://server2:8188, Production\nhttp://server3:8188, Staging`}
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              rows={5}
-            />
-            <div className="servers-bulk-actions">
-              <button type="button" onClick={handleBulkAdd} className="btn btn-primary">
-                Add servers
-              </button>
-              <button
-                type="button"
-                onClick={() => { setBulkOpen(false); setBulkText('') }}
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {logsServerUrl && (

@@ -1,6 +1,10 @@
 /**
- * Slick theme – WCAG AA compliant, easy on the eyes.
- * Muted, non-flashy colors; no harsh brightness.
+ * GT Coffee Maker — Deep Purple theme
+ * WCAG AA compliant, sophisticated, no neon.
+ *
+ * These CSS variables exist so that components not yet migrated to Tailwind
+ * still render with the correct palette.  New code should use Tailwind classes
+ * (see tailwind.config.js for the canonical colour definitions).
  */
 
 :root {
@@ -14,14 +18,24 @@
   --text-secondary: #b8c4d0;
   --text-muted: #8b9aab;
 
-  /* Accent – muted blue, not flashy */
-  --accent: #6b9bd1;
-  --accent-hover: #5a8ac4;
+  /* Accent – deep purple, sophisticated */
+  --accent: #7a4db0;
+  --accent-hover: #6a3fa0;
+  --accent-light: #8f60c4;
+  --accent-dark: #4a2670;
+
+  /* Layout */
   --border: #2d3a4a;
+  --border-light: #354556;
   --shadow: rgba(0, 0, 0, 0.25);
+  --shadow-sm: rgba(0, 0, 0, 0.15);
+  --shadow-purple: rgba(122, 77, 176, 0.15);
+
+  /* Interactive */
+  --focus-ring: #7a4db0;
 
   /* Semantic – soft, non-burning */
-  --success: #5cb89a;
-  --warning: #c9a227;
-  --error: #c97070;
+  --success: #4db896;
+  --warning: #d4a335;
+  --error: #d16b6b;
 }

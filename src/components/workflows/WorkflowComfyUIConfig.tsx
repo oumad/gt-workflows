@@ -40,15 +40,17 @@ export function WorkflowComfyUIConfig({
         <h2>ComfyUI Config</h2>
       </div>
       <div className="info-grid">
-        <div className="info-item">
+        <div className="info-item info-item-full">
           <label>Server URL</label>
-          <div className="info-input-with-action">
-            <ServerUrlEditor
-              value={cfg.serverUrl}
-              onChange={(v) => updateCfg({ serverUrl: v })}
-              className={isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}
-              onViewLogs={(url) => setLogsServerUrl(url)}
-            />
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <ServerUrlEditor
+                value={cfg.serverUrl}
+                onChange={(v) => updateCfg({ serverUrl: v })}
+                className={isFieldChanged('comfyui_config.serverUrl') ? 'field-changed' : ''}
+                onViewLogs={(url) => setLogsServerUrl(url)}
+              />
+            </div>
             {cfg.serverUrl && (
               <button
                 type="button"

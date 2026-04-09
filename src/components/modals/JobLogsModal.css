@@ -2,8 +2,10 @@
 @import '../ui/Buttons.css';
 @import '../ui/SpinnerIcon.css';
 
-.job-logs-modal {
-  max-width: 700px;
+/* Use double-class to beat .modal-content { max-width: 500px } regardless of import order */
+.modal-content.job-logs-modal {
+  max-width: min(1100px, 96vw);
+  width: min(1100px, 96vw);
   max-height: 85vh;
 }
 
@@ -28,7 +30,7 @@
 }
 
 .job-logs-job-id {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 400;
   font-family: ui-monospace, monospace;
   color: var(--text-muted);
@@ -83,7 +85,7 @@
   background: var(--bg-primary);
   border-radius: 8px;
   border: 1px solid var(--border);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-primary);
   white-space: pre-wrap;

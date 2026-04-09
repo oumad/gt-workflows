@@ -50,9 +50,10 @@ export default function DependencyAuditModal({
   return (
     <div className="modal-overlay modal-overlay--blur" onClick={onClose}>
       <div className="modal-content dep-audit-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+        {/* Header */}
+        <div className="dep-audit-modal-header">
           <div className="dep-audit-modal-title">
-            <Package size={20} />
+            <Package size={18} />
             <h2>Dependency Audit</h2>
           </div>
           <div className="dep-audit-modal-actions">
@@ -62,122 +63,129 @@ export default function DependencyAuditModal({
               </span>
             )}
             <button
-              className="btn btn-toolbar"
+              className="dep-audit-reaudit-btn"
               onClick={runAudit}
               disabled={loading}
               title="Re-audit"
             >
               <span className="icon-spinner-wrap">
-                <RefreshCw size={14} className={loading ? 'spinner' : ''} />
+                <RefreshCw size={13} className={loading ? 'spinner' : ''} />
               </span>
               <span>Re-audit</span>
             </button>
-            <button className="modal-close" onClick={onClose}>
-              <X size={20} />
+            <button className="test-wf-modal-close" onClick={onClose}>
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        <div className="dep-audit-tabs">
-          <button
-            className={`dep-audit-tab ${activeTab === 'nodes' ? 'active' : ''}`}
-            onClick={() => setActiveTab('nodes')}
-          >
-            <Blocks size={15} />
-            <span>Custom Nodes</span>
-            {showSummary && (
-              <DependencyAuditTabBadge counts={tabCounts.nodes} />
-            )}
-          </button>
-          <button
-            className={`dep-audit-tab ${activeTab === 'models' ? 'active' : ''}`}
-            onClick={() => setActiveTab('models')}
-          >
-            <HardDrive size={15} />
-            <span>Models</span>
-            {showSummary && (
-              <DependencyAuditTabBadge counts={tabCounts.models} />
-            )}
-          </button>
-          {showInputsTab && (
-            <button
-              className={`dep-audit-tab ${activeTab === 'inputs' ? 'active' : ''}`}
-              onClick={() => setActiveTab('inputs')}
-            >
-              <ImageIcon size={15} />
-              <span>Inputs</span>
-              {showSummary && (
-                <DependencyAuditTabBadge counts={tabCounts.inputs} soft />
+        {/* Scrollable area */}
+        <div className="dep-audit-scroll-wrap">
+          {/* Sticky tabs */}
+          <div className="dep-audit-sticky-tabs">
+            <div className="dep-audit-tabs">
+              <button
+                className={`dep-audit-tab ${activeTab === 'nodes' ? 'active' : ''}`}
+                onClick={() => setActiveTab('nodes')}
+              >
+                <Blocks size={14} />
+                <span>Custom Nodes</span>
+                {showSummary && (
+                  <DependencyAuditTabBadge counts={tabCounts.nodes} />
+                )}
+              </button>
+              <button
+                className={`dep-audit-tab ${activeTab === 'models' ? 'active' : ''}`}
+                onClick={() => setActiveTab('models')}
+              >
+                <HardDrive size={14} />
+                <span>Models</span>
+                {showSummary && (
+                  <DependencyAuditTabBadge counts={tabCounts.models} />
+                )}
+              </button>
+              {showInputsTab && (
+                <button
+                  className={`dep-audit-tab ${activeTab === 'inputs' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('inputs')}
+                >
+                  <ImageIcon size={14} />
+                  <span>Inputs</span>
+                  {showSummary && (
+                    <DependencyAuditTabBadge counts={tabCounts.inputs} soft />
+                  )}
+                </button>
               )}
-            </button>
-          )}
-        </div>
-
-        <div className="modal-body dep-audit-modal-content">
-          {error && <div className="dep-audit-error">{error}</div>}
-
-          {loading && revealProgress && (
-            <div className="dep-audit-progress">
-              <span className="icon-spinner-wrap">
-                <Loader size={14} className="spinner" />
-              </span>
-              <span>{revealProgress}</span>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'nodes' && (
-            <>
-              {showSummary && (
-                <DependencyAuditSummary
-                  counts={tabCounts.nodes}
-                  variant="nodes"
-                />
-              )}
-              <DependencyAuditNodesTab
-                displayResults={displayResults}
-                phase={phase}
-                loading={loading}
-                collapsedServers={collapsedServers}
-                onToggleServer={toggleServer}
-              />
-            </>
-          )}
+          {/* Content */}
+          <div className="dep-audit-content">
+            {error && <div className="dep-audit-error">{error}</div>}
 
-          {activeTab === 'models' && (
-            <>
-              {showSummary && (
-                <DependencyAuditSummary
-                  counts={tabCounts.models}
-                  variant="models"
-                />
-              )}
-              <DependencyAuditModelsTab
-                displayResults={displayResults}
-                phase={phase}
-                loading={loading}
-                collapsedServers={collapsedServers}
-                onToggleServer={toggleServer}
-              />
-            </>
-          )}
+            {loading && revealProgress && (
+              <div className="dep-audit-progress">
+                <span className="icon-spinner-wrap">
+                  <Loader size={13} className="spinner" />
+                </span>
+                <span>{revealProgress}</span>
+              </div>
+            )}
 
-          {activeTab === 'inputs' && (
-            <>
-              {showSummary && (
-                <DependencyAuditSummary
-                  counts={tabCounts.inputs}
-                  variant="inputs"
+            {activeTab === 'nodes' && (
+              <>
+                {showSummary && (
+                  <DependencyAuditSummary
+                    counts={tabCounts.nodes}
+                    variant="nodes"
+                  />
+                )}
+                <DependencyAuditNodesTab
+                  displayResults={displayResults}
+                  phase={phase}
+                  loading={loading}
+                  collapsedServers={collapsedServers}
+                  onToggleServer={toggleServer}
                 />
-              )}
-              <DependencyAuditInputsTab
-                displayResults={displayResults}
-                phase={phase}
-                loading={loading}
-                collapsedServers={collapsedServers}
-                onToggleServer={toggleServer}
-              />
-            </>
-          )}
+              </>
+            )}
+
+            {activeTab === 'models' && (
+              <>
+                {showSummary && (
+                  <DependencyAuditSummary
+                    counts={tabCounts.models}
+                    variant="models"
+                  />
+                )}
+                <DependencyAuditModelsTab
+                  displayResults={displayResults}
+                  phase={phase}
+                  loading={loading}
+                  collapsedServers={collapsedServers}
+                  onToggleServer={toggleServer}
+                />
+              </>
+            )}
+
+            {activeTab === 'inputs' && (
+              <>
+                {showSummary && (
+                  <DependencyAuditSummary
+                    counts={tabCounts.inputs}
+                    variant="inputs"
+                  />
+                )}
+                <DependencyAuditInputsTab
+                  displayResults={displayResults}
+                  phase={phase}
+                  loading={loading}
+                  collapsedServers={collapsedServers}
+                  onToggleServer={toggleServer}
+                />
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

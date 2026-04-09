@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter as Router } from 'react-router-dom'
 
 import { AuthProvider } from '@/features/auth'
+import { NavGuardProvider } from '@/contexts/NavGuardContext'
 
 import { AppRoutes } from './router'
 
@@ -20,7 +21,9 @@ export function AppProviders(): ReactElement {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router>
-          <AppRoutes />
+          <NavGuardProvider>
+            <AppRoutes />
+          </NavGuardProvider>
         </Router>
       </AuthProvider>
     </QueryClientProvider>

@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
-import { Server, X, Check, AlertTriangle, FileText, Activity, CheckCircle, XCircle, Clock, LayoutGrid, Cpu, Pencil, GripVertical, Loader2, Bell, BellRing, RotateCcw, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { FileText, Activity, Cpu, Pencil, GripVertical, Loader2, Bell, BellRing, RotateCcw, Trash2, MoreHorizontal, Check, AlertTriangle } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { ServerHealthStatus, ServerSystemInfo } from '@/hooks/useServerHealthCheck'
+import type { ServerHealthStatus } from '@/hooks/useServerHealthCheck'
 import type { QueueDepth } from '@/services/api/servers'
 import { restartServer } from '@/services/api/servers'
 import { formatRelativeTime } from '@/utils/dateFormat'
+import { useToast } from '@/contexts/ToastContext'
+import { useIncidentTimeline } from '@/contexts/IncidentTimelineContext'
 
-// Ticks relative time every 30s
 function RelativeTime({ iso }: { iso: string }) {
   const [label, setLabel] = useState(() => formatRelativeTime(iso))
   useEffect(() => {
@@ -23,31 +24,6 @@ function formatGb(bytes: number): string {
   return gb >= 10 ? `${Math.round(gb)}` : `${gb.toFixed(1)}`
 }
 
-function SysInfoStrip({ info }: { info: ServerSystemInfo }) {
-  const hasVram = info.vramTotal != null && info.vramFree != null
-  const vramUsed = hasVram ? info.vramTotal! - info.vramFree! : null
-
-  return (
-    <div className="server-card-sysinfo">
-      {info.comfyVersion && (
-        <span className="server-card-version" title="ComfyUI version">{info.comfyVersion}</span>
-      )}
-      {info.comfyVersion && info.gpuName && <span className="server-card-sysinfo-sep">·</span>}
-      {info.gpuName && (
-        <span className="server-card-gpu" title="GPU">
-          <Cpu size={11} />
-          {info.gpuName}
-          {hasVram && (
-            <span className="server-card-vram">
-              {' '}{formatGb(vramUsed!)}/{formatGb(info.vramTotal!)} GB
-            </span>
-          )}
-        </span>
-      )}
-    </div>
-  )
-}
-
 interface ServerCardProps {
   server: string
   index: number
@@ -60,6 +36,7 @@ interface ServerCardProps {
   queueDepth?: QueueDepth
   showDragHandle: boolean
   isWatched?: boolean
+  activeTag?: string | null
   onRemove: (index: number) => void
   onEdit: (url: string) => void
   onViewLogs: (url: string) => void
@@ -67,40 +44,66 @@ interface ServerCardProps {
   onViewWorkflows: (url: string) => void
   onViewJobs: (url: string) => void
   onToggleWatch?: (url: string) => void
+  onTagClick?: (tag: string) => void
+  onViewDetail?: (url: string) => void
 }
 
 export function ServerCard({
   server, index, serverAliases, serverGroups, health, wfCount, isServerChecking,
-  isDuplicate, queueDepth, showDragHandle, isWatched,
-  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs, onToggleWatch,
+  isDuplicate, queueDepth, showDragHandle, isWatched, activeTag,
+  onRemove, onEdit, onViewLogs, onCheck, onViewWorkflows, onViewJobs, onToggleWatch, onTagClick, onViewDetail,
 }: ServerCardProps) {
+  const { addToast } = useToast()
+  const { addEvent } = useIncidentTimeline()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
   const showOverlay = confirmRemove || confirmRestart
   const [restarting, setRestarting] = useState(false)
   const [restartDone, setRestartDone] = useState(false)
-  const [restartError, setRestartError] = useState<string | null>(null)
+
+  const [showMenu, setShowMenu] = useState(false)
+  const [menuUp, setMenuUp] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!showMenu) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showMenu])
+
+  useEffect(() => {
+    if (!showMenu || !menuBtnRef.current) return
+    const rect = menuBtnRef.current.getBoundingClientRect()
+    setMenuUp(window.innerHeight - rect.bottom < 200)
+  }, [showMenu])
 
   async function handleRestart() {
     if (restarting) return
     setConfirmRestart(false)
     setRestarting(true)
     setRestartDone(false)
-    setRestartError(null)
     try {
       await restartServer(norm)
       setRestartDone(true)
+      addEvent('server.restart', norm)
       setTimeout(() => setRestartDone(false), 4000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Restart failed'
-      setRestartError(msg)
-      setTimeout(() => setRestartError(null), 6000)
+      addToast(msg, 'error')
     } finally {
       setRestarting(false)
     }
   }
+
   const norm = server.replace(/\/$/, '')
   const bareUrl = server.replace(/^https?:\/\//, '')
+  const alias = serverAliases[server]
+  const hasAlias = Boolean(alias && alias !== bareUrl)
+  const tags = serverGroups[norm] ?? []
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: server })
   const style = {
@@ -118,15 +121,20 @@ export function ServerCard({
         ? 'server-card--unhealthy'
         : 'server-card--checking'
 
-  const queueLabel = queueDepth
-    ? [
-        queueDepth.running > 0 ? `${queueDepth.running} running` : '',
-        queueDepth.pending > 0 ? `${queueDepth.pending} queued` : '',
-      ].filter(Boolean).join(' · ')
-    : null
+  const dotClass = !health
+    ? 'server-card-dot--unchecked'
+    : health.healthy === null
+      ? 'server-card-dot--checking'
+      : health.healthy
+        ? 'server-card-dot--healthy'
+        : 'server-card-dot--unhealthy'
 
-  const showSysInfo = health?.healthy === true && health.systemInfo &&
-    (health.systemInfo.comfyVersion || health.systemInfo.gpuName)
+  const hasQueue = queueDepth && (queueDepth.running > 0 || queueDepth.pending > 0)
+
+  const info = health?.systemInfo
+  const showSysInfo = health?.healthy === true && info && (info.comfyVersion || info.gpuName)
+  const hasVram = info?.vramTotal != null && info?.vramFree != null
+  const vramUsed = hasVram ? info!.vramTotal! - info!.vramFree! : null
 
   const latencyCls = health?.latencyMs != null
     ? health.latencyMs < 100 ? 'server-card-latency--fast'
@@ -148,9 +156,7 @@ export function ServerCard({
               <p className="server-card-overlay-title">Restart ComfyUI?</p>
               <p className="server-card-overlay-sub">{bareUrl}</p>
               <div className="server-card-overlay-actions">
-                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRestart(false)}>
-                  Cancel
-                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRestart(false)}>Cancel</button>
                 <button type="button" className="server-card-overlay-btn server-card-overlay-btn--confirm" onClick={handleRestart}>
                   <RotateCcw size={13} /> Restart
                 </button>
@@ -163,9 +169,7 @@ export function ServerCard({
               <p className="server-card-overlay-title">Remove server?</p>
               <p className="server-card-overlay-sub">{bareUrl}</p>
               <div className="server-card-overlay-actions">
-                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRemove(false)}>
-                  Cancel
-                </button>
+                <button type="button" className="server-card-overlay-btn server-card-overlay-btn--cancel" onClick={() => setConfirmRemove(false)}>Cancel</button>
                 <button type="button" className="server-card-overlay-btn server-card-overlay-btn--danger" onClick={() => onRemove(index)}>
                   <Trash2 size={13} /> Remove
                 </button>
@@ -174,126 +178,166 @@ export function ServerCard({
           )}
         </div>
       )}
-      <div className="server-card-header">
+
+      {/* ── Main row ── */}
+      <div className="server-card-row">
         {showDragHandle && (
           <div className="server-card-drag-handle" {...attributes} {...listeners} title="Drag to reorder">
-            <GripVertical size={14} />
+            <GripVertical size={13} />
           </div>
         )}
-        <div className="server-card-status-icon">
-          {!health && <Server size={20} className="server-card-icon-default" />}
-          {health?.healthy === null && <Clock size={20} className="server-card-icon-checking spin" />}
-          {health?.healthy === true && <CheckCircle size={20} className="server-card-icon-healthy" />}
-          {health?.healthy === false && <XCircle size={20} className="server-card-icon-unhealthy" />}
+
+        <span className={`server-card-dot ${dotClass}`} />
+
+        <div className="server-card-info">
+          <div className="server-card-name-line">
+            <span
+              className={`server-card-name${onViewDetail ? ' cursor-pointer hover:text-accent-light transition-colors' : ''}`}
+              title={onViewDetail ? `${server} — click to view queue & stats` : server}
+              onClick={onViewDetail ? (e) => { e.stopPropagation(); onViewDetail(server) } : undefined}
+            >
+              {hasAlias ? alias : bareUrl}
+            </span>
+            {queueDepth && queueDepth.running > 0 && (
+              <span className="server-card-running-dot" title={`${queueDepth.running} job${queueDepth.running !== 1 ? 's' : ''} running now`} />
+            )}
+            {isDuplicate && (
+              <AlertTriangle size={11} className="server-card-dup-icon" title="Duplicate URL" />
+            )}
+          </div>
+          {hasAlias && (
+            <span className="server-card-url" title={server}>{bareUrl}</span>
+          )}
+          {tags.length > 0 && (
+            <div className="server-card-tags">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className={`server-card-tag${onTagClick ? ' server-card-tag--clickable' : ''}${activeTag === tag ? ' server-card-tag--active' : ''}`}
+                  onClick={onTagClick ? (e) => { e.stopPropagation(); onTagClick(tag) } : undefined}
+                  title={onTagClick ? `Filter by tag: ${tag}` : tag}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="server-card-title-block">
-          <span className="server-card-title" title={server}>
-            {serverAliases[server] || bareUrl}
-          </span>
-          <span className="server-card-url" title={server}>
-            {bareUrl}
-          </span>
-        </div>
-        {isDuplicate && (
-          <span className="server-card-duplicate-badge" title="Duplicate URL">
-            <AlertTriangle size={14} />
-          </span>
-        )}
-        <button type="button" className="server-card-edit-btn" onClick={() => onEdit(server)} title="Edit server">
-          <Pencil size={13} />
-        </button>
-        {onToggleWatch && (
+
+        <div ref={menuRef} className="server-card-menu-wrap">
           <button
+            ref={menuBtnRef}
             type="button"
-            className={`server-card-watch-btn${isWatched ? ' server-card-watch-btn--active' : ''}`}
-            onClick={() => onToggleWatch(server)}
-            title={isWatched ? 'Stop monitoring this server' : 'Monitor this server in background'}
+            className="server-card-menu-btn"
+            onClick={(e) => { e.stopPropagation(); setShowMenu((o) => !o) }}
+            title="Actions"
           >
-            {isWatched ? <BellRing size={13} /> : <Bell size={13} />}
+            <MoreHorizontal size={15} />
           </button>
-        )}
-        <button type="button" className="server-card-remove" onClick={() => setConfirmRemove(true)} title="Remove server">
-          <X size={14} />
-        </button>
+          {showMenu && (
+            <div className={`server-card-menu ${menuUp ? 'server-card-menu--up' : ''}`}>
+              <button type="button" className="server-card-menu-item" onClick={() => { onViewLogs(server); setShowMenu(false) }}>
+                <FileText size={13} /> View server log
+              </button>
+              <div className="server-card-menu-divider" />
+              <button type="button" className="server-card-menu-item" onClick={() => { onCheck(norm); setShowMenu(false) }} disabled={isServerChecking}>
+                {isServerChecking ? <Loader2 size={13} className="spin" /> : <Activity size={13} />}
+                Check health
+              </button>
+              <button type="button" className="server-card-menu-item" onClick={() => { onEdit(server); setShowMenu(false) }}>
+                <Pencil size={13} /> Edit
+              </button>
+              {onToggleWatch && (
+                <button
+                  type="button"
+                  className={`server-card-menu-item${isWatched ? ' server-card-menu-item--active' : ''}`}
+                  onClick={() => { onToggleWatch(server); setShowMenu(false) }}
+                >
+                  {isWatched ? <BellRing size={13} /> : <Bell size={13} />}
+                  {isWatched ? 'Stop monitoring' : 'Monitor'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="server-card-menu-item"
+                onClick={() => { setConfirmRestart(true); setShowMenu(false) }}
+                disabled={restarting}
+              >
+                {restarting ? <Loader2 size={13} className="spin" /> : restartDone ? <Check size={13} /> : <RotateCcw size={13} />}
+                Restart ComfyUI
+              </button>
+              <div className="server-card-menu-divider" />
+              <button type="button" className="server-card-menu-item server-card-menu-item--danger" onClick={() => { setConfirmRemove(true); setShowMenu(false) }}>
+                <Trash2 size={13} /> Remove
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {(serverGroups[norm] ?? []).length > 0 && (
-        <div className="server-card-tags">
-          {(serverGroups[norm] ?? []).map((tag) => (
-            <span key={tag} className="server-card-group-badge" title={`Tag: ${tag}`}>
-              {tag}
+      {/* ── GPU / version strip ── */}
+      {showSysInfo && (
+        <div className="server-card-sysinfo">
+          {info!.comfyVersion && <span className="server-card-version">{info!.comfyVersion}</span>}
+          {info!.comfyVersion && info!.gpuName && <span className="server-card-sysinfo-sep">·</span>}
+          {info!.gpuName && (
+            <span className="server-card-gpu">
+              <Cpu size={10} />
+              {info!.gpuName}
+              {hasVram && <span className="server-card-vram"> {formatGb(vramUsed!)}/{formatGb(info!.vramTotal!)} GB</span>}
             </span>
-          ))}
+          )}
         </div>
       )}
 
-      {showSysInfo && <SysInfoStrip info={health!.systemInfo!} />}
-
+      {/* ── Footer ── */}
       <div className="server-card-footer">
         {wfCount > 0 && (
           <button
             type="button"
-            className="server-card-wf-count"
+            className="server-card-badge"
             onClick={() => onViewWorkflows(norm)}
-            title={`${wfCount} workflow${wfCount !== 1 ? 's' : ''} use this server — click to view`}
+            title={`${wfCount} workflow${wfCount !== 1 ? 's' : ''} — click to view`}
           >
-            <LayoutGrid size={13} />
             {wfCount} wf
           </button>
         )}
-
-        {queueLabel && health?.healthy === true && (
+        {hasQueue && health?.healthy === true && (
           <button
             type="button"
-            className="server-card-queue"
+            className="server-card-badge server-card-badge--queue"
             onClick={() => onViewJobs(norm)}
-            title="View current jobs on this server"
+            title="View current jobs"
           >
-            {queueLabel}
-          </button>
-        )}
-
-        {health?.lastChecked ? (
-          <span
-            className="server-card-meta"
-            title={`Last checked: ${new Date(health.lastChecked).toLocaleString()}`}
-          >
-            <RelativeTime iso={health.lastChecked} />
-            {health.latencyMs != null && health.healthy === true && (
-              <>
-                <span className="server-card-meta-sep">·</span>
-                <span className={`server-card-latency ${latencyCls}`}>{health.latencyMs}ms</span>
-              </>
+            {queueDepth!.running > 0 && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2em' }}>
+                ▶{' '}
+                {queueDepth!.runningJobName
+                  ? <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'bottom' }}>{queueDepth!.runningJobName}</span>
+                  : queueDepth!.running}
+              </span>
             )}
-          </span>
-        ) : (
-          <span className="server-card-meta server-card-meta--unchecked">not checked</span>
+            {queueDepth!.running > 0 && queueDepth!.pending > 0 && ' · '}
+            {queueDepth!.pending > 0 && `${queueDepth!.pending} queued`}
+          </button>
         )}
 
-        <div className="server-card-actions">
-          <button type="button" className="server-action-btn" onClick={() => onViewLogs(server)} title="View server logs">
-            <FileText size={14} />
-          </button>
-          <button
-            type="button"
-            className={`server-action-btn${restartDone ? ' server-action-btn--done' : ''}`}
-            onClick={() => setConfirmRestart(true)}
-            disabled={restarting}
-            title="Restart ComfyUI (requires ComfyUI Manager)"
-          >
-            {restarting ? <Loader2 size={14} className="spin" /> : restartDone ? <Check size={14} /> : <RotateCcw size={14} />}
-          </button>
-          <button type="button" className="server-action-btn" onClick={() => onCheck(norm)} disabled={isServerChecking} title="Check server health">
-            {isServerChecking ? <Loader2 size={14} className="spin" /> : <Activity size={14} />}
-          </button>
+        <div className="server-card-meta">
+          {health?.lastChecked ? (
+            <span title={`Last checked: ${new Date(health.lastChecked).toLocaleString()}`}>
+              <RelativeTime iso={health.lastChecked} />
+              {health.latencyMs != null && health.healthy === true && (
+                <span className={`server-card-latency ${latencyCls}`}> · {health.latencyMs}ms</span>
+              )}
+            </span>
+          ) : (
+            <span className="server-card-meta--unchecked">not checked</span>
+          )}
         </div>
       </div>
 
       {health?.healthy === false && health.error && (
         <div className="server-card-error">{health.error}</div>
-      )}
-      {restartError && (
-        <div className="server-card-error">{restartError}</div>
       )}
     </div>
   )

@@ -213,7 +213,7 @@ export function NodeVisibilityEditor({ connectTo, currentNodeId, workflowJson, p
                                   </div>
                                   <div className="condition-edit-actions">
                                     <button onClick={() => { const updated = newConditionType === 'displayedWhen' ? { displayedWhen: parseConditionValue(newConditionValue) } : { hiddenWhen: parseConditionValue(newConditionValue) }; updateCondition(index, updated); setEditingConditionIndex(null) }} className="btn btn-secondary btn-small">Save</button>
-                                    <button onClick={() => setEditingConditionIndex(null)} className="btn btn-secondary btn-small">Cancel</button>
+                                    <button onClick={() => setEditingConditionIndex(null)} className="btn btn-cancel btn-small">Cancel</button>
                                   </div>
                                 </div>
                               )}
