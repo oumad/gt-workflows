@@ -97,8 +97,7 @@ Use these dedicated nodes when you need user-adjustable values. They auto-render
 
 | Node Class | Use For | Notes |
 |---|---|---|
-| `SaveImageWebsocket` | Image output | Preferred for GT — streams in real-time |
-| `SaveImage` | Image output (file) | Saves to disk, GT reads from file |
+| `SaveImage` | Image output | Preferred for GT — use `"filename_prefix": "ComfyUI"` |
 | `SaveVideo` | Video output | Requires `filename_prefix`, `format`, `codec` |
 | `CreateVideo` | Reassemble video | Combines frames + fps + audio before SaveVideo |
 
@@ -485,9 +484,188 @@ Add mask LoadImage node ID to `input_ids` so the system can send mask data to it
 |---|---|---|---|
 | Image Edit (Qwen) | 228:228 | 228:78 | Simple (no resize) |
 | Paint Transfer | 266 | 264 | Simple (no resize) |
-| UI Screen Restyle | 233 | 18 | Simple (no resize) |
+| UI Screen Restyle | 240:10 | 18 | Advanced masking (SAM3 + invert + upload) |
 | Extract Materials | 122 | 41 | With ResizeImageMaskNode match size |
 | Apply Vinyl Wrap | 57 | 56 | With auto-mask (SegmentAnything) |
+
+### Advanced Masking Options (SAM3 + Invert + Upload)
+
+Adds a "Masking Options" collapsible accordion with three features: manual mask upload, text-prompt-based mask (SAM3), and mask inversion. This builds on top of the standard mask pattern.
+
+#### Flow Diagram
+
+```
+                          ┌─ SAM3Grounding (prompt mask) ─┐     ┌─ InvertMask ──────┐
+User draws / uploads mask ─┤                               ├─────┤                   ├─→ SetLatentNoiseMask
+                          └─ ImageToMask (drawn mask) ─────┘     └─ pass through ────┘
+                                Switch (Use Prompt Mask)           Switch (Invert Mask)
+```
+
+#### workflow.json — New Nodes (subgraph `MASK_SUB`)
+
+Use a subgraph ID (e.g., `240`) for all mask option nodes. The mask LoadImage node should also be inside the subgraph so it appears within the accordion.
+
+```json
+"MASK_SUB:1": {
+  "inputs": { "value": false },
+  "class_type": "PrimitiveBoolean",
+  "_meta": { "title": "Upload Mask" }
+},
+"MASK_SUB:2": {
+  "inputs": { "value": false },
+  "class_type": "PrimitiveBoolean",
+  "_meta": { "title": "Use Prompt Mask" }
+},
+"MASK_SUB:3": {
+  "inputs": { "text": "" },
+  "class_type": "TextInput_",
+  "_meta": { "title": "Mask Prompt" }
+},
+"MASK_SUB:4": {
+  "inputs": { "value": false },
+  "class_type": "PrimitiveBoolean",
+  "_meta": { "title": "Invert Mask" }
+},
+"MASK_SUB:5": {
+  "inputs": { "precision": "auto", "attention": "auto", "compile": false },
+  "class_type": "LoadSAM3Model",
+  "_meta": { "title": "(down)Load SAM3 Model" }
+},
+"MASK_SUB:6": {
+  "inputs": {
+    "confidence_threshold": 0.2,
+    "text_prompt": ["MASK_SUB:3", 0],
+    "max_detections": 1,
+    "sam3_model": ["MASK_SUB:5", 0],
+    "image": ["IMAGE_INPUT_NODE", 0]
+  },
+  "class_type": "SAM3Grounding",
+  "_meta": { "title": "SAM3 Text Segmentation" }
+},
+"MASK_SUB:7": {
+  "inputs": {
+    "boolean": ["MASK_SUB:2", 0],
+    "on_true": ["MASK_SUB:6", 0],
+    "on_false": ["EXISTING_IMAGE_TO_MASK", 0]
+  },
+  "class_type": "Switch mask [Crystools]",
+  "_meta": { "title": "Switch mask" }
+},
+"MASK_SUB:8": {
+  "inputs": { "mask": ["MASK_SUB:7", 0] },
+  "class_type": "InvertMask",
+  "_meta": { "title": "InvertMask" }
+},
+"MASK_SUB:9": {
+  "inputs": {
+    "boolean": ["MASK_SUB:4", 0],
+    "on_true": ["MASK_SUB:8", 0],
+    "on_false": ["MASK_SUB:7", 0]
+  },
+  "class_type": "Switch mask [Crystools]",
+  "_meta": { "title": "Switch mask" }
+},
+"MASK_SUB:10": {
+  "inputs": { "image": "empty.png" },
+  "class_type": "LoadImage",
+  "_meta": { "title": "Mask Image" }
+}
+```
+
+**Key connections to update:**
+- Move the existing mask LoadImage into the subgraph (rename to `MASK_SUB:10`)
+- SAM3Grounding `image` → connect to the main image input node (the one being masked)
+- Switch mask (MASK_SUB:7) `on_false` → connect to existing `ImageToMask` node output
+- SetLatentNoiseMask `mask` → change from `[ImageToMask, 0]` to `[MASK_SUB:9, 0]`
+- ImageToMask `image` → update to `[MASK_SUB:10, 0]` (renamed mask node)
+- Update `maskNode` in node_parsers to reference `MASK_SUB:10`
+
+**AppInfo changes:**
+- Remove old mask node ID from `input_ids` (now covered by subgraph)
+- Add `MASK_SUB` subgraph ID to `input_ids`
+- Place it right after the image node being masked for logical UI ordering
+
+#### params.json — Subgraph and Node Parsers
+
+```json
+{
+  "subgraphs": {
+    "MASK_SUB": {
+      "label": "Masking Options",
+      "hideNodeLabels": true,
+      "nodesOrder": ["1", "10", "2", "3", "4"]
+    }
+  },
+  "hiddenNodeIds": [
+    "MASK_SUB:5", "MASK_SUB:6", "MASK_SUB:7",
+    "MASK_SUB:8", "MASK_SUB:9", "MASK_SUB:10"
+  ],
+  "wrappedNodeIds": ["MASK_SUB"]
+}
+```
+
+**node_parsers for mask subgraph nodes:**
+
+```json
+{
+  "IMAGE_NODE": {
+    "inputs": {
+      "image": {
+        "type": "uploadImage",
+        "drawMaskEnable": true,
+        "maskNode": { "nodeId": "MASK_SUB:10" }
+      }
+    }
+  },
+  "MASK_SUB:10": {
+    "inputs": {
+      "image": { "type": "uploadImage", "label": "Mask Image" }
+    },
+    "connectTo": {
+      "nodeId": "MASK_SUB:1",
+      "inputField": "value",
+      "conditions": [
+        { "hiddenWhen": false },
+        { "displayedWhen": true }
+      ]
+    }
+  },
+  "MASK_SUB:1": {
+    "inputs": { "value": { "type": "checkbox", "label": "Upload Mask" } }
+  },
+  "MASK_SUB:2": {
+    "inputs": { "value": { "type": "checkbox", "label": "Use Prompt Mask" } }
+  },
+  "MASK_SUB:3": {
+    "inputs": {},
+    "connectTo": {
+      "nodeId": "MASK_SUB:2",
+      "inputField": "value",
+      "conditions": [
+        { "hiddenWhen": false },
+        { "displayedWhen": true }
+      ]
+    }
+  },
+  "MASK_SUB:4": {
+    "inputs": { "value": { "type": "checkbox", "label": "Invert Mask" } }
+  }
+}
+```
+
+#### Key Design Decisions
+
+- **`hideNodeLabels: true`** on the subgraph removes bold titles above each checkbox — only the inline checkbox labels show
+- **nodesOrder** controls display order: Upload checkbox → Mask image (when visible) → Prompt checkbox → Prompt text (when visible) → Invert checkbox
+- **Upload Mask** checkbox controls visibility of the mask LoadImage (`MASK_SUB:10`) via `connectTo`; when unchecked, drawing on the main image still sends mask data to it
+- **Use Prompt Mask** checkbox controls visibility of the text prompt (`MASK_SUB:3`) via `connectTo`
+- Internal processing nodes (SAM3 model, switches, invert) stay in `hiddenNodeIds`
+- The subgraph should be placed in AppInfo `input_ids` right after the masked image node for logical UI flow
+
+#### Reference Implementation
+| Workflow | Subgraph ID | Image Node | Notes |
+|---|---|---|---|
+| UI Screen Restyle | 240 | 18 | Full pattern with SAM3 + invert + upload |
 
 ---
 
@@ -535,8 +713,8 @@ When the user provides a raw ComfyUI API-format JSON export, follow these steps:
 1. **Create folder** `data/gt-workflows/<Workflow Name>/`
 2. **Clean up the workflow JSON:**
    - Replace real filenames with `placeholder.jpeg` (images) or `placeholder.mp4` (videos)
-   - Replace `SaveImage` output with `SaveImageWebsocket` for GT streaming (keep SaveImage too if desired)
-   - Verify AppInfo `output_ids` points to the SaveImageWebsocket node
+   - Use `SaveImage` with `"filename_prefix": "ComfyUI"` as the output node (preferred over `SaveImageWebsocket`)
+   - Verify AppInfo `output_ids` points to the SaveImage output node
    - Verify AppInfo `input_ids` includes ALL user-facing nodes — subgraph IDs (e.g., `"132"`) cover all child nodes in that subgraph
    - If there's no AppInfo node, add one along with an EmptyImage node
 3. **Recognize subgraph nodes:** Exported subgraph nodes use `"subgraphId:childId"` format (e.g., `"132:129"`). In params.json, configure the parent subgraph ID in `wrappedNodeIds` and `subgraphs` for proper accordion grouping. Use `nodesOrder` with child IDs only (the part after `:`).
@@ -564,6 +742,52 @@ In params.json, find the select definition and add to the `options` array. For d
 3. For inline sliders on processing nodes: make sure to hide connection fields (`"images": false`)
 4. Default parsers auto-handle IntNumber/FloatSlider — check if custom config conflicts
 
+### Adding Powerflow Connections
+
+Powerflow enables chaining workflows together. Add `powerflowConfig` inside `comfyui_config` to define which inputs/outputs are connectable.
+
+```json
+{
+  "powerflowConfig": {
+    "enabled": true,
+    "availableConnections": {
+      "inputs": [
+        { "nodeId": "18", "fields": [{ "name": "image", "label": "Input Image" }] },
+        { "nodeId": "46", "fields": [{ "name": "text", "label": "Prompt" }] }
+      ],
+      "outputs": [
+        { "nodeId": "199", "fields": ["images"] }
+      ]
+    }
+  }
+}
+```
+
+#### Input Detection Rules
+
+| workflow.json `class_type` | Field name | Notes |
+|---|---|---|
+| `LoadImage` | `"image"` | Exclude hidden/mask nodes |
+| `TextInput_` | `"text"` | Prompt nodes |
+| `LoadVideo` / `VHS_LoadVideo` | `"video"` | Video input |
+
+#### Output Detection Rules
+
+Use only nodes listed in AppInfo `output_ids`:
+
+| workflow.json `class_type` | Field name |
+|---|---|
+| `SaveImage` | `"images"` |
+| `VHS_VideoCombine` / `SaveVideo` | `"video"` |
+
+#### Labels
+
+Always provide labels from node_parsers `label` field or workflow.json `_meta.title`. Strip "Load " prefixes from titles for cleaner labels.
+
+#### Subgraph Nodes
+
+Subgraph nodes (e.g., `"228:104"`) can be referenced in powerflow — use the full `"subgraphId:childId"` as `nodeId`.
+
 ---
 
 ## 5. Global Environment & Server Config
@@ -585,5 +809,6 @@ In params.json, find the select definition and add to the `options` array. For d
 - [ ] Hide internal/connection fields with `false` in node_parsers
 - [ ] Add `icon.jpg`
 - [ ] Set appropriate `timeout` (120s for simple, 300-500s for heavy)
+- [ ] Add `powerflowConfig` with `availableConnections` (inputs from LoadImage/TextInput_/LoadVideo, outputs from AppInfo `output_ids`)
 - [ ] Test: all inputs render, values propagate, workflow executes
 - [ ] Validate JSON: `python -m json.tool workflow.json && python -m json.tool params.json`
