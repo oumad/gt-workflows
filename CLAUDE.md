@@ -195,6 +195,9 @@ Connect RepeatLatentBatch output → SetLatentNoiseMask → KSampler.
 | `devMode` | boolean | Only visible in dev mode |
 | `timeout` | number | Seconds before timeout |
 | `iconBadge` | object | Badge on workflow card (`content`, `colorVariant`, + CSS) |
+| `scope` | string | Where workflow appears: `"app"`, `"project"`, `"items"`, or `"item"` |
+| `documentation` | string | Path to markdown doc file (absolute or relative to workflow folder) |
+| `dashboard` | object | `{ disable?: boolean, breakSize?: number }` — hide from dashboard or set card break size |
 
 ### comfyui_config Fields
 
@@ -209,7 +212,8 @@ Connect RepeatLatentBatch output → SetLatentNoiseMask → KSampler.
 | `subgraphs` | object | Configure subgraph accordion groups |
 | `node_parsers` | object or string | Inline config or path to external JSON file |
 | `outputComparator` | object | Enable before/after wipe comparison |
-| `saveInputPath` | string | Required when using uploadImage/uploadVideo |
+| `placeholders` | object | Define accepted format placeholders (see Placeholders section below) |
+| `skipOutputHistory` | boolean or string[] | Skip saving outputs to item history. `true` = skip all, `string[]` = skip specific output node IDs |
 
 ### parser_type: "mixlab" vs Default
 
@@ -254,7 +258,7 @@ Both require nodes to be in AppInfo `input_ids` to appear.
   "maskNode": { "nodeId": "maskNodeId" },
   "instructions": "Draw on the area to edit",
   "base64": false,
-  "cover": false
+  "cover": true
 }
 ```
 
@@ -312,6 +316,31 @@ For IntNumber/FloatSlider nodes, the default parser auto-creates sliders using r
 #### number
 ```json
 { "type": "number", "min": 0, "max": 100, "step": 1, "acceptFloat": false }
+```
+
+#### uploadAudio
+```json
+{
+  "type": "uploadAudio",
+  "accept": "<ACCEPTED_AUDIO_FORMATS>"
+}
+```
+
+#### file
+```json
+{
+  "type": "file",
+  "label": "Upload File",
+  "accept": "<ACCEPTED_FILE_FORMATS>"
+}
+```
+
+#### folder
+```json
+{
+  "type": "folder",
+  "label": "Select Folder"
+}
 ```
 
 ### connectTo — Conditional Visibility (Node Level)
@@ -393,6 +422,50 @@ Enable before/after wipe comparison:
   "outputComparator": {
     "defaultEnabled": false,
     "inputNodeId": "imageInputNodeId"
+  }
+}
+```
+
+### Placeholders
+
+Define accepted file format lists once, then reference them in input parsers with `<PLACEHOLDER_NAME>`:
+
+```json
+{
+  "comfyui_config": {
+    "placeholders": {
+      "ACCEPTED_IMG_FORMATS": ["png", "jpg", "jpeg", "webp", "bmp"],
+      "ACCEPTED_VIDEO_FORMATS": ["mp4", "mov", "avi", "webm"],
+      "ACCEPTED_AUDIO_FORMATS": ["mp3", "wav", "ogg"],
+      "ACCEPTED_FILE_FORMATS": ["glb", "gltf", "obj"]
+    }
+  }
+}
+```
+
+Then in input parsers: `"accept": "<ACCEPTED_IMG_FORMATS>"` resolves to the array above. Without placeholders, pass the array directly: `"accept": ["png", "jpg"]`.
+
+### Universal Input Parser Properties
+
+All input types (uploadImage, slider, select, etc.) inherit these base properties:
+
+| Property | Type | Notes |
+|---|---|---|
+| `optional` | boolean | Mark field as optional — skips validation when empty. Hidden/conditionally-hidden fields are automatically treated as optional |
+| `required` | boolean | Mark field as mandatory — shows validation error when empty and blocks execution |
+| `connectTo` | object | Auto-update this field's value based on another node's field (see connectTo — Auto-Update Values) |
+
+`optional` and `required` can be added to any input type definition:
+```json
+{
+  "image": {
+    "type": "uploadImage",
+    "required": true,
+    "accept": "<ACCEPTED_IMG_FORMATS>"
+  },
+  "text": {
+    "type": "textArea",
+    "optional": true
   }
 }
 ```
@@ -752,16 +825,38 @@ Powerflow enables chaining workflows together. Add `powerflowConfig` inside `com
     "enabled": true,
     "availableConnections": {
       "inputs": [
-        { "nodeId": "18", "fields": [{ "name": "image", "label": "Input Image" }] },
-        { "nodeId": "46", "fields": [{ "name": "text", "label": "Prompt" }] }
+        { "nodeId": "18", "fields": [{ "name": "image", "handleLabel": "Input Image" }] },
+        { "nodeId": "46", "fields": [{ "name": "text", "handleLabel": "Prompt" }] }
       ],
       "outputs": [
-        { "nodeId": "199", "fields": ["images"] }
+        { "nodeId": "199", "handleLabel": "Output Image" }
       ]
     }
   }
 }
 ```
+
+#### Powerflow Options
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | boolean | Enable powerflow for this workflow |
+| `exclusive` | boolean | Workflow is ONLY accessible via powerflow (hidden from normal gallery) |
+| `availableConnections` | object | Define exposed inputs and outputs |
+
+- **`exclusive: true`**: Use for utility workflows that only make sense as part of a chain (e.g., format converters, post-processors). They won't appear in the normal workflow gallery.
+
+#### Input Fields
+
+Each input entry has `nodeId` and `fields` array. Each field has:
+- `name`: The input field name on the node (e.g., `"image"`, `"text"`, `"video"`)
+- `handleLabel` (optional): Display label on the powerflow handle. Falls back to `name` if not set
+
+#### Output Entries
+
+Each output entry has:
+- `nodeId`: The output node ID (must be in AppInfo `output_ids`)
+- `handleLabel` (optional): Display label on the powerflow handle. Output type is auto-detected from the node's `class_type`
 
 #### Input Detection Rules
 
@@ -779,10 +874,6 @@ Use only nodes listed in AppInfo `output_ids`:
 |---|---|
 | `SaveImage` | `"images"` |
 | `VHS_VideoCombine` / `SaveVideo` | `"video"` |
-
-#### Labels
-
-Always provide labels from node_parsers `label` field or workflow.json `_meta.title`. Strip "Load " prefixes from titles for cleaner labels.
 
 #### Subgraph Nodes
 
@@ -806,6 +897,8 @@ Subgraph nodes (e.g., `"228:104"`) can be referenced in powerflow — use the fu
 - [ ] Verify `input_ids` includes ALL user-facing nodes (image/video inputs AND control nodes)
 - [ ] Verify `output_ids` points to correct output node
 - [ ] Create `params.json` with parser, serverUrl, workflow path, node_parsers
+- [ ] Add `placeholders` if using `<ACCEPTED_IMG_FORMATS>` etc. in input parsers
+- [ ] Set `required: true` on mandatory upload/input fields
 - [ ] Hide internal/connection fields with `false` in node_parsers
 - [ ] Add `icon.jpg`
 - [ ] Set appropriate `timeout` (120s for simple, 300-500s for heavy)

@@ -111,6 +111,10 @@ export function FieldEditor({ fieldName, config, nodeId, workflowJson, params, o
                   <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontWeight: 'normal' }}>Size of the image in the image picker (in pixels)</small>
                 </div>
                 <div className="config-row checkbox-row">
+                  <label><input type="checkbox" checked={(config.cover as boolean | undefined) !== false} onChange={(e) => onUpdate(fieldName, { cover: e.target.checked ? undefined : false })} /> Cover Mode</label>
+                  <small style={{ display: 'block', marginTop: '2px', color: 'var(--text-muted)', fontWeight: 'normal' }}>Image fills the container (cover) vs fits inside (contain)</small>
+                </div>
+                <div className="config-row checkbox-row">
                   <label><input type="checkbox" checked={(config.base64 as boolean) || false} onChange={(e) => onUpdate(fieldName, { base64: e.target.checked })} /> Base64 Encoding</label>
                 </div>
                 <div className="config-row checkbox-row">
@@ -131,15 +135,9 @@ export function FieldEditor({ fieldName, config, nodeId, workflowJson, params, o
               </>
             )}
 
-            {(config.type === 'uploadVideo' || config.type === 'uploadAudio') && (
-              <div className="config-row">
-                <label>Save Path (or use &lt;SAVE_INPUT_PATH&gt; placeholder)</label>
-                <input type="text" value={(config.path as string) || ''} onChange={(e) => onUpdate(fieldName, { path: e.target.value })} placeholder="<SAVE_INPUT_PATH> or custom path" className="config-input" />
-              </div>
-            )}
-
-            <div className="config-row">
-              <label><input type="checkbox" checked={config.required || false} onChange={(e) => onUpdate(fieldName, { required: e.target.checked })} /> Required</label>
+            <div className="config-row" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <label><input type="checkbox" checked={config.required || false} onChange={(e) => onUpdate(fieldName, { required: e.target.checked || undefined })} /> Required</label>
+              <label><input type="checkbox" checked={(config.optional as boolean) || false} onChange={(e) => onUpdate(fieldName, { optional: e.target.checked || undefined })} /> Optional</label>
             </div>
 
             {config.type !== 'checkbox' && (

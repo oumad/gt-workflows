@@ -111,6 +111,30 @@ export interface DashboardConfig {
   breakSize?: number;
 }
 
+export interface PowerflowConnectionField {
+  name: string;
+  handleLabel?: string;
+}
+
+export interface PowerflowInputEntry {
+  nodeId: string;
+  fields: PowerflowConnectionField[];
+}
+
+export interface PowerflowOutputEntry {
+  nodeId: string;
+  handleLabel?: string;
+}
+
+export interface PowerflowConfig {
+  enabled: boolean;
+  exclusive?: boolean;
+  availableConnections?: {
+    inputs: PowerflowInputEntry[];
+    outputs: PowerflowOutputEntry[];
+  };
+}
+
 export interface ComfyUIConfig {
   serverUrl?: string | string[];
   workflow?: string;
@@ -120,17 +144,13 @@ export interface ComfyUIConfig {
   nonPersistentNodeIds?: string[];
   hiddenNodeIds?: string[];
   wrappedNodeIds?: string[];
-  saveInputPath?: string;
   saveOutputPath?: string;
   node_parsers?: Record<string, unknown> | string;
   subgraphs?: Record<string, SubgraphConfig>;
   placeholders?: PlaceholdersConfig;
   outputComparator?: OutputComparatorConfig;
-  ACCEPTED_FILE_FORMATS?: string[];
-  ACCEPTED_IMG_FORMATS?: string[];
-  ACCEPTED_VIDEO_FORMATS?: string[];
-  ACCEPTED_AUDIO_FORMATS?: string[];
-  SAVE_INPUT_PATH?: string;
+  powerflowConfig?: PowerflowConfig;
+  skipOutputHistory?: boolean | string[];
 }
 
 export interface PlaceholdersConfig {
@@ -138,7 +158,6 @@ export interface PlaceholdersConfig {
   ACCEPTED_IMG_FORMATS?: string[];
   ACCEPTED_VIDEO_FORMATS?: string[];
   ACCEPTED_AUDIO_FORMATS?: string[];
-  SAVE_INPUT_PATH?: string;
   [key: string]: unknown;
 }
 

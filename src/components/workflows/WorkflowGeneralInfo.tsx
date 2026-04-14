@@ -142,6 +142,9 @@ export function WorkflowGeneralInfo({
               className={`info-input ${isFieldChanged('scope') ? 'field-changed' : ''}`}
             >
               <option value="">None</option>
+              <option value="app">App</option>
+              <option value="project">Project</option>
+              <option value="items">Items</option>
               <option value="item">Item</option>
             </select>
           </div>
