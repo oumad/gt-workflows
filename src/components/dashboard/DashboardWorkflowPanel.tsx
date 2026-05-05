@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronDown, ChevronRight, List } from 'lucide-react'
 import { formatDateShortTimeMedium } from '@/utils/dateFormat'
@@ -101,7 +101,10 @@ export function DashboardWorkflowPanel({
     navigate(`/workflows/workflow/${encodeURIComponent(name)}`)
   }, [navigate, workflowNames])
 
-  const totalCount = workflowDisplayList.reduce((sum, item) => sum + item.count, 0)
+  const totalCount = useMemo(
+    () => workflowDisplayList.reduce((sum, item) => sum + item.count, 0),
+    [workflowDisplayList]
+  )
 
   return (
     <div className="bg-primary border border-default rounded-[10px] px-[1.15rem] pt-4 pb-3 flex flex-col gap-[0.35rem] min-h-0 overflow-hidden h-full">

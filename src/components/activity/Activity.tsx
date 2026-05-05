@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { RefreshCw, Activity as ActivityIcon, Timer, TimerOff, Radio, BarChart2, Terminal, ChevronDown, ChevronUp, X, Stethoscope } from 'lucide-react'
 import { getQueueStatsWithJobLists } from '@/services/api/stats'
@@ -348,8 +348,14 @@ export function Activity() {
   const queueRes = data?.queueRes
   const activeJobsRaw = queueRes?.active ?? []
   const waitingJobsRaw = queueRes?.waiting ?? []
-  const activeJobs = userFilter ? activeJobsRaw.filter((j) => j.user === userFilter) : activeJobsRaw
-  const waitingJobs = userFilter ? waitingJobsRaw.filter((j) => j.user === userFilter) : waitingJobsRaw
+  const activeJobs = useMemo(
+    () => userFilter ? activeJobsRaw.filter((j) => j.user === userFilter) : activeJobsRaw,
+    [activeJobsRaw, userFilter]
+  )
+  const waitingJobs = useMemo(
+    () => userFilter ? waitingJobsRaw.filter((j) => j.user === userFilter) : waitingJobsRaw,
+    [waitingJobsRaw, userFilter]
+  )
   const showSpinner = loading && data != null
 
   useEffect(() => {

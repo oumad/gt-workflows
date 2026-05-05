@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { getUserServerStats, type ServerWorkflowEntry } from '@/services/api/stats'
 import type { ActivityStatsPeriod } from '@/components/activity/useActivityStats'
 import { displayServerName } from '@/utils/serverDisplay'
@@ -153,7 +153,7 @@ export function ServerWorkflowStats() {
     return () => ctrl.abort()
   }, [period])
 
-  const byWorkflow = pivotToWorkflows(data)
+  const byWorkflow = useMemo(() => pivotToWorkflows(data), [data])
   const isEmpty = view === 'byServer' ? data.length === 0 : byWorkflow.length === 0
 
   const CLS_TAB_ACTIVE = 'px-3 py-[0.2rem] rounded-md text-xs font-semibold bg-accent/20 text-accent-light border border-accent/30 cursor-pointer transition-colors'

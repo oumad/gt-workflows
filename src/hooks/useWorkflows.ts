@@ -21,6 +21,7 @@ export function useWorkflows(): UseWorkflowsResult {
     queryKey: WORKFLOWS_QUERY_KEY,
     queryFn: listWorkflows,
     enabled: authStatus === 'ok',
+    staleTime: 60_000,
   })
 
   const loadWorkflows = useCallback(async (): Promise<void> => {

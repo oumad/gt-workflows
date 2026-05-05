@@ -1,7 +1,12 @@
+import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// Reuse TCP connections to the backend so requests don't flood the OS with
+// TIME_WAIT sockets — especially visible when checking many servers at once.
+const backendAgent = new http.Agent({ keepAlive: true, maxSockets: 64 })
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -23,6 +28,7 @@ export default defineConfig({
       // SSE endpoint needs selfHandleResponse to prevent http-proxy from buffering the stream
       '/api/servers/test-workflow': {
         target: 'http://127.0.0.1:3011',
+        agent: backendAgent,
         changeOrigin: true,
         secure: false,
         selfHandleResponse: true,
@@ -43,6 +49,7 @@ export default defineConfig({
       },
       '/api': {
         target: 'http://127.0.0.1:3011',
+        agent: backendAgent,
         changeOrigin: true,
         secure: false,
         timeout: 300000, // 5 min for stats (loading many jobs from Redis can be slow under load)
@@ -62,6 +69,7 @@ export default defineConfig({
       },
       '/data': {
         target: 'http://127.0.0.1:3011',
+        agent: backendAgent,
         changeOrigin: true,
         secure: false,
         timeout: 5000,

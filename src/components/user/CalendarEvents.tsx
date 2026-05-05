@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -514,11 +514,14 @@ export function CalendarEvents({ preferences, discordEnabled = false }: Calendar
 
   const serverAliases: Record<string, string> = preferences?.serverAliases ?? {}
   const servers: string[] = preferences?.monitoredServers ?? []
-  const eventDates = new Set(events.map((e) => e.date))
+  const eventDates = useMemo(() => new Set(events.map((e) => e.date)), [events])
 
-  const displayedEvents = selectedDate
-    ? events.filter((e) => e.date === selectedDate)
-    : events.filter((e) => e.date >= today).slice(0, 8)
+  const displayedEvents = useMemo(
+    () => selectedDate
+      ? events.filter((e) => e.date === selectedDate)
+      : events.filter((e) => e.date >= today).slice(0, 8),
+    [events, selectedDate, today]
+  )
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }

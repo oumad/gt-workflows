@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { WorkflowParams } from '@/types'
 import { Search, Settings, ArrowRight, ArrowDown, Info, Package, Edit2, X, Check } from 'lucide-react'
 import NodeParserEditor from './NodeParserEditor'
@@ -13,6 +14,10 @@ interface NodeManagerProps {
 
 export default function NodeManager({ workflowJson, params, onUpdateParams }: NodeManagerProps) {
   const nm = useNodeManager(workflowJson, params, onUpdateParams)
+  const sortedSubgraphGroups = useMemo(
+    () => Object.entries(nm.groupedNodes.subgraphGroups).sort(([a], [b]) => a.localeCompare(b)),
+    [nm.groupedNodes.subgraphGroups]
+  )
 
   if (!workflowJson || params.parser !== 'comfyui') return null
 
@@ -79,7 +84,7 @@ export default function NodeManager({ workflowJson, params, onUpdateParams }: No
                     </div>
                   </div>
                 )}
-                {Object.entries(nm.groupedNodes.subgraphGroups).sort(([a], [b]) => a.localeCompare(b)).map(([sgId, sgNodes]) => {
+                {sortedSubgraphGroups.map(([sgId, sgNodes]) => {
                   const isExpanded = nm.expandedSubgraphs.has(sgId)
                   const sgLabel = nm.getSubgraphLabel(sgId)
                   const isWrapped = nm.wrappedNodeIds.includes(sgId)
