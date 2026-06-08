@@ -1,0 +1,28 @@
+/* ─── Reset ─────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button {
+  font-family: inherit;
+  /* Indicate clickability — was 'default' which masked obvious affordances
+     across the app. The browser UA default for <button> is also pointer; we
+     match it so users immediately see which elements respond to clicks. */
+  cursor: pointer;
+}

@@ -1,0 +1,121 @@
+# Production stack — what you bring up on the prod host.
+#
+# Differences vs docker-compose.dev.yml:
+#   - No test-server (the throwaway nginx used for alert-cycle testing).
+#   - No source-code volume mounts; both api + frontend run from the image's
+#     baked artefacts. A code change therefore requires a rebuild + restart.
+#   - Frontend container runs nginx serving the built dist + proxying /api
+#     to the api service. The api service has NO externally-mapped port —
+#     all ingress goes through the frontend's :80.
+#   - SEED_TEST_SERVER is off (no test-server to seed).
+#
+# Bring up:    docker compose up -d --build
+# Tail logs:   docker compose logs -f api frontend
+# Stop:        docker compose down
+# Wipe DB:     docker compose down -v   (also drops postgres_data)
+#
+# Frontend is the only ingress point. If you need TLS, put Caddy / nginx /
+# Traefik in front of the frontend container and reverse-proxy to :80.
+
+services:
+  # ── PostgreSQL ────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coffee_maker
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Schema is applied by the API container on startup via applySchema()
+      # (api/src/db/push.ts), which shells out to `drizzle-kit push --force`.
+      # schema.ts is the only source of truth — no migration files to track.
+      # `docker compose down -v` wipes this volume; the next `up` recreates
+      # the schema automatically from schema.ts.
+    # Internal only — Postgres is not reachable from outside the docker
+    # network. If you need pgAdmin from your laptop, attach a temporary
+    # `ports: ["5432:5432"]` via an override file.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d coffee_maker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Redis ─────────────────────────────────────
+  # ./redis/dump.rdb is loaded automatically on startup (Redis reads from
+  # --dir /data). On prod this should be replaced by an external Redis
+  # instance owned by gt-workflows; this container is mostly for the
+  # standalone deploy.
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - ./redis:/data
+    command: >
+      redis-server
+      --dir /data
+      --dbfilename dump.rdb
+      --save 60 1
+      --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ── API ───────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/coffee_maker"
+      REDIS_URL: "redis://redis:6379"
+      REDIS_BULLMQ_PREFIX: "${REDIS_BULLMQ_PREFIX:-bull}"
+      REDIS_BULLMQ_QUEUE: "${REDIS_BULLMQ_QUEUE:-workflow-studio-comfyui-process-queue}"
+      REDIS_LORA_QUEUE: "${REDIS_LORA_QUEUE:-lora-trainer-training-queue}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in prod — generate with: openssl rand -hex 32}"
+      NODE_ENV: production
+      PORT: "3001"
+      # Same-origin in prod — nginx proxies /api on the frontend's host, so
+      # the browser never makes a cross-origin request. CORS only matters
+      # for direct API consumers (CI scripts, the MCP transport from non-
+      # browser clients). Set to your public hostname or "*" if open.
+      CORS_ORIGIN: "${CORS_ORIGIN:-*}"
+      WORKFLOWS_DIR: /workflows
+      # Put the live Discord webhook URL in your .env (DISCORD_WEBHOOK_URL=…).
+      # The previous hardcoded value was leaked — rotate before reuse.
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      # No test-server in prod, so SEED_TEST_SERVER is off.
+      SEED_TEST_SERVER: "false"
+      CREDENTIALS_MASTER_KEY: "${CREDENTIALS_MASTER_KEY:?CREDENTIALS_MASTER_KEY must be set — generate with: openssl rand -base64 32}"
+    volumes:
+      - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
+    # No `ports:` — the API is reached only through the frontend's /api
+    # proxy. Saves a firewall rule and stops anyone from skipping the
+    # frontend's cache headers, body limit, etc.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend (nginx serving built SPA + /api proxy) ───────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+    ports:
+      # The only externally-exposed port in the prod stack. Front this
+      # with a TLS-terminating reverse proxy (Caddy / Cloudflare Tunnel /
+      # nginx with Let's Encrypt) when you're ready for HTTPS.
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

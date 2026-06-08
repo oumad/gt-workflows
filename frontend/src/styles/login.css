@@ -1,0 +1,175 @@
+/* ─── Login layout ──────────────────────────── */
+.login-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) 1fr;
+  background: var(--bg);
+}
+@media (max-width: 880px) {
+  .login-stage {
+    grid-template-columns: 1fr;
+  }
+  .login-side {
+    display: none;
+  }
+}
+.login-side {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  position: relative;
+  overflow: hidden;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+}
+.login-side .brand-mark {
+  background: var(--bg);
+  color: var(--ink);
+}
+.login-side .brand-name {
+  color: var(--bg);
+}
+.login-side .brand-sub {
+  color: rgba(255, 255, 255, 0.55);
+}
+.login-side-art {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+}
+.login-art-blob {
+  position: absolute;
+  top: 30%;
+  left: 60%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.7;
+}
+.login-art-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 32px);
+  mask-image: radial-gradient(closest-side at 50% 60%, black, transparent 80%);
+}
+.login-side-copy {
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+.login-side-copy .kicker {
+  color: rgba(255, 255, 255, 0.55);
+}
+.login-side-copy h2 {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 8px 0 14px;
+}
+.login-side-copy p {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  max-width: 320px;
+  line-height: 1.55;
+}
+.login-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  overflow: auto;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-head h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.login-sub {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.login-input-wrap {
+  position: relative;
+}
+.login-input-ico {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  pointer-events: none;
+  display: flex;
+}
+.login-input-wrap .input {
+  padding-left: 32px;
+}
+.login-input-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink-3);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+.login-input-eye:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.login-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.login-err {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

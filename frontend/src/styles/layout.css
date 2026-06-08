@@ -1,0 +1,313 @@
+/* ─── App shell ─────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Sidebar ───────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 18px var(--pad) 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--bg);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: auto -6px -6px auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: -2px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 6px 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sidebar-section {
+  padding: 6px var(--pad);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 8px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 10px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font: 500 13px/1 var(--font-ui);
+  border-radius: 8px;
+  cursor: default;
+  text-align: left;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.nav-item-active {
+  background: var(--ink) !important;
+  color: var(--bg) !important;
+}
+.nav-item-active:hover {
+  background: var(--ink) !important;
+}
+.nav-item.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+.nav-item:hover .nav-icon {
+  color: var(--ink);
+}
+.nav-item.active .nav-icon,
+.nav-item-active .nav-icon {
+  color: var(--accent);
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-label {
+  flex: 1;
+}
+.nav-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.nav-badge-warn {
+  background: color-mix(in oklab, var(--bad) 15%, transparent);
+  color: var(--bad);
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: var(--pad);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--pop-pink), var(--pop-purple));
+  color: white;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.user-role {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* ─── Main content ──────────────────────────── */
+.main {
+  overflow: auto;
+  background: var(--bg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Page head ─────────────────────────────── */
+.page-head {
+  padding: 22px 32px 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.page-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.1;
+}
+.page-sub {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.crumbs-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.crumbs-sep {
+  opacity: 0.4;
+  user-select: none;
+  font-weight: 400;
+}
+/* Clickable hop — uses the same accent-on-hover treatment as other links
+   so the breadcrumb affordance reads consistently. cursor:pointer comes
+   from the global button rule. */
+.crumbs-link {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.12s;
+}
+.crumbs-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.crumbs-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.crumbs-static {
+  /* Last segment / non-navigable label — same color as the rest, no hover
+     state so it doesn't masquerade as a button. */
+  color: inherit;
+}
+
+/* ─── Tabs ──────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+}
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+  cursor: default;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.tab .pill {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--ink-2);
+}
+.tab.active .pill {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}

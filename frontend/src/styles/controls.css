@@ -1,0 +1,311 @@
+/* ─── Buttons ───────────────────────────────── */
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 13px/1 var(--font-ui);
+  padding: 0 12px;
+  height: var(--row-h);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Match the browser-default <button> cursor so the button reads as
+     clickable. The :disabled override below still flips it to not-allowed
+     when the action is unavailable. */
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.btn-primary:hover:not(:disabled) {
+  background: #000;
+}
+.btn-accent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.btn-accent:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.btn-danger {
+  background: var(--bad);
+  color: white;
+  border-color: var(--bad);
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-sm {
+  height: calc(var(--row-h) - 6px);
+  padding: 0 9px;
+  font-size: 12px;
+}
+.btn-xs {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+.btn-icon {
+  width: var(--row-h);
+  padding: 0;
+  justify-content: center;
+}
+
+/* ─── Chips / pills ─────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.chip-good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.chip-warn {
+  background: var(--warn-soft);
+  color: #8a6f10;
+}
+.chip-bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.chip-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.chip-accent {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.chip-aborted {
+  background: transparent;
+  color: var(--ink-3);
+  border: 1px dashed var(--line);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+.dot-pulse {
+  animation: dot-pulse 2s ease-out infinite;
+  box-shadow: 0 0 0 0 currentColor;
+}
+@keyframes dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* ─── Editable inline fields ────────────────── */
+.editable {
+  background: transparent;
+  border: 1px dashed transparent;
+  padding: 2px 4px;
+  border-radius: 4px;
+  gap: 4px;
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+}
+.editable:hover {
+  border-color: var(--line);
+}
+
+/* ─── Inputs ────────────────────────────────── */
+.input,
+.select {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 13px/1 var(--font-ui);
+  padding: 0 10px;
+  height: var(--row-h);
+  border-radius: 8px;
+  outline: none;
+  width: 100%;
+}
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+textarea.input {
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+/* ─── Search bars ───────────────────────────── */
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-ico {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-3);
+  pointer-events: none;
+  display: flex;
+}
+.search-input {
+  padding-left: 30px;
+  width: 200px;
+  height: var(--row-h);
+}
+
+.search {
+  position: relative;
+}
+.search input {
+  padding-left: 30px;
+}
+.search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  pointer-events: none;
+  display: flex;
+}
+
+/* ─── Toggle group ──────────────────────────── */
+.toggle-group {
+  display: inline-flex;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.toggle-group button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 5px 10px;
+  font: 500 12px/1 var(--font-ui);
+  color: var(--ink-2);
+  border-radius: 6px;
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.toggle-group button.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.toggle-group button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Expanding variant — only the active option is laid out at full size;
+   non-active siblings collapse to 0 width with a smooth transition.
+   The ExpandingToggle component manages the .is-collapsed class. */
+.toggle-group-expanding {
+  gap: 0;
+}
+.toggle-group-expanding > button {
+  margin-left: 2px;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 180ms ease,
+    padding-left 180ms ease,
+    padding-right 180ms ease,
+    margin-left 180ms ease,
+    opacity 150ms ease;
+}
+.toggle-group-expanding > button:first-of-type {
+  margin-left: 0;
+}
+.toggle-group-expanding > button.is-collapsed {
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── Permission cells ──────────────────────── */
+.perm-cell {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  cursor: default;
+  color: var(--ink-3);
+}
+.perm-cell:hover {
+  border-color: var(--ink-3);
+}
+.perm-cell[data-on] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* ─── Keyboard shortcut badge ───────────────── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 10px/1 var(--font-mono);
+  padding: 2px 5px;
+  min-width: 16px;
+  height: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink-2);
+}

@@ -1,0 +1,21 @@
+# Files NOT sent to the Docker build context. Keeping the context small
+# makes `docker build` faster and stops host-only artefacts from leaking
+# into the image.
+
+node_modules
+dist
+
+# Local env + editor cruft
+.env*
+.DS_Store
+.idea
+.vscode
+
+# Dockerfile + ignore file don't need to be inside the image.
+Dockerfile
+.dockerignore
+
+# Git history (the COPY . . in the build stage would otherwise drag the
+# entire .git in if it exists at this level).
+.git
+.gitignore

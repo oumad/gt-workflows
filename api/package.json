@@ -1,0 +1,57 @@
+{
+  "name": "coffee-maker-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,json}\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "drizzle-kit check",
+    "_db:push:DANGEROUS": "drizzle-kit push",
+    "seed:workflows": "tsx scripts/seed-workflows.ts",
+    "migrate:redis": "tsx scripts/migrate-redis.ts",
+    "test:jobs:create": "tsx scripts/test-jobs-create.ts",
+    "test:jobs:run": "tsx scripts/test-jobs-run.ts",
+    "test:jobs:log": "tsx scripts/test-jobs-log.ts",
+    "test:jobs:start": "tsx scripts/test-jobs-start.ts",
+    "test:jobs:complete": "tsx scripts/test-jobs-complete.ts",
+    "test:jobs:clean": "tsx scripts/test-jobs-clean.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@hono/zod-validator": "^0.8.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.23",
+    "ioredis": "^5.4.2",
+    "postgres": "^3.4.5",
+    "undici": "^8.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^24.9.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.20.0"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
+  }
+}

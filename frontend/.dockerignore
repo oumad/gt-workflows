@@ -1,0 +1,19 @@
+# Files that should NOT be sent to the Docker build context. Keeping the
+# context small makes `docker build` faster and stops host-only artefacts
+# from leaking into the image.
+
+node_modules
+dist
+.vite
+*.tsbuildinfo
+
+# Local env + editor cruft
+.env*
+.DS_Store
+.idea
+.vscode
+
+# Don't ship the Dockerfile or compose files into the build context — they
+# don't need to be inside the image.
+Dockerfile
+.dockerignore

@@ -1,0 +1,147 @@
+# Development stack — use during local development + alert-cycle testing.
+#
+# Differences vs docker-compose.yml (prod):
+#   - test-server: an idle nginx that the api auto-registers as a monitored
+#     server (SEED_TEST_SERVER=true). Lets you exercise the down → recovered
+#     alert cycle by stopping/starting it.
+#   - api + frontend bind their dev ports (3001, 5173) directly to the host
+#     so you can hit them without going through nginx.
+#   - frontend uses the `dev` target of frontend/Dockerfile (Vite with HMR),
+#     and mounts ./frontend/src so file edits hot-reload inside the container.
+#   - postgres binds 5432 to the host so pgAdmin / psql work without an
+#     override file.
+#
+# Bring up:    docker compose -f docker-compose.dev.yml up
+# Hot reload:  edits to ./frontend/src land instantly via the volume mount;
+#              edits to ./api/src require a container restart since the api
+#              container still runs the built /app/dist. (Open a separate
+#              terminal and `npm run dev` against the host for true API HMR.)
+# Stop:        docker compose -f docker-compose.dev.yml down
+
+services:
+  # ── PostgreSQL ────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coffee_maker
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      # Exposed in dev so you can attach pgAdmin / psql / Drizzle Studio
+      # to the host's :5432 without a separate override.
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d coffee_maker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Redis ─────────────────────────────────────
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - ./redis:/data
+    ports:
+      # Exposed in dev so you can `redis-cli -h localhost` from the host.
+      - "6379:6379"
+    command: >
+      redis-server
+      --dir /data
+      --dbfilename dump.rdb
+      --save 60 1
+      --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Test server (server-alert testing) ────────
+  # A bare HTTP server with no purpose other than being pingable. The API
+  # auto-registers it as a monitored server on startup (SEED_TEST_SERVER=true
+  # below), so you can exercise the down → recovered alert cycle:
+  #   docker compose -f docker-compose.dev.yml stop  test-server
+  #     → next health probe → "down" alert, reminders at +10m, +30m, +1h…
+  #   docker compose -f docker-compose.dev.yml start test-server
+  #     → next health probe → "recovered" alert
+  # `restart: "no"` so a manual `stop` actually stays stopped.
+  test-server:
+    image: nginx:alpine
+    ports:
+      - "8888:80"
+    restart: "no"
+
+  # ── API ───────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      # Exposed in dev so the host's browser can hit /api/health directly
+      # without going through the frontend's nginx proxy. Also useful for
+      # curl-driven debugging of MCP endpoints.
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/coffee_maker"
+      REDIS_URL: "redis://redis:6379"
+      REDIS_BULLMQ_PREFIX: "${REDIS_BULLMQ_PREFIX:-bull}"
+      REDIS_BULLMQ_QUEUE: "${REDIS_BULLMQ_QUEUE:-workflow-studio-comfyui-process-queue}"
+      REDIS_LORA_QUEUE: "${REDIS_LORA_QUEUE:-lora-trainer-training-queue}"
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-production}"
+      NODE_ENV: production
+      PORT: "3001"
+      # In dev the frontend's Vite dev server lives at :5173 — let it XHR
+      # against :3001 for direct calls. The Vite proxy still preferred,
+      # but the CORS_ORIGIN here covers any tester hitting the api with curl.
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:5173,http://localhost:80}"
+      WORKFLOWS_DIR: /workflows
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      # Auto-register the test-server above as a monitored server so alert
+      # testing works straight after `down -v`. Unset to disable.
+      SEED_TEST_SERVER: "true"
+      CREDENTIALS_MASTER_KEY: "${CREDENTIALS_MASTER_KEY:-5CRtACmi9g5gqBPd458bmjwQNk1cyM33hWy/91TsgZM=}"
+    volumes:
+      - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend (Vite dev server + HMR) ──────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "5173:5173"
+    environment:
+      # Inside the docker network, "api" resolves to the api container.
+      # vite.config.ts reads this and proxies /api → http://api:3001.
+      VITE_DEV_API_PROXY: "http://api:3001"
+    volumes:
+      # Bind-mount source so edits land instantly inside the container —
+      # Vite's HMR picks them up and reloads the browser. node_modules is
+      # NOT mounted: we want the image's pre-installed node_modules to win
+      # (host's may have a different arch / be stale).
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  # Separate volume from the prod compose so dev DB state doesn't collide
+  # with a parallel prod stack running on the same host.
+  postgres_data_dev:

@@ -1,0 +1,13 @@
+/* Aggregate stylesheet — Vite bundles all of these into one CSS file at build
+ * time, so the @import-vs-multiple-imports trade-off only matters for source
+ * organization. Split by concern: tokens, base reset, app layout, utility
+ * helpers, controls, surfaces, data display, domain-specific, and login. */
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './utils.css';
+@import './controls.css';
+@import './surfaces.css';
+@import './data.css';
+@import './domain.css';
+@import './login.css';
