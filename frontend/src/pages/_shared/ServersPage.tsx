@@ -168,7 +168,7 @@ export function ServersPage({
     }
   })
   // 'name' preserves the natural directory order; 'status' surfaces problems
-  // (down → service-down → maintenance → warn → busy → ok) so ops can triage at
+  // (down → maintenance → warn → busy → ok) so ops can triage at
   // a glance without scrolling.
   const [sortBy, setSortBy] = useState<'name' | 'status'>(() => {
     try {
@@ -327,11 +327,10 @@ export function ServersPage({
   // on name so the order within a status bucket stays stable across reloads.
   const STATUS_RANK: Record<ReturnType<typeof serverStatus>, number> = {
     down: 0,
-    'service-down': 1,
-    maintenance: 2,
-    warn: 3,
-    busy: 4,
-    ok: 5,
+    maintenance: 1,
+    warn: 2,
+    busy: 3,
+    ok: 4,
   }
 
   const filtered = pageServers
@@ -544,7 +543,6 @@ export function ServersPage({
                   const ms = s.health?.latencyMs ?? null
                   const hasLat =
                     status !== 'down' &&
-                    status !== 'service-down' &&
                     status !== 'maintenance' &&
                     ms != null
                   const latColor = !hasLat
@@ -1036,6 +1034,22 @@ export function ServersPage({
                       setMenuOpen(null)
                     },
                     color: 'var(--warn)',
+                  },
+                ]
+              : []),
+            // Monitoring toggle — applies to both servers and services (each is
+            // probed independently now). Off ⇒ the auto health sync skips it,
+            // so it only updates on a manual force-check.
+            ...(isAdmin
+              ? [
+                  {
+                    icon: s.isMonitored ? <EyeOff size={14} /> : <Eye size={14} />,
+                    label: s.isMonitored ? 'Disable monitoring' : 'Enable monitoring',
+                    action: () => {
+                      handlePatch(s, { isMonitored: !s.isMonitored })
+                      setMenuOpen(null)
+                    },
+                    color: 'var(--info)',
                   },
                 ]
               : []),

@@ -15,6 +15,7 @@ export type ServerPatch = Partial<{
   description: string | null
   type: ServerKind
   isMaintenance: boolean
+  isMonitored: boolean
   maxConcurrent: number | null
 }>
 
@@ -68,10 +69,9 @@ export const serverColor = (s: ServerType) => s.color ?? typeAccent(s)
 /* ─── Helpers ───────────────────────────────── */
 export function serverStatus(
   s: ServerType,
-): 'ok' | 'warn' | 'down' | 'busy' | 'service-down' | 'maintenance' {
+): 'ok' | 'warn' | 'down' | 'busy' | 'maintenance' {
   if (s.isMaintenance) return 'maintenance'
   if (!s.health || s.health.status === 'offline' || s.health.status === 'unknown') return 'down'
-  if (s.health.status === 'service-down') return 'service-down'
   if ((s.activeJobs ?? 0) + (s.waitingJobs ?? 0) > 0) return 'busy'
   if (s.health.latencyMs && s.health.latencyMs > 200) return 'warn'
   return 'ok'
@@ -82,7 +82,6 @@ export const STATUS_TONE: Record<string, string> = {
   warn: 'warn',
   down: 'bad',
   busy: 'info',
-  'service-down': 'bad',
   maintenance: 'warn',
 }
 export const STATUS_LABEL: Record<string, string> = {
@@ -90,7 +89,6 @@ export const STATUS_LABEL: Record<string, string> = {
   warn: 'Warning',
   down: 'Down',
   busy: 'Busy',
-  'service-down': 'Svc Down',
   maintenance: 'Maint.',
 }
 

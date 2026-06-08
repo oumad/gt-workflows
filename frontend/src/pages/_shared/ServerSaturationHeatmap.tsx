@@ -72,7 +72,7 @@ export function ServerSaturationHeatmap({ servers, onOpen }: Props) {
           let tone: string
           let label: string
           let title: string
-          if (status === 'down' || status === 'service-down') {
+          if (status === 'down') {
             tone = 'color-mix(in oklab, var(--bad) 40%, var(--surface))'
             label = 'Down'
             title = `${s.name} — ${status}. activeJobs=${active}.`

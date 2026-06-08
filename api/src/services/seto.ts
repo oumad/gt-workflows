@@ -83,8 +83,26 @@ function classifyReason(reason: string | null | undefined): string | null {
   return null
 }
 
-function isServiceDown(svc: { lastPingAt: Date | null; lastPingOk: boolean | null; type: string | null; lastComfyOk: boolean | null }): boolean {
-  return !svc.lastPingAt || !svc.lastPingOk || svc.lastComfyOk === false
+function isServiceDown(svc: { lastPingAt: Date | null; lastPingOk: boolean | null }): boolean {
+  return !svc.lastPingAt || !svc.lastPingOk
+}
+
+/** Hostname of a server/service URL (scheme optional), or null if unparseable. */
+function recordHostname(url: string): string | null {
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).hostname || null
+  } catch {
+    return null
+  }
+}
+
+/** True when the URL carries a port → it's a service; port-less → a host. */
+function recordHasPort(url: string): boolean {
+  try {
+    return !!new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).port
+  } catch {
+    return false
+  }
 }
 
 async function lookupJob(id: string): Promise<JobLookup | null> {
@@ -467,16 +485,43 @@ async function checkService(serverId: string, cfg: Cfg): Promise<Finding[]> {
     })
     return findings
   }
-  const down = !svc.lastPingAt || !svc.lastPingOk || svc.lastComfyOk === false
+  const down = !svc.lastPingAt || !svc.lastPingOk
   if (down) {
     findings.push({
       code: 'si_down',
       severity: 'bad',
       title: 'Service unavailable',
       body: svc.lastPingAt
-        ? 'The latest health probe failed to reach this service.'
+        ? 'The latest reachability probe failed to reach this service (ComfyUI / AI-Toolkit).'
         : 'No successful probe has landed yet — the service may be brand new or completely offline.',
     })
+  }
+
+  // Host ping context — a service runs on a host. Surfacing the host's ping lets
+  // the user tell "the service process crashed" (host pings, service down) from
+  // "the whole box is down" (host not pinging). Only shown when there's
+  // something to report: the service is down, or the host itself isn't pinging.
+  const svcHostname = recordHostname(svc.url)
+  if (svcHostname) {
+    const allServers = await repo.findAllServers()
+    const host = allServers.find(
+      (s) => s.id !== svc.id && !recordHasPort(s.url) && recordHostname(s.url) === svcHostname,
+    )
+    if (host) {
+      const hostDown = !host.lastPingAt || !host.lastPingOk
+      if (hostDown || down) {
+        findings.push({
+          code: hostDown ? 'si_host_down' : 'si_host_up',
+          severity: hostDown ? 'bad' : 'info',
+          title: hostDown
+            ? `Host ${host.name} is not responding to ping`
+            : `Host ${host.name} responds to ping`,
+          body: hostDown
+            ? 'The underlying host is failing its ICMP ping — this looks like a box or network problem, not just the service. Check the machine itself.'
+            : 'The host is pingable, so the box is up. If the service is unreachable, the service process (ComfyUI / AI-Toolkit) is what is down — not the host.',
+        })
+      }
+    }
   }
 
   // Linked workflows — workflow services only. The workflows table doesn't
@@ -898,7 +943,7 @@ async function checkWorkflow(id: string): Promise<Finding[]> {
         continue
       }
       if (s.isMaintenance) maintenance.push(s.name)
-      else if (!s.lastPingOk || s.lastComfyOk === false) {
+      else if (!s.lastPingOk) {
         offline.push(s.name)
       }
     }

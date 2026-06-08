@@ -5,16 +5,16 @@
  */
 import type { Server, Workflow } from '../db/schema.js'
 
-// 'offline'      → host unreachable (ICMP + TCP both failed)
-// 'service-down' → host reachable but ComfyUI/AI-Toolkit not answering HTTP
-export type HealthStatus = 'unknown' | 'offline' | 'online' | 'service-down'
+// A record is online when its own probe passed — a server's ICMP ping, or a
+// service's (ComfyUI/AI-Toolkit) HTTP reachability. Servers and services are
+// monitored independently; neither inherits the other's status.
+export type HealthStatus = 'unknown' | 'offline' | 'online'
 
 export interface ServerHealth {
   status: HealthStatus
   latencyMs: number | null
   lastPingAt: string
-  // Service tier reachability (ComfyUI or AI-Toolkit). null = host-only record
-  // with no service to check. Field name kept for wire-compat.
+  // Deprecated — always null now; kept for wire-compat.
   comfyOk: boolean | null
 }
 

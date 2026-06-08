@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { canSee } from '../../lib/permissions'
+import { isHostRecord } from '../../lib/serverLinks'
 import type { Page } from '../../types'
 
 type NavItem = {
@@ -92,7 +93,12 @@ export function Sidebar({ page, navigate }: Props) {
   const { user, role, logout } = useAuth()
   const { servers, runningJobs } = useData()
   const initials = (user?.username ?? '?').slice(0, 2).toUpperCase()
-  const downCount = servers.filter((s) => s.health?.status === 'offline').length
+  // Down = probed and found offline (a server's failed ping, or a service's
+  // failed reachability), excluding maintenance. Split so each nav item shows
+  // its own count: hosts on Servers, ComfyUI/AI-Toolkit on Services.
+  const isDown = (s: (typeof servers)[number]) => !s.isMaintenance && s.health?.status === 'offline'
+  const downServers = servers.filter((s) => isHostRecord(s) && isDown(s)).length
+  const downServices = servers.filter((s) => !isHostRecord(s) && isDown(s)).length
 
   return (
     <aside className="sidebar">
@@ -111,8 +117,10 @@ export function Sidebar({ page, navigate }: Props) {
         <div className="sidebar-section">Brews</div>
         <NavGroup
           items={TOOLS.map((item) => {
-            if ((item.id === 'services' || item.id === 'servers') && downCount > 0)
-              return { ...item, badge: downCount, badgeWarn: true }
+            if (item.id === 'servers' && downServers > 0)
+              return { ...item, badge: downServers, badgeWarn: true }
+            if (item.id === 'services' && downServices > 0)
+              return { ...item, badge: downServices, badgeWarn: true }
             if (item.id === 'jobs' && runningJobs > 0) return { ...item, badge: runningJobs }
             return item
           })}

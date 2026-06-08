@@ -46,7 +46,7 @@ const STDERR_TAIL_BYTES = 8 * 1024
 export type RdpStatus = {
   /** Server exists and we know how to reach it via RDP. */
   reachable: boolean
-  /** Last ping derived via deriveHealth(); false when offline / unknown / service-down. */
+  /** Last ping derived via deriveHealth(); false when offline / unknown. */
   pingOk: boolean
   /** Whether any service on the host is healthy. Surfaced to the UI so the
    *  badge can read "ping OK · services degraded" when applicable. */
@@ -81,11 +81,10 @@ export async function rdpStatus(serverId: string): Promise<RdpStatus> {
 
   const health = deriveHealth(server)
   const pingOk = health?.status === 'online'
-  // For a server (no port), "services OK" needs the sibling rows. We don't
-  // do that lookup here — pingOk + comfyOk on the row is enough signal for
-  // the UI. The frontend resolves the broader "are linked services healthy"
-  // question because it already has the full servers list cached.
-  const servicesOk = pingOk && (server.lastComfyOk ?? true)
+  // For a server (host) record, "services OK" is resolved by the frontend,
+  // which has the full servers list and can check the linked service records.
+  // Here we just report the host's own ping.
+  const servicesOk = pingOk
 
   const cred = await credentialsRepo.findCredentialForServer(serverId)
 

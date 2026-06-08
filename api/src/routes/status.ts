@@ -77,16 +77,15 @@ app.get('/summary', requireAuth, async (c) => {
   const data = await summaryCache.memo('summary', async () => {
     const servers = await serversService.listServers()
 
-    // "down" = not in maintenance, monitored, and either offline / unknown /
-    // service-down. Mirrors the serverStatus() classification used by the UI.
+    // "down" = not in maintenance, monitored, and offline / unknown / never
+    // probed. Mirrors the serverStatus() classification used by the UI.
     const serversDown = servers.filter(
       (s) =>
         !s.isMaintenance &&
         s.isMonitored &&
         (s.health === null ||
           s.health.status === 'offline' ||
-          s.health.status === 'unknown' ||
-          s.health.status === 'service-down'),
+          s.health.status === 'unknown'),
     ).length
 
     const servicesInMaintenance = servers.filter((s) => s.isMaintenance).length

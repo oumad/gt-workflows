@@ -49,26 +49,13 @@ export function deriveHealth(row: Server): ServerHealth | null {
       comfyOk: null,
     }
   }
-  // Tier 1 — host reachability (ICMP, or TCP fallback). Not reachable ⇒ the box
-  // itself is down/unreachable, regardless of any stale service reading.
-  if (!row.lastPingOk) {
-    return {
-      status: 'offline',
-      latencyMs: null,
-      lastPingAt: row.lastPingAt.toISOString(),
-      comfyOk: null,
-    }
-  }
-  // Tier 2 — service reachability. lastComfyOk is null for host-only records
-  // (nothing to check ⇒ host up means online); for a service record it's the
-  // ComfyUI (/system_stats) or AI-Toolkit (/api/gpu) check.
-  const serviceOk = row.lastComfyOk
-  const status = serviceOk === false ? 'service-down' : 'online'
+  // A record's health is its own probe: a server's ping, or a service's HTTP
+  // reachability — both land in lastPingOk. Online when the last probe passed.
   return {
-    status,
-    latencyMs: row.lastPingMs,
+    status: row.lastPingOk ? 'online' : 'offline',
+    latencyMs: row.lastPingOk ? row.lastPingMs : null,
     lastPingAt: row.lastPingAt.toISOString(),
-    comfyOk: serviceOk ?? null,
+    comfyOk: null,
   }
 }
 
@@ -532,7 +519,11 @@ export async function createServer(input: CreateServerInput): Promise<ServerWith
     ...input,
     url: normalizedUrl,
     tags: input.tags ?? [],
-    isMonitored: false,
+    // Manually-added servers are monitored by default — the operator added it
+    // on purpose, so the auto health sync should track it. (Bulk-scraped
+    // servers stay unmonitored to avoid alerting on every historical URL;
+    // enable them per-record with the monitoring toggle.)
+    isMonitored: true,
   })
   if (!inserted) throw internalError('Insert failed')
 
