@@ -1,0 +1,143 @@
+# Release CI — triggered by a `v*.*.*` semver tag, also runnable manually
+# via workflow_dispatch (override the version via the input).
+#
+# Config-only release. Doesn't touch Docker — no buildx, no save, no push.
+# The release ships a tarball of the deploy files (compose, env template,
+# DEPLOY guide). The operator builds images by hand on the target host:
+#
+#     git clone … && cd coffee-maker
+#     # or: tar -xzf coffee-maker-<version>-deploy.tar.gz
+#     cp .env.example .env && $EDITOR .env
+#     docker compose build && docker compose up -d
+#
+# Re-introducing pre-built images later means: bring back a docker-buildx
+# job here, ship the .tar.gz images in the bundle, and add the matching
+# install.sh / overlay file (the design is sketched at the bottom of
+# release/DEPLOY.md).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to publish (e.g. v1.2.3). Manual runs only.'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # required to create the GitHub release + upload assets
+
+jobs:
+  # Stage 1: figure out the version string ONCE so every other job uses the
+  # same value (tag push and workflow_dispatch land in different fields).
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set.outputs.version }}
+    steps:
+      - name: Validate + emit version
+        id: set
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ github.event.inputs.version }}"
+          else
+            v="${GITHUB_REF#refs/tags/}"
+          fi
+          if ! echo "$v" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "::error::Version '$v' is not a valid semver-prefixed tag (vX.Y.Z[-suffix])"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  # Stage 2: stage the deploy files into a versioned directory and tarball
+  # it. Tiny artefact — just text/yaml/markdown.
+  build-bundle:
+    name: Build deploy bundle
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage release directory
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -e
+          stage="coffee-maker-${VERSION}"
+          mkdir -p "$stage"
+
+          # The deploy files the operator needs on the target host.
+          cp docker-compose.yml     "$stage/"
+          cp docker-compose.dev.yml "$stage/"
+          cp .env.example           "$stage/"
+          cp frontend/nginx.conf    "$stage/nginx.conf.reference"
+          cp release/DEPLOY.md      "$stage/DEPLOY.md"
+
+          # Stamp the version into a VERSION file so an operator extracting
+          # an unknown tarball can confirm which release they have.
+          echo "$VERSION" > "$stage/VERSION"
+
+          tar -czf "${stage}-deploy.tar.gz" "$stage"
+          ls -lh "${stage}-deploy.tar.gz"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-bundle
+          path: coffee-maker-*-deploy.tar.gz
+          if-no-files-found: error
+
+  # Stage 3: assemble the GitHub Release with the bundle attached.
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [resolve-version, build-bundle]
+    steps:
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-bundle
+          path: ./out
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.version }}
+          name: ${{ needs.resolve-version.outputs.version }}
+          generate_release_notes: true
+          # Pre-release when the version has a suffix (e.g. v1.2.3-rc.1).
+          prerelease: ${{ contains(needs.resolve-version.outputs.version, '-') }}
+          files: out/coffee-maker-*-deploy.tar.gz
+          body: |
+            ## Install
+
+            This bundle is config-only — no Docker images. Build them on
+            the target host from a checkout of this tag (or the same
+            sources).
+
+            ```bash
+            # Extract the deploy files
+            tar -xzf coffee-maker-${{ needs.resolve-version.outputs.version }}-deploy.tar.gz
+            cd coffee-maker-${{ needs.resolve-version.outputs.version }}
+
+            # Fill in required env vars
+            cp .env.example .env && $EDITOR .env
+
+            # Get the matching sources (one of):
+            #   git clone <this-repo> --branch ${{ needs.resolve-version.outputs.version }} src
+            #   # or copy api/ + frontend/ from your existing checkout
+
+            # Build + start
+            docker compose build
+            docker compose up -d
+            docker compose logs -f api frontend
+            ```
+
+            See `DEPLOY.md` inside the tarball for the fuller guide
+            (required env vars, TLS termination, backups, upgrades).

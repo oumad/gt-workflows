@@ -1,0 +1,100 @@
+# Dev CI — runs on every PR and on every push to main. Confirms that the
+# backend and frontend build cleanly and that typecheck / lint / migration
+# consistency all pass. Pure verification — no images pushed, no artefacts
+# uploaded.
+#
+# Split into two parallel jobs so a typecheck error in the frontend doesn't
+# block the api job from running (and vice versa) — both fail/pass
+# independently, so reviewers see both signals at once.
+
+name: Dev build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Each ref (PR branch / main) only runs the latest commit's CI. Cancels
+  # in-flight runs when a fresh push arrives so the queue stays short.
+  group: dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ./api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Build (tsc → dist/)
+        run: npm run build
+
+      - name: Drizzle — verify migrations are consistent with schema
+        # `db:check` walks the meta/_journal.json + snapshots and confirms
+        # the schema.ts state matches the latest snapshot. A failing check
+        # means someone edited schema.ts without running `db:generate`.
+        # DATABASE_URL is required by drizzle.config.ts even though
+        # `check` doesn't talk to a DB — a placeholder satisfies the env.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+        run: npm run db:check
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Build (tsc + vite → dist/)
+        run: npm run build

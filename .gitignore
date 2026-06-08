@@ -105,6 +105,6 @@ scratch/
 **/ssr-manifest.json
 
 redis/
-workflows/
+/workflows/
 references/
 data/
