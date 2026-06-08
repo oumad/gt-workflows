@@ -78,7 +78,7 @@ app.get('/summary', requireAuth, async (c) => {
     const servers = await serversService.listServers()
 
     // "down" = not in maintenance, monitored, and either offline / unknown /
-    // comfy-down. Mirrors the serverStatus() classification used by the UI.
+    // service-down. Mirrors the serverStatus() classification used by the UI.
     const serversDown = servers.filter(
       (s) =>
         !s.isMaintenance &&
@@ -86,7 +86,7 @@ app.get('/summary', requireAuth, async (c) => {
         (s.health === null ||
           s.health.status === 'offline' ||
           s.health.status === 'unknown' ||
-          s.health.status === 'comfy-down'),
+          s.health.status === 'service-down'),
     ).length
 
     const servicesInMaintenance = servers.filter((s) => s.isMaintenance).length

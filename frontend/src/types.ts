@@ -47,7 +47,9 @@ export type Workflow = {
 }
 
 export type ServerHealth = {
-  status: 'online' | 'offline' | 'comfy-down' | 'unknown'
+  // 'offline'      → host unreachable (ICMP + TCP both failed)
+  // 'service-down' → host reachable, but ComfyUI/AI-Toolkit not answering
+  status: 'online' | 'offline' | 'service-down' | 'unknown'
   latencyMs: number | null
   lastPingAt: string
   comfyOk: boolean | null

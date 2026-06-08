@@ -42,12 +42,17 @@ export function ServerStatusBadge({
   style?: React.CSSProperties
 }) {
   const status = serverStatus(server)
-  if (status !== 'comfy-down') {
+  if (status !== 'service-down') {
     return <StatusChip status={status} style={style} />
   }
+  // Host is reachable (ICMP/TCP ok) but the service isn't answering — show both
+  // tiers: a red chip for the dead service, a green one for the live host.
+  const serviceLabel = server.type === 'lora' ? 'AI-Toolkit' : 'ComfyUI'
   return (
     <span className="row" style={{ gap: 5 }}>
-      <StatusChip status="down" style={style} />
+      <span className="chip chip-bad" style={style}>
+        <span className="dot" /> {serviceLabel} down
+      </span>
       <span className="chip chip-good" style={style}>
         <span className="dot" /> Ping
       </span>

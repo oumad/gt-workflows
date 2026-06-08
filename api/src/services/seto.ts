@@ -84,7 +84,7 @@ function classifyReason(reason: string | null | undefined): string | null {
 }
 
 function isServiceDown(svc: { lastPingAt: Date | null; lastPingOk: boolean | null; type: string | null; lastComfyOk: boolean | null }): boolean {
-  return !svc.lastPingAt || !svc.lastPingOk || (svc.type === 'workflow' && svc.lastComfyOk === false)
+  return !svc.lastPingAt || !svc.lastPingOk || svc.lastComfyOk === false
 }
 
 async function lookupJob(id: string): Promise<JobLookup | null> {
@@ -467,8 +467,7 @@ async function checkService(serverId: string, cfg: Cfg): Promise<Finding[]> {
     })
     return findings
   }
-  const down =
-    !svc.lastPingAt || !svc.lastPingOk || (svc.type === 'workflow' && svc.lastComfyOk === false)
+  const down = !svc.lastPingAt || !svc.lastPingOk || svc.lastComfyOk === false
   if (down) {
     findings.push({
       code: 'si_down',
@@ -899,7 +898,7 @@ async function checkWorkflow(id: string): Promise<Finding[]> {
         continue
       }
       if (s.isMaintenance) maintenance.push(s.name)
-      else if (!s.lastPingOk || (s.type === 'workflow' && s.lastComfyOk === false)) {
+      else if (!s.lastPingOk || s.lastComfyOk === false) {
         offline.push(s.name)
       }
     }

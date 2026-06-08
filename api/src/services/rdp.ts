@@ -46,7 +46,7 @@ const STDERR_TAIL_BYTES = 8 * 1024
 export type RdpStatus = {
   /** Server exists and we know how to reach it via RDP. */
   reachable: boolean
-  /** Last ping derived via deriveHealth(); false when offline / unknown / comfy-down. */
+  /** Last ping derived via deriveHealth(); false when offline / unknown / service-down. */
   pingOk: boolean
   /** Whether any service on the host is healthy. Surfaced to the UI so the
    *  badge can read "ping OK · services degraded" when applicable. */

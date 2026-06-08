@@ -1,29 +1,50 @@
 import { eq, sql } from 'drizzle-orm'
+import { execFile } from 'node:child_process'
+import { Socket } from 'node:net'
 import { db, servers } from '../db/index.js'
+import { config } from '../config/index.js'
 import { sendServerStatusAlert, type ServerAlertEvent } from '../lib/discord.js'
 import { recordServerAlerts } from './alerts.js'
 
-// Unified monitoring for both layers of the cluster:
+// Two-tier monitoring — what makes the difference between "the box is down"
+// and "the box is up but the service crashed":
 //
-//   Tier 1 — Servers (hosts):  port-less URLs, e.g. http://worker-03
-//   Tier 2 — Services:         URLs with a port,  e.g. http://worker-03:8188
+//   Tier 1 — Host reachability: is the machine alive on the network?
+//     • ICMP echo ("ping") first. If ICMP is unavailable in this container
+//       (no NET_RAW capability / no `ping` binary) or silently dropped by a
+//       firewall, fall back to a TCP connect — a successful connect OR a
+//       refused connection both prove the host's network stack answered.
+//   Tier 2 — Service reachability: is the service answering HTTP?
+//     • workflow servers → ComfyUI    GET /system_stats
+//     • lora servers     → AI-Toolkit GET /api/gpu
+//     • only runs when the host is reachable AND the record is a service
+//       (has a port). Host records (port-less) have no service tier.
 //
 // The sync walks the hostname tree top-down:
 //   • host probed first
-//     – ok       → probe each service running on this host
-//     – down     → alert for the host; services are marked offline (no
-//                  per-service alert — the host alert is the parent signal)
-//     – maintenance → skip everything in the group, no probe, no alert
+//     – reachable    → probe each service running on this host
+//     – unreachable  → alert for the host; services are marked offline (no
+//                      per-service alert — the host alert is the parent signal)
+//     – maintenance  → skip everything in the group, no probe, no alert
 //   • orphan services (no host record on their hostname) probe standalone
 //
 // Recovery is handled per record via classifyTransition's `downSince` state
 // machine, so a host coming back up emits a 'recovered' event and any service
 // that's still down emits its own 'down' event on the next sync.
-//
-// Per-record probes run in parallel within their tier; total wall time stays
-// bounded by ≈2 × PROBE_TIMEOUT_MS (host then services).
 
-const PROBE_TIMEOUT_MS = 3_000
+// Per-check timeouts. MONITOR_TIMEOUT_MS (default 5s) is the overall budget;
+// ICMP and TCP get tighter slices so a fully-unreachable host resolves without
+// stacking the full budget three times over.
+const PROBE_TIMEOUT_MS = config.MONITOR_TIMEOUT_MS
+const ICMP_TIMEOUT_MS = Math.min(PROBE_TIMEOUT_MS, 2_000)
+const TCP_TIMEOUT_MS = Math.min(PROBE_TIMEOUT_MS, 3_000)
+const SERVICE_TIMEOUT_MS = PROBE_TIMEOUT_MS
+
+// Once we learn ICMP can't be used here (binary missing, or no permission to
+// open a raw socket), stop spawning `ping` on every probe and go straight to
+// the TCP fallback. A firewall that merely drops echo requests still leaves
+// ICMP "usable" (the binary runs, it just times out) — that case keeps trying.
+let icmpUsable = true
 
 // Re-alert cadence: the "down" alert fires instantly (on the first probe that
 // sees the server unreachable). Reminders then go out at widening gaps —
@@ -41,43 +62,150 @@ function nextAlertDelayMs(alertCount: number): number {
   return ALERT_GAPS_MS[alertCount - 1] ?? ALERT_REPEAT_MS
 }
 
-async function httpGet(url: string): Promise<{ ok: boolean; ms: number | null }> {
+type HostReach = { reachable: boolean; rttMs: number | null; via: 'icmp' | 'tcp' | null }
+
+type ProbeResult = {
+  host: HostReach
+  // null when there's no service tier to check: host-only (port-less) records,
+  // or a host that's unreachable (no point hitting a dead box's port).
+  service: { ok: boolean } | null
+}
+
+// Service health endpoint per server type — the cheap, always-present path that
+// proves the process is actually serving (not just that the port is open).
+const SERVICE_PATH: Record<string, string> = {
+  workflow: '/system_stats', // ComfyUI
+  lora: '/api/gpu', // AI-Toolkit
+}
+
+/** Tier 1a — ICMP echo via the system `ping` binary. Cross-platform arg shapes.
+ *  `available:false` means ICMP can't be used here (missing binary / no raw-
+ *  socket permission) so the caller falls back to TCP rather than trusting a
+ *  spurious "down". A firewall that just drops echoes still reports available. */
+function icmpPing(
+  host: string,
+  timeoutMs: number,
+): Promise<{ ok: boolean; rttMs: number | null; available: boolean }> {
+  const isWin = process.platform === 'win32'
+  const timeoutSec = Math.max(1, Math.ceil(timeoutMs / 1000))
+  const args = isWin
+    ? ['-n', '1', '-w', String(timeoutMs), host]
+    : ['-c', '1', '-W', String(timeoutSec), host]
+  return new Promise((resolve) => {
+    execFile(
+      'ping',
+      args,
+      { timeout: timeoutMs + 1_000, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (err) {
+          const e = err as NodeJS.ErrnoException
+          const blob = `${e.code ?? ''} ${err.message ?? ''} ${stderr ?? ''}`.toLowerCase()
+          // Missing binary or no permission to open an ICMP socket → unavailable.
+          // A plain non-zero exit (numeric code) is a genuine "host down".
+          const unavailable =
+            e.code === 'ENOENT' || /not permitted|permission denied|socket:/.test(blob)
+          return resolve({ ok: false, rttMs: null, available: !unavailable })
+        }
+        // Windows `ping` exits 0 even on failure — confirm via output.
+        if (isWin && /unreachable|timed out|100% loss/i.test(stdout)) {
+          return resolve({ ok: false, rttMs: null, available: true })
+        }
+        const m = stdout.match(/time[=<]\s*([\d.]+)\s*ms/i)
+        resolve({ ok: true, rttMs: m ? Math.round(Number(m[1])) : null, available: true })
+      },
+    )
+  })
+}
+
+/** Tier 1b — TCP connect fallback. A successful connect OR a refused/reset
+ *  connection both prove the host is alive (its stack answered); only a
+ *  timeout / unreachable error means down. Needs no special capability. */
+function tcpConnect(
+  host: string,
+  port: number,
+  timeoutMs: number,
+): Promise<{ reachable: boolean; rttMs: number | null }> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const sock = new Socket()
+    let settled = false
+    const done = (reachable: boolean) => {
+      if (settled) return
+      settled = true
+      sock.destroy()
+      resolve({ reachable, rttMs: reachable ? Date.now() - start : null })
+    }
+    sock.setTimeout(timeoutMs)
+    sock.once('connect', () => done(true))
+    sock.once('timeout', () => done(false))
+    sock.once('error', (err: NodeJS.ErrnoException) =>
+      done(err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET'),
+    )
+    sock.connect(port, host)
+  })
+}
+
+/** Tier 1 — is the host alive? ICMP first; on failure/unavailability fall back
+ *  to a TCP connect (to the service port, or :80 for port-less host records). */
+async function checkHostReachable(hostname: string, port: number | null): Promise<HostReach> {
+  if (icmpUsable) {
+    const icmp = await icmpPing(hostname, ICMP_TIMEOUT_MS)
+    if (icmp.ok) return { reachable: true, rttMs: icmp.rttMs, via: 'icmp' }
+    if (!icmp.available) icmpUsable = false // learn once; skip ICMP from now on
+  }
+  const tcp = await tcpConnect(hostname, port ?? 80, TCP_TIMEOUT_MS)
+  return tcp.reachable
+    ? { reachable: true, rttMs: tcp.rttMs, via: 'tcp' }
+    : { reachable: false, rttMs: null, via: null }
+}
+
+/** Tier 2 — is the service answering HTTP? Lenient: any HTTP response means the
+ *  process is up and serving (the host tier already proved the box is up).
+ *  Returns null for types with no known health path. */
+async function checkService(base: string, type: string): Promise<{ ok: boolean } | null> {
+  const path = SERVICE_PATH[type]
+  if (!path) return null
   const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS)
-  const start = Date.now()
+  const timer = setTimeout(() => ctl.abort(), SERVICE_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { method: 'GET', signal: ctl.signal })
+    const res = await fetch(`${base}${path}`, { method: 'GET', signal: ctl.signal })
     await res.body?.cancel().catch(() => {})
-    return { ok: true, ms: Date.now() - start }
+    return { ok: true }
   } catch {
-    return { ok: false, ms: null }
+    return { ok: false }
   } finally {
     clearTimeout(timer)
   }
 }
 
-type ProbeResult = {
-  ping: { ok: boolean; ms: number | null }
-  comfy: { ok: boolean } | null // null for non-workflow servers
-}
-
 async function probeServer(url: string, type: string): Promise<ProbeResult> {
   const base = url.replace(/\/+$/, '')
-  if (type !== 'workflow') {
-    const ping = await httpGet(base)
-    return { ping, comfy: null }
+  let hostname: string
+  let port: number | null
+  try {
+    const u = new URL(base)
+    hostname = u.hostname
+    port = u.port ? Number(u.port) : null
+  } catch {
+    return { host: { reachable: false, rttMs: null, via: null }, service: null }
   }
-  const [ping, comfy] = await Promise.all([httpGet(base), httpGet(`${base}/system_stats`)])
-  return { ping, comfy }
+
+  const host = await checkHostReachable(hostname, port)
+  // Service tier only when the host is up AND this is a service record (has a
+  // port). Host records (port-less) are just the box — no service to probe.
+  const service = host.reachable && port !== null ? await checkService(base, type) : null
+  return { host, service }
 }
 
 function isHealthy(r: ProbeResult): boolean {
-  return r.ping.ok && (r.comfy === null || r.comfy.ok)
+  return r.host.reachable && (r.service === null || r.service.ok)
 }
 
-function downReason(r: ProbeResult): string {
-  if (!r.ping.ok) return 'unreachable (ping failed)'
-  if (r.comfy && !r.comfy.ok) return 'ComfyUI not responding'
+function downReason(r: ProbeResult, type: string): string {
+  if (!r.host.reachable) return 'unreachable (no ICMP or TCP response)'
+  if (r.service && !r.service.ok) {
+    return type === 'lora' ? 'AI-Toolkit not responding' : 'ComfyUI not responding'
+  }
   return 'unknown'
 }
 
@@ -131,10 +259,10 @@ export async function probeOneServer(
       .update(servers)
       .set({
         lastPingAt: now,
-        lastPingOk: result.ping.ok,
-        lastPingMs: result.ping.ms,
-        lastComfyAt: result.comfy !== null ? now : undefined,
-        lastComfyOk: result.comfy !== null ? result.comfy.ok : undefined,
+        lastPingOk: result.host.reachable,
+        lastPingMs: result.host.rttMs,
+        lastComfyAt: result.service !== null ? now : undefined,
+        lastComfyOk: result.service !== null ? result.service.ok : undefined,
         ...(update
           ? {
               downSince: update.downSince,
@@ -144,9 +272,10 @@ export async function probeOneServer(
           : {}),
       })
       .where(eq(servers.id, row.id))
-    const comfyStr = result.comfy !== null ? `, comfy: ${result.comfy.ok ? 'up' : 'down'}` : ''
+    const viaStr = result.host.via ? ` (via ${result.host.via})` : ''
+    const svcStr = result.service !== null ? `, service: ${result.service.ok ? 'up' : 'down'}` : ''
     console.log(
-      `[health] one-off probe of ${row.url}: ping ${result.ping.ok ? 'up' : 'down'}${comfyStr}`,
+      `[health] one-off probe of ${row.url}: host ${result.host.reachable ? 'up' : 'down'}${viaStr}${svcStr}`,
     )
   } catch (err) {
     // If we couldn't persist the new alert state, don't send the alert either —
@@ -233,7 +362,7 @@ function classifyTransition(
         serverId: row.id,
         name: row.name,
         url: row.url,
-        reason: downReason(result),
+        reason: downReason(result, row.type),
       },
     }
   }
@@ -281,7 +410,10 @@ function hostnameOf(r: HealthRow): string | null {
 /** Synthetic "down because the host is down" probe result. Used to mark the
  *  services on a downed host as offline in the UI without sending a per-
  *  service alert (the host's alert is the parent signal). */
-const SYNTHETIC_HOST_DOWN: ProbeResult = { ping: { ok: false, ms: null }, comfy: null }
+const SYNTHETIC_HOST_DOWN: ProbeResult = {
+  host: { reachable: false, rttMs: null, via: null },
+  service: null,
+}
 
 type WriteRow = {
   id: string
@@ -308,10 +440,10 @@ function buildWrite(
     name: row.name,
     url: row.url,
     lastPingAt: now,
-    lastPingOk: result.ping.ok,
-    lastPingMs: result.ping.ms,
-    lastComfyAt: result.comfy !== null ? now : null,
-    lastComfyOk: result.comfy !== null ? result.comfy.ok : null,
+    lastPingOk: result.host.reachable,
+    lastPingMs: result.host.rttMs,
+    lastComfyAt: result.service !== null ? now : null,
+    lastComfyOk: result.service !== null ? result.service.ok : null,
     downSince: update ? update.downSince : row.downSince,
     lastAlertAt: update ? update.lastAlertAt : row.lastAlertAt,
     alertCount: update ? update.alertCount : row.alertCount,
@@ -374,10 +506,10 @@ export async function syncServerHealth(): Promise<void> {
 
   function recordProbe(row: HealthRow, result: ProbeResult) {
     probesPerformed++
-    if (result.ping.ok) pingUpCount++
-    if (result.comfy !== null) {
+    if (result.host.reachable) pingUpCount++
+    if (result.service !== null) {
       comfyTotal++
-      if (result.comfy.ok) comfyUpCount++
+      if (result.service.ok) comfyUpCount++
     }
     const { update, event } = classifyTransition(row, result, now)
     writes.push(buildWrite(row, result, update, now))
@@ -489,10 +621,10 @@ export async function syncServerHealth(): Promise<void> {
   }
 
   const elapsed = Date.now() - start
-  const comfyStr = comfyTotal > 0 ? `, comfy ${comfyUpCount}/${comfyTotal} up` : ''
+  const comfyStr = comfyTotal > 0 ? `, service ${comfyUpCount}/${comfyTotal} up` : ''
   const skipStr = skippedMaintenance > 0 ? `, ${skippedMaintenance} skipped (maintenance)` : ''
   const inhStr = servicesDownByHost > 0 ? `, ${servicesDownByHost} services down-by-host` : ''
   console.log(
-    `[health] probed ${probesPerformed} records in ${elapsed}ms — ping ${pingUpCount}/${probesPerformed} up${comfyStr}${inhStr}${skipStr}${writeOk ? '' : ' — DB WRITE FAILED'}`,
+    `[health] probed ${probesPerformed} records in ${elapsed}ms — host ${pingUpCount}/${probesPerformed} up${comfyStr}${inhStr}${skipStr}${writeOk ? '' : ' — DB WRITE FAILED'}`,
   )
 }

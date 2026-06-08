@@ -168,7 +168,7 @@ export function ServersPage({
     }
   })
   // 'name' preserves the natural directory order; 'status' surfaces problems
-  // (down → comfy-down → maintenance → warn → busy → ok) so ops can triage at
+  // (down → service-down → maintenance → warn → busy → ok) so ops can triage at
   // a glance without scrolling.
   const [sortBy, setSortBy] = useState<'name' | 'status'>(() => {
     try {
@@ -327,7 +327,7 @@ export function ServersPage({
   // on name so the order within a status bucket stays stable across reloads.
   const STATUS_RANK: Record<ReturnType<typeof serverStatus>, number> = {
     down: 0,
-    'comfy-down': 1,
+    'service-down': 1,
     maintenance: 2,
     warn: 3,
     busy: 4,
@@ -544,7 +544,7 @@ export function ServersPage({
                   const ms = s.health?.latencyMs ?? null
                   const hasLat =
                     status !== 'down' &&
-                    status !== 'comfy-down' &&
+                    status !== 'service-down' &&
                     status !== 'maintenance' &&
                     ms != null
                   const latColor = !hasLat

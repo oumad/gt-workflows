@@ -5,12 +5,16 @@
  */
 import type { Server, Workflow } from '../db/schema.js'
 
-export type HealthStatus = 'unknown' | 'offline' | 'online' | 'comfy-down'
+// 'offline'      → host unreachable (ICMP + TCP both failed)
+// 'service-down' → host reachable but ComfyUI/AI-Toolkit not answering HTTP
+export type HealthStatus = 'unknown' | 'offline' | 'online' | 'service-down'
 
 export interface ServerHealth {
   status: HealthStatus
   latencyMs: number | null
   lastPingAt: string
+  // Service tier reachability (ComfyUI or AI-Toolkit). null = host-only record
+  // with no service to check. Field name kept for wire-compat.
   comfyOk: boolean | null
 }
 

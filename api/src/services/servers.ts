@@ -49,6 +49,8 @@ export function deriveHealth(row: Server): ServerHealth | null {
       comfyOk: null,
     }
   }
+  // Tier 1 — host reachability (ICMP, or TCP fallback). Not reachable ⇒ the box
+  // itself is down/unreachable, regardless of any stale service reading.
   if (!row.lastPingOk) {
     return {
       status: 'offline',
@@ -57,10 +59,17 @@ export function deriveHealth(row: Server): ServerHealth | null {
       comfyOk: null,
     }
   }
-  // Ping is OK — for workflow servers also check comfy status
-  const comfyOk = row.type === 'workflow' ? (row.lastComfyOk ?? null) : null
-  const status = row.type === 'workflow' && comfyOk === false ? 'comfy-down' : 'online'
-  return { status, latencyMs: row.lastPingMs, lastPingAt: row.lastPingAt.toISOString(), comfyOk }
+  // Tier 2 — service reachability. lastComfyOk is null for host-only records
+  // (nothing to check ⇒ host up means online); for a service record it's the
+  // ComfyUI (/system_stats) or AI-Toolkit (/api/gpu) check.
+  const serviceOk = row.lastComfyOk
+  const status = serviceOk === false ? 'service-down' : 'online'
+  return {
+    status,
+    latencyMs: row.lastPingMs,
+    lastPingAt: row.lastPingAt.toISOString(),
+    comfyOk: serviceOk ?? null,
+  }
 }
 
 function getWorkflowsDir(): string {

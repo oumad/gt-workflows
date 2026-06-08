@@ -27,7 +27,10 @@ ENV NODE_ENV=production
 # Alpine package name is plain `xvfb` in 3.19+; older `xorg-server-xvfb` is gone.
 # `--no-cache` keeps the image lean (~70MB total for these). procps gives us a
 # usable `kill` for clean teardown.
-RUN apk add --no-cache freerdp xvfb procps
+# iputils provides `ping` for the tier-1 ICMP host check in serverHealth.ts.
+# ICMP needs the NET_RAW capability (granted by Docker's default cap set); if
+# it's dropped or ICMP is firewalled, the probe falls back to a TCP connect.
+RUN apk add --no-cache freerdp xvfb procps iputils
 
 # Re-install only production deps. Skips drizzle-kit / tsc / eslint / tsx /
 # typescript-eslint etc., which the runtime never touches — the in-process

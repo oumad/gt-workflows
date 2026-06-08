@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WifiOff, RefreshCw, AlertTriangle } from 'lucide-react'
+import { loadSession } from '../../lib/storage'
 
 /* Shape of GET /api/health. `sync` is absent on very old deploys — treat a
  * missing `sync` as "done" so we don't show a stuck banner. */
@@ -108,7 +109,15 @@ export function SystemStatusBanner() {
       try {
         const ctl = new AbortController()
         const to = window.setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS)
-        const res = await fetch('/api/status/summary', { cache: 'no-store', signal: ctl.signal })
+        // /api/status/summary is requireAuth-protected; auth in this app is a
+        // Bearer JWT from storage (no cookies), so a bare fetch 401s. Mirror
+        // the header the `api` client attaches on every other call.
+        const session = loadSession()
+        const res = await fetch('/api/status/summary', {
+          cache: 'no-store',
+          signal: ctl.signal,
+          headers: session ? { Authorization: `Bearer ${session.token}` } : {},
+        })
         window.clearTimeout(to)
         if (res.ok) {
           const body = (await res.json().catch(() => null)) as StatusSummary | null
