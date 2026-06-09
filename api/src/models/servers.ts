@@ -14,8 +14,6 @@ export interface ServerHealth {
   status: HealthStatus
   latencyMs: number | null
   lastPingAt: string
-  // Deprecated — always null now; kept for wire-compat.
-  comfyOk: boolean | null
 }
 
 export interface ServerWithCounts extends Server {

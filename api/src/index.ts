@@ -124,7 +124,6 @@ async function seedTestServer() {
         url,
         type: 'lora', // ping-only probe — no /system_stats check
         tags: ['test'],
-        isMonitored: true,
       })
       console.log(
         '[seed] Created test server (http://test-server) — stop/start the test-server container to fire alerts',

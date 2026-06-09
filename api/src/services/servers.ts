@@ -46,7 +46,6 @@ export function deriveHealth(row: Server): ServerHealth | null {
       status: 'unknown',
       latencyMs: null,
       lastPingAt: row.lastPingAt.toISOString(),
-      comfyOk: null,
     }
   }
   // A record's health is its own probe: a server's ping, or a service's HTTP
@@ -55,7 +54,6 @@ export function deriveHealth(row: Server): ServerHealth | null {
     status: row.lastPingOk ? 'online' : 'offline',
     latencyMs: row.lastPingOk ? row.lastPingMs : null,
     lastPingAt: row.lastPingAt.toISOString(),
-    comfyOk: null,
   }
 }
 
@@ -433,7 +431,6 @@ export async function scrapeServers(): Promise<ScrapeResult> {
         url: hostUrl,
         tags: [],
         type: 'workflow',
-        isMonitored: false,
       },
       // Host URL has no port; in normal data its match key won't catch
       // workflow_jobs (which carry port-bearing service URLs). The relink
@@ -458,7 +455,6 @@ export async function scrapeServers(): Promise<ScrapeResult> {
         url: found.url,
         tags: [],
         type: found.type,
-        isMonitored: false,
       },
       key,
       found.type,
@@ -519,11 +515,6 @@ export async function createServer(input: CreateServerInput): Promise<ServerWith
     ...input,
     url: normalizedUrl,
     tags: input.tags ?? [],
-    // Manually-added servers are monitored by default — the operator added it
-    // on purpose, so the auto health sync should track it. (Bulk-scraped
-    // servers stay unmonitored to avoid alerting on every historical URL;
-    // enable them per-record with the monitoring toggle.)
-    isMonitored: true,
   })
   if (!inserted) throw internalError('Insert failed')
 

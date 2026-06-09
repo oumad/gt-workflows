@@ -265,10 +265,6 @@ export async function probeOneServer(
         lastPingAt: now,
         lastPingOk: result.ok,
         lastPingMs: result.ms,
-        // Service-tier columns are no longer used (a service's reachability IS
-        // its lastPingOk now); clear them so stale values can't mislead.
-        lastComfyAt: null,
-        lastComfyOk: null,
         ...(update
           ? {
               downSince: update.downSince,
@@ -400,8 +396,6 @@ type WriteRow = {
   lastPingAt: Date
   lastPingOk: boolean
   lastPingMs: number | null
-  lastComfyAt: Date | null
-  lastComfyOk: boolean | null
   downSince: Date | null
   lastAlertAt: Date | null
   alertCount: number
@@ -420,9 +414,6 @@ function buildWrite(
     lastPingAt: now,
     lastPingOk: result.ok,
     lastPingMs: result.ms,
-    // Deprecated service-tier columns — always cleared (see probeOneServer).
-    lastComfyAt: null,
-    lastComfyOk: null,
     downSince: update ? update.downSince : row.downSince,
     lastAlertAt: update ? update.lastAlertAt : row.lastAlertAt,
     alertCount: update ? update.alertCount : row.alertCount,
@@ -432,8 +423,9 @@ function buildWrite(
 export async function syncServerHealth(): Promise<void> {
   let rows: HealthRow[]
   try {
+    // Every server is monitored — maintenance is the only opt-out, and that's
+    // handled per-record below (skipped, not probed, no alert).
     rows = await db.query.servers.findMany({
-      where: (s, { eq }) => eq(s.isMonitored, true),
       columns: {
         id: true,
         name: true,
@@ -499,8 +491,6 @@ export async function syncServerHealth(): Promise<void> {
           lastPingAt: sql`excluded.last_ping_at`,
           lastPingOk: sql`excluded.last_ping_ok`,
           lastPingMs: sql`excluded.last_ping_ms`,
-          lastComfyAt: sql`excluded.last_comfy_at`,
-          lastComfyOk: sql`excluded.last_comfy_ok`,
           downSince: sql`excluded.down_since`,
           lastAlertAt: sql`excluded.last_alert_at`,
           alertCount: sql`excluded.alert_count`,

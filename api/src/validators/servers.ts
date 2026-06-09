@@ -22,9 +22,6 @@ export const patchServerSchema = z
     description: z.string().nullable().optional(),
     type: z.enum(['workflow', 'lora']).optional(),
     isMaintenance: z.boolean().optional(),
-    // Toggle whether the auto health sync probes this record. Off by default
-    // for scraped servers; the UI exposes a per-record toggle.
-    isMonitored: z.boolean().optional(),
     // null clears the soft cap; positive ints set it. 0 / negatives are rejected
     // because a "0 concurrent" server makes no sense — set isMaintenance instead.
     maxConcurrent: z.number().int().positive().max(10_000).nullable().optional(),

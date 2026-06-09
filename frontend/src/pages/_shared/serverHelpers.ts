@@ -15,7 +15,6 @@ export type ServerPatch = Partial<{
   description: string | null
   type: ServerKind
   isMaintenance: boolean
-  isMonitored: boolean
   maxConcurrent: number | null
 }>
 

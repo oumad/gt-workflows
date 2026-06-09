@@ -1037,22 +1037,6 @@ export function ServersPage({
                   },
                 ]
               : []),
-            // Monitoring toggle — applies to both servers and services (each is
-            // probed independently now). Off ⇒ the auto health sync skips it,
-            // so it only updates on a manual force-check.
-            ...(isAdmin
-              ? [
-                  {
-                    icon: s.isMonitored ? <EyeOff size={14} /> : <Eye size={14} />,
-                    label: s.isMonitored ? 'Disable monitoring' : 'Enable monitoring',
-                    action: () => {
-                      handlePatch(s, { isMonitored: !s.isMonitored })
-                      setMenuOpen(null)
-                    },
-                    color: 'var(--info)',
-                  },
-                ]
-              : []),
             {
               icon: <Bot size={14} />,
               label: 'Ask Seto',

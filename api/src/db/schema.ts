@@ -126,9 +126,6 @@ export const servers = pgTable(
     lastPingAt: timestamp('last_ping_at', { withTimezone: true }),
     lastPingOk: boolean('last_ping_ok'),
     lastPingMs: integer('last_ping_ms'),
-    lastComfyAt: timestamp('last_comfy_at', { withTimezone: true }),
-    lastComfyOk: boolean('last_comfy_ok'),
-    isMonitored: boolean('is_monitored').notNull().default(true),
     isMaintenance: boolean('is_maintenance').notNull().default(false),
     // Soft cap for the saturation heatmap: tiles colour by activeJobs / maxConcurrent.
     // null means the server hasn't been calibrated yet — the UI shows a neutral tile
@@ -140,7 +137,6 @@ export const servers = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('servers_is_monitored_idx').on(t.isMonitored)],
 )
 
 // ─────────────────────────────────────────────

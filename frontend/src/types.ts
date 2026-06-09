@@ -52,7 +52,6 @@ export type ServerHealth = {
   status: 'online' | 'offline' | 'unknown'
   latencyMs: number | null
   lastPingAt: string
-  comfyOk: boolean | null
 }
 
 export type ServerKind = 'workflow' | 'lora'
@@ -67,9 +66,6 @@ export type Server = {
   type: ServerKind
   gpu: string | null
   isMaintenance: boolean
-  /** Whether the auto health sync probes this record. Scraped servers start
-   *  off; manual adds start on. Toggle per-record on the Servers/Services page. */
-  isMonitored: boolean
   /** Soft cap used by the saturation heatmap: tiles colour by
    *  activeJobs / maxConcurrent. null = not calibrated; the UI falls back to
    *  a neutral tile until the operator sets a value via Settings. */
