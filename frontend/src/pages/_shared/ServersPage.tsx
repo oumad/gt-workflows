@@ -370,7 +370,7 @@ export function ServersPage({
             {(tab === 'insights' || tab === 'repartition') && (
               <RangeSelector range={range} onChange={setRange} />
             )}
-            <button className="btn btn-sm" onClick={reload} disabled={loading}>
+            <button className="btn btn-sm" onClick={() => reload()} disabled={loading}>
               {' '}
               <RefreshCw size={14} /> Sync
             </button>

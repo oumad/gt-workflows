@@ -10,7 +10,7 @@ interface DataContextValue {
   workflowsError: string | null
   serversError: string | null
   reloadWorkflows: () => Promise<void>
-  reloadServers: () => Promise<void>
+  reloadServers: (opts?: { silent?: boolean }) => Promise<void>
   runningJobs: number
 }
 
@@ -40,15 +40,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const reloadServers = useCallback(async () => {
-    setServersLoading(true)
+  const reloadServers = useCallback(async (opts?: { silent?: boolean }) => {
+    // Background polls pass { silent } so the cards don't flash a loading state
+    // every tick — only the first load and explicit manual reloads show it.
+    if (!opts?.silent) setServersLoading(true)
     setServersError(null)
     try {
       setServers(await api.get<Server[]>('/api/servers'))
     } catch (e) {
       setServersError(e instanceof Error ? e.message : 'Failed to load servers')
     } finally {
-      setServersLoading(false)
+      if (!opts?.silent) setServersLoading(false)
     }
   }, [])
 
@@ -79,6 +81,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       svFetched.current = true
       reloadServers()
     }
+    // Server health (online/offline + latency) is refreshed server-side every
+    // sync tick. Poll so the Servers/Services pages, sidebar badges, and
+    // dashboard reflect it without a manual refresh. Silent = no loading flash.
+    const id = setInterval(() => reloadServers({ silent: true }), 15_000)
+    return () => clearInterval(id)
   }, [reloadServers])
 
   return (

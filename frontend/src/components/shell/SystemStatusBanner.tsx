@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { WifiOff, RefreshCw, AlertTriangle } from 'lucide-react'
+import { WifiOff, RefreshCw, AlertTriangle, X } from 'lucide-react'
 import { loadSession } from '../../lib/storage'
 
 /* Shape of GET /api/health. `sync` is absent on very old deploys — treat a
@@ -55,6 +55,9 @@ const SUMMARY_POLL_MS = 10_000
 export function SystemStatusBanner() {
   const [status, setStatus] = useState<Status>('ok')
   const [summary, setSummary] = useState<StatusSummary | null>(null)
+  // Signature of the issue set the user dismissed. Auto-cleared once the issues
+  // resolve (see effect below), so a fresh/changed problem re-surfaces.
+  const [dismissedSig, setDismissedSig] = useState<string | null>(null)
   const healthTimer = useRef<number | null>(null)
   const summaryTimer = useRef<number | null>(null)
   const navigate = useNavigate()
@@ -139,6 +142,24 @@ export function SystemStatusBanner() {
     }
   }, [status])
 
+  // Signature of the current issues (which facets, and their counts). null when
+  // everything is clear — used both to decide whether to render and to remember
+  // what the user dismissed.
+  const issueSig =
+    summary &&
+    (summary.serversDown > 0 ||
+      summary.failedJobs5m > 0 ||
+      summary.slowJobs5m > 0 ||
+      summary.servicesInMaintenance > 0)
+      ? `${summary.serversDown}|${summary.failedJobs5m}|${summary.slowJobs5m}|${summary.servicesInMaintenance}`
+      : null
+
+  // Forget the dismissal once everything clears, so the banner comes back for
+  // the next problem instead of staying hidden after a one-time dismiss.
+  useEffect(() => {
+    if (issueSig === null && dismissedSig !== null) setDismissedSig(null)
+  }, [issueSig, dismissedSig])
+
   // ── Connection-status banners take precedence ──────────────────────────
   if (status !== 'ok') {
     const offline = status === 'offline'
@@ -179,13 +200,9 @@ export function SystemStatusBanner() {
   }
 
   // ── Ops summary banner (only when at least one facet is non-zero) ──────
-  if (!summary) return null
-  const hasIssue =
-    summary.serversDown > 0 ||
-    summary.failedJobs5m > 0 ||
-    summary.slowJobs5m > 0 ||
-    summary.servicesInMaintenance > 0
-  if (!hasIssue) return null
+  // Hidden when everything is clear, or when the user dismissed this exact
+  // set of issues (re-shown automatically once the counts change or resolve).
+  if (!summary || issueSig === null || issueSig === dismissedSig) return null
 
   // Red when something is hard-broken (servers offline or recent failures);
   // amber when it's a softer signal (slow jobs or planned maintenance only).
@@ -271,6 +288,25 @@ export function SystemStatusBanner() {
           </button>
         </span>
       ))}
+      <button
+        type="button"
+        aria-label="Dismiss"
+        title="Dismiss"
+        onClick={() => setDismissedSig(issueSig)}
+        style={{
+          marginLeft: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          background: 'transparent',
+          border: 0,
+          color: 'inherit',
+          opacity: 0.85,
+          cursor: 'pointer',
+          padding: 2,
+        }}
+      >
+        <X size={14} />
+      </button>
     </div>
   )
 }
