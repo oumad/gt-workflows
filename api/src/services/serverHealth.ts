@@ -143,18 +143,27 @@ function tcpConnect(
   })
 }
 
+// Ports the TCP fallback tries when ICMP can't confirm a host. A connect OR a
+// refused connection on ANY of them proves the box is alive; we only declare it
+// down when every port times out / is unreachable. Mixes common service +
+// management ports so a host with ICMP filtered still resolves.
+const TCP_FALLBACK_PORTS = [80, 443, 22, 3389, 8188]
+
 /** Server (host) reachability — ICMP first; on failure/unavailability fall back
- *  to a TCP connect on :80 so a host with ICMP blocked still reports up when its
- *  stack answers. */
+ *  to TCP connects across a few common ports (in parallel) so a host with ICMP
+ *  blocked still reports up when its stack answers on any of them. */
 async function checkHostReachable(hostname: string): Promise<HostReach> {
   if (icmpUsable) {
     const icmp = await icmpPing(hostname, ICMP_TIMEOUT_MS)
     if (icmp.ok) return { reachable: true, rttMs: icmp.rttMs, via: 'icmp' }
     if (!icmp.available) icmpUsable = false // learn once; skip ICMP from now on
   }
-  const tcp = await tcpConnect(hostname, 80, TCP_TIMEOUT_MS)
-  return tcp.reachable
-    ? { reachable: true, rttMs: tcp.rttMs, via: 'tcp' }
+  const results = await Promise.all(
+    TCP_FALLBACK_PORTS.map((p) => tcpConnect(hostname, p, TCP_TIMEOUT_MS)),
+  )
+  const hit = results.find((r) => r.reachable)
+  return hit
+    ? { reachable: true, rttMs: hit.rttMs, via: 'tcp' }
     : { reachable: false, rttMs: null, via: null }
 }
 
@@ -172,7 +181,9 @@ async function checkServiceReachable(
   try {
     const res = await fetch(`${base}${path}`, { method: 'GET', signal: ctl.signal })
     await res.body?.cancel().catch(() => {})
-    return { ok: true, ms: Date.now() - start }
+    // Require a 2xx/3xx — a 4xx/5xx means the port answers but the service isn't
+    // actually serving (wrong process, crashed handler, auth wall).
+    return { ok: res.ok, ms: res.ok ? Date.now() - start : null }
   } catch {
     return { ok: false, ms: null }
   } finally {

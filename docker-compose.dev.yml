@@ -104,6 +104,10 @@ services:
       # testing works straight after `down -v`. Unset to disable.
       SEED_TEST_SERVER: "true"
       CREDENTIALS_MASTER_KEY: "${CREDENTIALS_MASTER_KEY:-5CRtACmi9g5gqBPd458bmjwQNk1cyM33hWy/91TsgZM=}"
+      # Health-monitor cadence (optional; api config has sensible defaults).
+      MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
+      MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
+      MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     depends_on:

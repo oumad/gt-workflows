@@ -12,6 +12,9 @@ interface DataContextValue {
   reloadWorkflows: () => Promise<void>
   reloadServers: (opts?: { silent?: boolean }) => Promise<void>
   runningJobs: number
+  /** Flips true once the initial Redis→Postgres sync finishes. Pages can add
+   *  it to a fetch effect's deps to refetch data that was empty on cold boot. */
+  firstSyncDone: boolean
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -24,6 +27,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [workflowsError, setWorkflowsError] = useState<string | null>(null)
   const [serversError, setServersError] = useState<string | null>(null)
   const [runningJobs, setRunningJobs] = useState(0)
+  const [firstSyncDone, setFirstSyncDone] = useState(false)
 
   const wfFetched = useRef(false)
   const svFetched = useRef(false)
@@ -88,6 +92,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id)
   }, [reloadServers])
 
+  // Watch the initial Redis->Postgres sync. On cold boot, jobs/analytics/etc.
+  // are empty until it finishes; when it flips done we re-pull context-owned
+  // data, and `firstSyncDone` lets individual pages refetch their own.
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    const poll = async () => {
+      try {
+        const h = await api.get<{ sync?: { firstSyncDone?: boolean } }>('/api/health')
+        if (!cancelled && h.sync?.firstSyncDone !== false) {
+          setFirstSyncDone(true)
+          void reloadWorkflows()
+          void reloadServers({ silent: true })
+          return // done — stop polling
+        }
+      } catch {
+        /* transient — retry on next tick */
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 5_000)
+    }
+    poll()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [reloadWorkflows, reloadServers])
+
   return (
     <DataContext.Provider
       value={{
@@ -100,6 +131,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         reloadWorkflows,
         reloadServers,
         runningJobs,
+        firstSyncDone,
       }}
     >
       {children}

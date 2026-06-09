@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { api, isAbortError } from '../../lib/api'
+import { useData } from '../../context/DataContext'
 import {
   RefreshCw,
   Download,
@@ -117,6 +118,9 @@ export function History({
   const prefs = loadPrefs()
   const myId = prefs.myGtUserId
   const [mineOnly, setMineOnly] = useState(false)
+  // Refetch when the initial Redis->Postgres sync completes (first-ever boot)
+  // so history fills in without a manual refresh.
+  const { firstSyncDone } = useData()
 
   useEffect(() => {
     api
@@ -291,7 +295,7 @@ export function History({
   useEffect(() => {
     load(1, kind, status, focus, qApplied, range, mineOnly)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, mineOnly])
+  }, [range, mineOnly, firstSyncDone])
 
   const displayed = useMemo(() => {
     if (!sortKey) return rows

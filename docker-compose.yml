@@ -90,6 +90,11 @@ services:
       # No test-server in prod, so SEED_TEST_SERVER is off.
       SEED_TEST_SERVER: "false"
       CREDENTIALS_MASTER_KEY: "${CREDENTIALS_MASTER_KEY:?CREDENTIALS_MASTER_KEY must be set — generate with: openssl rand -base64 32}"
+      # Health-monitor cadence (optional; api config has sensible defaults).
+      # MONITOR_INTERVAL_MS = how often servers/services are probed.
+      MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
+      MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
+      MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     # No `ports:` — the API is reached only through the frontend's /api

@@ -21,6 +21,8 @@ const WF_QUEUE = config.REDIS_BULLMQ_QUEUE
 const LORA_QUEUE = config.REDIS_LORA_QUEUE
 const PREFIX = config.REDIS_BULLMQ_PREFIX
 const INTERVAL = config.SYNC_INTERVAL_MS
+const HEALTH_INTERVAL = config.MONITOR_INTERVAL_MS
+const HEALTH_STAGGER = config.MONITOR_STAGGER_MS
 const BATCH = 200
 
 // BullMQ uses sorted sets for some queues and lists for others
@@ -91,6 +93,7 @@ export function getSyncStatus(): SyncStatus {
 
 class SyncService {
   private timer: NodeJS.Timeout | null = null
+  private healthTimer: NodeJS.Timeout | null = null
   private client: Redis | null = null
 
   private redis(): Redis {
@@ -107,13 +110,30 @@ class SyncService {
   }
 
   start(): void {
-    setTimeout(() => this.run(), 15_000) // first sync after 15s startup
+    setTimeout(() => this.run(), 15_000) // first job sync after 15s startup
     this.timer = setInterval(() => this.run(), INTERVAL)
-    console.log(`[sync] started — interval ${INTERVAL / 1000}s, queues: ${WF_QUEUE}, ${LORA_QUEUE}`)
+
+    // Health probing runs on its own cadence (MONITOR_INTERVAL_MS) so it can be
+    // tuned independently of the Redis→Postgres job sync. MONITOR_STAGGER_MS
+    // delays the first probe so we don't hammer everything at boot.
+    const runHealth = () => {
+      void syncServerHealth().catch((e) =>
+        console.error('[health] sync failed:', e instanceof Error ? e.message : e),
+      )
+    }
+    setTimeout(() => {
+      runHealth()
+      this.healthTimer = setInterval(runHealth, HEALTH_INTERVAL)
+    }, HEALTH_STAGGER)
+
+    console.log(
+      `[sync] started — job sync ${INTERVAL / 1000}s, health ${HEALTH_INTERVAL / 1000}s (stagger ${HEALTH_STAGGER / 1000}s), queues: ${WF_QUEUE}, ${LORA_QUEUE}`,
+    )
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer)
+    if (this.healthTimer) clearInterval(this.healthTimer)
     this.client?.disconnect()
   }
 
@@ -122,7 +142,6 @@ class SyncService {
     const results = await Promise.allSettled([
       this.syncWorkflowJobs(),
       this.syncLoraJobs(),
-      syncServerHealth(),
       checkCalendarReminders(),
     ])
     syncState.running = false

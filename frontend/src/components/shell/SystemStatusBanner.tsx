@@ -25,6 +25,7 @@ type Status = 'ok' | 'offline' | 'syncing'
 type StatusSummary = {
   ts: number
   serversDown: number
+  servicesDown: number
   servicesInMaintenance: number
   failedJobs5m: number
   slowJobs5m: number
@@ -148,10 +149,11 @@ export function SystemStatusBanner() {
   const issueSig =
     summary &&
     (summary.serversDown > 0 ||
+      summary.servicesDown > 0 ||
       summary.failedJobs5m > 0 ||
       summary.slowJobs5m > 0 ||
       summary.servicesInMaintenance > 0)
-      ? `${summary.serversDown}|${summary.failedJobs5m}|${summary.slowJobs5m}|${summary.servicesInMaintenance}`
+      ? `${summary.serversDown}|${summary.servicesDown}|${summary.failedJobs5m}|${summary.slowJobs5m}|${summary.servicesInMaintenance}`
       : null
 
   // Forget the dismissal once everything clears, so the banner comes back for
@@ -206,7 +208,7 @@ export function SystemStatusBanner() {
 
   // Red when something is hard-broken (servers offline or recent failures);
   // amber when it's a softer signal (slow jobs or planned maintenance only).
-  const hard = summary.serversDown > 0 || summary.failedJobs5m > 0
+  const hard = summary.serversDown > 0 || summary.servicesDown > 0 || summary.failedJobs5m > 0
   const tone = hard ? 'var(--bad)' : 'var(--warn)'
 
   const chunks: { label: string; onClick: () => void; key: string }[] = []
@@ -216,6 +218,14 @@ export function SystemStatusBanner() {
       key: 'serversDown',
       label: `${n} server${n === 1 ? '' : 's'} down`,
       onClick: () => navigate('/servers'),
+    })
+  }
+  if (summary.servicesDown > 0) {
+    const n = summary.servicesDown
+    chunks.push({
+      key: 'servicesDown',
+      label: `${n} service${n === 1 ? '' : 's'} down`,
+      onClick: () => navigate('/services'),
     })
   }
   if (summary.failedJobs5m > 0) {

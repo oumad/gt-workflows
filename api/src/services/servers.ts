@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { config } from '../config/index.js'
 import { serverMatchKey } from '../lib/serverUrl.js'
 import { sendServerReport } from '../lib/discord.js'
-import { probeOneServer } from './serverHealth.js'
+import { probeOneServer, syncServerHealth } from './serverHealth.js'
 import { notFound, conflict, internalError } from '../lib/httpError.js'
 import * as repo from '../repositories/servers.js'
 import type {
@@ -489,6 +489,12 @@ export async function scrapeServers(): Promise<ScrapeResult> {
     )
   }
 
+  // Probe everything right away so freshly-scraped servers/services show their
+  // real status instead of sitting "unknown" until the next monitor tick.
+  if (createdHosts.length > 0 || createdServices.length > 0) {
+    void syncServerHealth().catch(() => {})
+  }
+
   return {
     servers: createdHosts.length,
     services: createdServices.length,
@@ -600,13 +606,14 @@ export async function getTopUsers(
         AND created_at > now() - (${opts.hours}::int * interval '1 hour')
       UNION ALL
       SELECT
-        client_id::text AS user_id,
-        COALESCE(user_name, '(unknown)') AS user_name,
-        status,
-        created_at
-      FROM training_jobs
-      WHERE server_id = ${serverId}
-        AND created_at > now() - (${opts.hours}::int * interval '1 hour')
+        tj.client_id::text AS user_id,
+        COALESCE(gu.name, '(unknown)') AS user_name,
+        tj.status,
+        tj.created_at
+      FROM training_jobs tj
+      LEFT JOIN gt_users gu ON gu.id = tj.client_id
+      WHERE tj.server_id = ${serverId}
+        AND tj.created_at > now() - (${opts.hours}::int * interval '1 hour')
     )
     SELECT
       user_id,

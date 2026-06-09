@@ -77,15 +77,20 @@ app.get('/summary', requireAuth, async (c) => {
   const data = await summaryCache.memo('summary', async () => {
     const servers = await serversService.listServers()
 
-    // "down" = not in maintenance and offline / unknown / never probed.
-    // Mirrors the serverStatus() classification used by the UI.
-    const serversDown = servers.filter(
-      (s) =>
-        !s.isMaintenance &&
-        (s.health === null ||
-          s.health.status === 'offline' ||
-          s.health.status === 'unknown'),
-    ).length
+    // Confirmed-down only (probed and offline) — never-probed / stale (unknown)
+    // records aren't alarmed on, so a fresh grind doesn't flash "down". Split
+    // host vs service by URL shape so the banner can label and route each.
+    const hasPort = (s: (typeof servers)[number]) => {
+      try {
+        return !!new URL(s.url).port
+      } catch {
+        return false
+      }
+    }
+    const isDown = (s: (typeof servers)[number]) =>
+      !s.isMaintenance && s.health !== null && s.health.status === 'offline'
+    const serversDown = servers.filter((s) => isDown(s) && !hasPort(s)).length
+    const servicesDown = servers.filter((s) => isDown(s) && hasPort(s)).length
 
     const servicesInMaintenance = servers.filter((s) => s.isMaintenance).length
 
@@ -97,6 +102,7 @@ app.get('/summary', requireAuth, async (c) => {
     return {
       ts: Date.now(),
       serversDown,
+      servicesDown,
       servicesInMaintenance,
       failedJobs5m,
       slowJobs5m,

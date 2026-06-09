@@ -7,6 +7,8 @@ import { api } from '../../lib/api'
 import { fmtRelativeTime } from '../../lib/format'
 import { Kpi } from '../../components/ui/Kpi'
 import { Workflow, Briefcase, Boxes, Server, ArrowRight, Zap, Cpu, BarChart2 } from 'lucide-react'
+import { isHostRecord } from '../../lib/serverLinks'
+import { useData } from '../../context/DataContext'
 import type { Page } from '../../types'
 import { JobModal, unifiedToRow, type UnifiedJob, type UnifiedJobsPage, type Row } from '../jobs/shared'
 import type { UnifiedLiveResponse } from '../jobs/jobs-types'
@@ -49,6 +51,7 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
   const { user } = useAuth()
   const { workflows, loading: wl } = useWorkflows()
   const { servers, loading: sl } = useServers()
+  const { firstSyncDone } = useData()
 
   // Live job counts
   const [runWf, setRunWf] = useState(0)
@@ -105,15 +108,25 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
       .get<UnifiedJobsPage>('/api/jobs?limit=10')
       .then((res) => setActivity(res.items ?? []))
       .catch(() => {})
-  }, [])
+    // Re-fetch once the initial Redis->Postgres sync finishes so first-ever
+    // boot fills in jobs/counts without a manual refresh.
+  }, [firstSyncDone])
 
   const running = runWf + runLo
   const waiting = queWf + queLo
 
   const firstName = user?.username ?? 'there'
-  const onlineCount = servers.filter((s) => s.health?.status === 'online').length
-  const downCount = servers.filter((s) => s.health?.status === 'offline').length
-  const unknownCount = servers.length - onlineCount - downCount
+  // Hosts (port-less) and services (ported) counted separately so the two
+  // KPIs/tiles don't show the same combined number.
+  const hostList = servers.filter(isHostRecord)
+  const serviceList = servers.filter((s) => !isHostRecord(s))
+  const serversOnline = hostList.filter((s) => s.health?.status === 'online').length
+  const serversDown = hostList.filter((s) => s.health?.status === 'offline').length
+  const servicesOnline = serviceList.filter((s) => s.health?.status === 'online').length
+  const servicesDown = serviceList.filter((s) => s.health?.status === 'offline').length
+  const servicesUnknown = serviceList.length - servicesOnline - servicesDown
+  // "N nodes online" in the welcome line means physical hosts.
+  const onlineCount = serversOnline
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
@@ -142,9 +155,9 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
       desc: 'Logical services running on servers (ComfyUI, LoRA…).',
       count: sl
         ? '…'
-        : servers.length === 0
+        : serviceList.length === 0
           ? 'No services'
-          : `${onlineCount} / ${servers.length} online`,
+          : `${servicesOnline} / ${serviceList.length} online`,
     },
     {
       id: 'servers',
@@ -154,9 +167,9 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
       desc: 'Physical hosts in the cluster.',
       count: sl
         ? '…'
-        : servers.length === 0
+        : hostList.length === 0
           ? 'No servers'
-          : `${onlineCount} / ${servers.length} online`,
+          : `${serversOnline} / ${hostList.length} online`,
     },
     {
       id: 'doctor',
@@ -235,30 +248,31 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
             valueColor={
               sl
                 ? 'var(--ink-2)'
-                : onlineCount === 0
+                : serversOnline === 0
                   ? 'var(--bad)'
-                  : onlineCount < servers.length
+                  : serversOnline < hostList.length
                     ? 'var(--warn)'
                     : 'var(--good)'
             }
             value={
               <>
-                {sl ? '…' : onlineCount}
+                {sl ? '…' : serversOnline}
                 <span style={{ fontSize: 14, color: 'var(--ink-3)', fontWeight: 500 }}>
                   {' '}
-                  / {servers.length}
+                  / {hostList.length}
                 </span>
               </>
             }
             sub={
-              !sl && (downCount > 0 || (servers.length > 0 && onlineCount === servers.length)) ? (
+              !sl &&
+              (serversDown > 0 || (hostList.length > 0 && serversOnline === hostList.length)) ? (
                 <>
-                  {downCount > 0 && (
+                  {serversDown > 0 && (
                     <span className="chip chip-warn" style={{ marginTop: 6 }}>
-                      {downCount} down
+                      {serversDown} down
                     </span>
                   )}
-                  {servers.length > 0 && onlineCount === servers.length && (
+                  {hostList.length > 0 && serversOnline === hostList.length && (
                     <span className="chip chip-good" style={{ marginTop: 6 }}>
                       All up
                     </span>
@@ -273,38 +287,38 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
             valueColor={
               sl
                 ? 'var(--ink-2)'
-                : onlineCount === 0
+                : servicesOnline === 0
                   ? 'var(--bad)'
-                  : onlineCount < servers.length
+                  : servicesOnline < serviceList.length
                     ? 'var(--warn)'
                     : 'var(--good)'
             }
             value={
               <>
-                {sl ? '…' : onlineCount}
+                {sl ? '…' : servicesOnline}
                 <span style={{ fontSize: 14, color: 'var(--ink-3)', fontWeight: 500 }}>
                   {' '}
-                  / {servers.length}
+                  / {serviceList.length}
                 </span>
               </>
             }
             sub={
               !sl &&
-              (downCount > 0 ||
-                unknownCount > 0 ||
-                (servers.length > 0 && onlineCount === servers.length)) ? (
+              (servicesDown > 0 ||
+                servicesUnknown > 0 ||
+                (serviceList.length > 0 && servicesOnline === serviceList.length)) ? (
                 <>
-                  {downCount > 0 && (
+                  {servicesDown > 0 && (
                     <span className="chip chip-warn" style={{ marginTop: 6 }}>
-                      {downCount} down
+                      {servicesDown} down
                     </span>
                   )}
-                  {unknownCount > 0 && (
+                  {servicesUnknown > 0 && (
                     <span
                       className="chip"
-                      style={{ marginTop: 6, marginLeft: downCount > 0 ? 6 : 0 }}
+                      style={{ marginTop: 6, marginLeft: servicesDown > 0 ? 6 : 0 }}
                     >
-                      {unknownCount} unknown
+                      {servicesUnknown} unknown
                     </span>
                   )}
                 </>

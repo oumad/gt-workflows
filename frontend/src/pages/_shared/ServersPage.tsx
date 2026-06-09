@@ -223,7 +223,10 @@ export function ServersPage({
   )
 
   const activeSrvs = pageServers.filter((s) => !s.isMaintenance)
-  const onlineCount = activeSrvs.filter((s) => serverStatus(s) !== 'down').length
+  const onlineCount = activeSrvs.filter((s) => {
+    const st = serverStatus(s)
+    return st === 'ok' || st === 'warn' || st === 'busy'
+  }).length
   const busyCount = activeSrvs.filter((s) => serverStatus(s) === 'busy').length
   const downCount = activeSrvs.filter((s) => serverStatus(s) === 'down').length
   const maintenanceCount = pageServers.filter((s) => s.isMaintenance).length
@@ -327,10 +330,11 @@ export function ServersPage({
   // on name so the order within a status bucket stays stable across reloads.
   const STATUS_RANK: Record<ReturnType<typeof serverStatus>, number> = {
     down: 0,
-    maintenance: 1,
-    warn: 2,
-    busy: 3,
-    ok: 4,
+    unknown: 1,
+    maintenance: 2,
+    warn: 3,
+    busy: 4,
+    ok: 5,
   }
 
   const filtered = pageServers
@@ -352,7 +356,7 @@ export function ServersPage({
     })
 
   const tabs = [
-    { id: 'all', label: cfg.allTabLabel, pill: servers.length },
+    { id: 'all', label: cfg.allTabLabel, pill: pageServers.length },
     { id: 'metrics', label: 'Metrics' },
     { id: 'insights', label: 'Insights' },
     { id: 'incidents', label: 'Incidents' },
