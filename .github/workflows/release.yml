@@ -73,11 +73,16 @@ jobs:
           mkdir -p "$stage"
 
           # The deploy files the operator needs on the target host.
-          cp docker-compose.yml     "$stage/"
-          cp docker-compose.dev.yml "$stage/"
-          cp .env.example           "$stage/"
-          cp frontend/nginx.conf    "$stage/nginx.conf.reference"
-          cp release/DEPLOY.md      "$stage/DEPLOY.md"
+          # All compose variants ship inside docker-compose-templates/. A copy
+          # of prod.yml is also placed at the bundle root as docker-compose.yml
+          # so the default `docker compose up` command keeps working without
+          # the operator having to learn the templates layout.
+          cp -r docker-compose-templates    "$stage/"
+          cp -r rdp-sidecar                 "$stage/"
+          cp docker-compose-templates/prod.yml "$stage/docker-compose.yml"
+          cp .env.example                   "$stage/"
+          cp frontend/nginx.conf            "$stage/nginx.conf.reference"
+          cp release/DEPLOY.md              "$stage/DEPLOY.md"
 
           # Stamp the version into a VERSION file so an operator extracting
           # an unknown tarball can confirm which release they have.

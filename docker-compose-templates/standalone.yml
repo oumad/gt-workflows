@@ -1,0 +1,87 @@
+# Standalone stack — api + frontend + postgres, NO managed Redis container
+# and NO test-server. Use this when:
+#   - Redis is owned by another stack (e.g. the real gt-workflows Redis you
+#     read job state from), and you don't want a second instance.
+#   - You're deploying coffee-maker into an existing environment.
+#
+# You MUST set REDIS_URL in your .env to point at the external instance, e.g.
+#   REDIS_URL=redis://redis.internal:6379
+# Without it the api still boots (lazyConnect), but the live job sync silently
+# fails — Jobs/Live tab will be empty.
+#
+# Run from the REPO ROOT (so `./api`, `./frontend`, `.env` resolve correctly):
+#   docker compose -f docker-compose-templates/standalone.yml --project-directory . up -d --build
+#   docker compose -f docker-compose-templates/standalone.yml --project-directory . logs -f api frontend
+#   docker compose -f docker-compose-templates/standalone.yml --project-directory . down
+#
+# RDP mode:
+#   Embedded (default) — the api image bundles freerdp + Xvfb; nothing extra.
+#   Sidecar           — set RDP_BRIDGE_URL on the api service to delegate RDP
+#                       tests to the rdp-sidecar container. See postgres-rdp.yml
+#                       for a self-contained sidecar service block you can copy.
+
+services:
+  # ── PostgreSQL ────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coffee_maker
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d coffee_maker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── API ───────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/coffee_maker"
+      # External Redis — must be set in .env. The api requires REDIS_URL to be
+      # non-empty even when Redis is unreachable; we don't supply a default
+      # because a wrong "redis://redis:6379" would silently mask the misconfig.
+      REDIS_URL: "${REDIS_URL:?REDIS_URL must point at the external Redis (e.g. redis://host:6379)}"
+      REDIS_BULLMQ_PREFIX: "${REDIS_BULLMQ_PREFIX:-bull}"
+      REDIS_BULLMQ_QUEUE: "${REDIS_BULLMQ_QUEUE:-workflow-studio-comfyui-process-queue}"
+      REDIS_LORA_QUEUE: "${REDIS_LORA_QUEUE:-lora-trainer-training-queue}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set — generate with: openssl rand -hex 32}"
+      NODE_ENV: production
+      PORT: "3001"
+      CORS_ORIGIN: "${CORS_ORIGIN:-*}"
+      WORKFLOWS_DIR: /workflows
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      SEED_TEST_SERVER: "false"
+      CREDENTIALS_MASTER_KEY: "${CREDENTIALS_MASTER_KEY:?CREDENTIALS_MASTER_KEY must be set — generate with: openssl rand -base64 32}"
+      MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
+      MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
+      MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      RDP_BRIDGE_URL: "${RDP_BRIDGE_URL:-}"
+      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
+    volumes:
+      - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend (nginx serving built SPA + /api proxy) ───────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

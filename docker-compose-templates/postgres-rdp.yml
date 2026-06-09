@@ -1,0 +1,66 @@
+# Minimal infra-only stack: Postgres + RDP sidecar. NO api, NO frontend, NO
+# Redis. Use this when:
+#   - You run the api natively (e.g. on a Windows host to use a UNC workflow
+#     share directly), and just need Postgres + the Linux-only RDP toolchain
+#     close to hand.
+#   - You want to validate the RDP bridge in isolation.
+#
+# Bind addresses are localhost-only by default — the RDP bridge will RDP to
+# any host with any creds it accepts, so DO NOT expose 8080 to a network you
+# don't fully trust. Override with `BRIDGE_BIND=0.0.0.0` only on a private net.
+#
+# Set RDP_BRIDGE_TOKEN in your .env to a non-empty value — the sidecar refuses
+# unauthenticated requests when it's set, and the native api should be
+# configured with the same value so its Authorization header matches.
+#
+# Run from the REPO ROOT:
+#   docker compose -f docker-compose-templates/postgres-rdp.yml --project-directory . up -d --build
+#   docker compose -f docker-compose-templates/postgres-rdp.yml --project-directory . logs -f rdp-sidecar
+#   docker compose -f docker-compose-templates/postgres-rdp.yml --project-directory . down
+#
+# Native-api env (point at these containers):
+#   DATABASE_URL=postgresql://postgres:devpassword@localhost:5432/coffee_maker
+#   RDP_BRIDGE_URL=http://localhost:8080
+#   RDP_BRIDGE_TOKEN=<same-as-below>
+
+services:
+  # ── PostgreSQL ────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: coffee_maker
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Bound to localhost so a natively-running api on this box can reach it
+      # without exposing the DB to the network.
+      - "${POSTGRES_BIND:-127.0.0.1}:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d coffee_maker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── RDP sidecar ──────────────────────────────
+  # Tiny image (~100MB) that bundles freerdp + Xvfb and a Go HTTP bridge.
+  # Source + Dockerfile live in ./rdp-sidecar.
+  rdp-sidecar:
+    build:
+      context: ./rdp-sidecar
+      dockerfile: Dockerfile
+    environment:
+      # Shared secret — clients must send `Authorization: Bearer <token>`.
+      # Leave unset only on a fully-private network.
+      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
+      PORT: "8080"
+    ports:
+      # Localhost-only by default. Override BRIDGE_BIND=0.0.0.0 only if you
+      # KNOW the network is private and you've set RDP_BRIDGE_TOKEN.
+      - "${BRIDGE_BIND:-127.0.0.1}:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -1,6 +1,6 @@
 # Development stack — use during local development + alert-cycle testing.
 #
-# Differences vs docker-compose.yml (prod):
+# Differences vs prod.yml:
 #   - test-server: an idle nginx that the api auto-registers as a monitored
 #     server (SEED_TEST_SERVER=true). Lets you exercise the down → recovered
 #     alert cycle by stopping/starting it.
@@ -11,12 +11,14 @@
 #   - postgres binds 5432 to the host so pgAdmin / psql work without an
 #     override file.
 #
-# Bring up:    docker compose -f docker-compose.dev.yml up
+# Run from the REPO ROOT (so `./api`, `./redis`, `.env` resolve correctly):
+#   docker compose -f docker-compose-templates/dev.yml --project-directory . up
+#   docker compose -f docker-compose-templates/dev.yml --project-directory . down
+#
 # Hot reload:  edits to ./frontend/src land instantly via the volume mount;
 #              edits to ./api/src require a container restart since the api
 #              container still runs the built /app/dist. (Open a separate
 #              terminal and `npm run dev` against the host for true API HMR.)
-# Stop:        docker compose -f docker-compose.dev.yml down
 
 services:
   # ── PostgreSQL ────────────────────────────────
@@ -64,9 +66,9 @@ services:
   # A bare HTTP server with no purpose other than being pingable. The API
   # auto-registers it as a monitored server on startup (SEED_TEST_SERVER=true
   # below), so you can exercise the down → recovered alert cycle:
-  #   docker compose -f docker-compose.dev.yml stop  test-server
+  #   docker compose -f docker-compose-templates/dev.yml --project-directory . stop  test-server
   #     → next health probe → "down" alert, reminders at +10m, +30m, +1h…
-  #   docker compose -f docker-compose.dev.yml start test-server
+  #   docker compose -f docker-compose-templates/dev.yml --project-directory . start test-server
   #     → next health probe → "recovered" alert
   # `restart: "no"` so a manual `stop` actually stays stopped.
   test-server:
@@ -108,6 +110,9 @@ services:
       MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
       MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
       MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      # RDP execution. Unset → api runs xfreerdp/Xvfb itself.
+      RDP_BRIDGE_URL: "${RDP_BRIDGE_URL:-}"
+      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     depends_on:

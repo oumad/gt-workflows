@@ -21,7 +21,9 @@ cd coffee-maker-<version>
 git clone https://github.com/<owner>/coffee-maker.git --branch <version> src
 #    b) Copy your existing api/ + frontend/ folders next to the compose files.
 #    The compose files reference `./api` and `./frontend` build contexts —
-#    they must live alongside docker-compose.yml.
+#    they must live alongside docker-compose.yml. (The release bundle ships
+#    all variants under docker-compose-templates/ and a copy of prod.yml at
+#    the root as docker-compose.yml so the default command keeps working.)
 
 # 3. Fill in required env vars (see table below).
 cp .env.example .env

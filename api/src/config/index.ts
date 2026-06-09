@@ -72,6 +72,21 @@ const envSchema = z.object({
   MONITOR_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   MONITOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   MONITOR_STAGGER_MS: z.coerce.number().int().nonnegative().default(1_000),
+
+  // ── RDP execution ─────────────────────────────
+  // When RDP_BRIDGE_URL is set (e.g. http://rdp-sidecar:8080), the API forwards
+  // every RDP test there via HTTP instead of spawning xfreerdp/Xvfb locally.
+  // Lets the API image stay slim or run natively on Windows while a sidecar
+  // owns the Linux-only RDP toolchain. Unset = current "embedded" behavior.
+  RDP_BRIDGE_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  // Shared secret for the bridge — sent as "Authorization: Bearer <token>".
+  // Optional but strongly recommended whenever the bridge isn't on a private
+  // network (the bridge will RDP anywhere with any creds it accepts).
+  RDP_BRIDGE_TOKEN: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

@@ -1,6 +1,6 @@
 # Production stack — what you bring up on the prod host.
 #
-# Differences vs docker-compose.dev.yml:
+# Differences vs dev.yml:
 #   - No test-server (the throwaway nginx used for alert-cycle testing).
 #   - No source-code volume mounts; both api + frontend run from the image's
 #     baked artefacts. A code change therefore requires a rebuild + restart.
@@ -9,13 +9,20 @@
 #     all ingress goes through the frontend's :80.
 #   - SEED_TEST_SERVER is off (no test-server to seed).
 #
-# Bring up:    docker compose up -d --build
-# Tail logs:   docker compose logs -f api frontend
-# Stop:        docker compose down
-# Wipe DB:     docker compose down -v   (also drops postgres_data)
+# Run from the REPO ROOT (so `./api`, `./redis`, `.env` resolve correctly):
+#   docker compose -f docker-compose-templates/prod.yml --project-directory . up -d --build
+#   docker compose -f docker-compose-templates/prod.yml --project-directory . logs -f api frontend
+#   docker compose -f docker-compose-templates/prod.yml --project-directory . down
+#   docker compose -f docker-compose-templates/prod.yml --project-directory . down -v   # wipes DB
 #
 # Frontend is the only ingress point. If you need TLS, put Caddy / nginx /
 # Traefik in front of the frontend container and reverse-proxy to :80.
+#
+# RDP mode:
+#   Embedded (default) — the api image bundles freerdp + Xvfb; nothing extra.
+#   Sidecar           — set RDP_BRIDGE_URL on the api service to delegate RDP
+#                       tests to the rdp-sidecar container (see postgres-rdp.yml
+#                       or the rdp-sidecar/ folder). Slimmer api image.
 
 services:
   # ── PostgreSQL ────────────────────────────────
@@ -95,6 +102,11 @@ services:
       MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
       MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
       MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      # RDP execution. Unset → api runs xfreerdp/Xvfb itself (the image bundles
+      # them). Set to `http://rdp-sidecar:8080` and add the sidecar service
+      # below to delegate RDP tests to a dedicated container.
+      RDP_BRIDGE_URL: "${RDP_BRIDGE_URL:-}"
+      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     # No `ports:` — the API is reached only through the frontend's /api

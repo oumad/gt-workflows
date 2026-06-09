@@ -12,9 +12,8 @@
 #     to transpile; type errors surface in dev + CI, not at image build
 #     time. Keeps the image build short and avoids tsconfig project-
 #     reference resolution drama.
-#   - Multi-target so docker-compose.dev.yml can build the `dev` target
-#     (vite dev server with HMR) and prod compose builds the default
-#     `prod` target.
+#   - Multi-target so dev.yml can build the `dev` target (vite dev server
+#     with HMR) and prod.yml builds the default `prod` target.
 
 # ─── Build ──────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
@@ -25,7 +24,7 @@ COPY . .
 RUN npx vite build
 
 # ─── Dev target ─────────────────────────────────────────────────
-# Used by docker-compose.dev.yml. Vite dev server with HMR.
+# Used by docker-compose-templates/dev.yml. Vite dev server with HMR.
 # --host 0.0.0.0 so the docker-mapped port reaches it.
 FROM node:24-alpine AS dev
 WORKDIR /app
