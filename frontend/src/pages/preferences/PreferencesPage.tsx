@@ -73,7 +73,9 @@ export function PreferencesPage() {
   // GT-user picker state — searches /api/gt-users on debounce. The currently
   // selected id+label live in component state; they're persisted on Save.
   const [gtQuery, setGtQuery] = useState('')
-  const [gtResults, setGtResults] = useState<{ id: string; name: string | null; email: string | null }[]>([])
+  const [gtResults, setGtResults] = useState<
+    { id: string; name: string | null; email: string | null }[]
+  >([])
   const [gtLoading, setGtLoading] = useState(false)
   useEffect(() => {
     if (!gtQuery.trim()) {
@@ -83,9 +85,9 @@ export function PreferencesPage() {
     const id = setTimeout(async () => {
       setGtLoading(true)
       try {
-        const res = await api.get<{ items: { id: string; name: string | null; email: string | null }[] }>(
-          `/api/gt-users?limit=10&q=${encodeURIComponent(gtQuery.trim())}`,
-        )
+        const res = await api.get<{
+          items: { id: string; name: string | null; email: string | null }[]
+        }>(`/api/gt-users?limit=10&q=${encodeURIComponent(gtQuery.trim())}`)
         setGtResults(res.items ?? [])
       } catch {
         setGtResults([])

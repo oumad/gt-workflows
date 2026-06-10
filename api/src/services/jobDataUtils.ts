@@ -39,7 +39,7 @@ export function deepFind(obj: unknown, ...keys: string[]): string {
   if (typeof obj !== 'object' || obj === null) return ''
   const o = obj as Record<string, unknown>
   for (const k of keys) {
-    if (typeof o[k] === 'string' && (o[k] as string).length > 0) return o[k] as string
+    if (typeof o[k] === 'string' && o[k].length > 0) return o[k]
   }
   for (const v of Object.values(o)) {
     const r = deepFind(v, ...keys)

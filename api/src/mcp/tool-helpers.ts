@@ -274,7 +274,7 @@ export function readSnapshotParams(historyRootAbs: string, snapshotId: string): 
     return JSON.parse(readFileSync(snapAbs, 'utf-8')) as ParamsJson
   } catch (err) {
     throw new Error(
-      `Failed to read snapshot params.json: ${err instanceof Error ? err.message : err}`,
+      `Failed to read snapshot params.json: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 }
@@ -288,7 +288,12 @@ export function readSnapshotParams(historyRootAbs: string, snapshotId: string): 
    Used by diff_params to give the AI a concise change list rather than a
    full text diff (which is hard for the model to summarize). */
 
-export type DiffEntry = { path: string; kind: 'added' | 'removed' | 'changed'; before?: unknown; after?: unknown }
+export type DiffEntry = {
+  path: string
+  kind: 'added' | 'removed' | 'changed'
+  before?: unknown
+  after?: unknown
+}
 
 export function diffObjects(base: unknown, current: unknown, prefix = '$'): DiffEntry[] {
   if (base === current) return []
@@ -297,9 +302,7 @@ export function diffObjects(base: unknown, current: unknown, prefix = '$'): Diff
     return [{ path: prefix, kind: 'changed', before: base, after: current }]
   }
   if (typeof base !== 'object' || base === null) {
-    return base === current
-      ? []
-      : [{ path: prefix, kind: 'changed', before: base, after: current }]
+    return base === current ? [] : [{ path: prefix, kind: 'changed', before: base, after: current }]
   }
   // Arrays: stringify-compare for simplicity. Per-element diff isn't useful
   // for params.json (mostly object/scalar fields, not big arrays).

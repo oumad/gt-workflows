@@ -375,10 +375,7 @@ export function SetoModal({
                           boxSizing: 'border-box',
                         }}
                       />
-                      <div
-                        className="row"
-                        style={{ marginTop: 8, justifyContent: 'flex-end' }}
-                      >
+                      <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={sendReport}

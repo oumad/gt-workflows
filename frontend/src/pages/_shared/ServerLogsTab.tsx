@@ -54,12 +54,17 @@ export function ServerLogs({ server, kindLabel }: { server: ServerType; kindLabe
     ERROR: 'var(--bad)',
     DEBUG: 'var(--ink-3)',
   }
-  const filtered =
-    lines == null
-      ? []
-      : lvlFilter === 'all'
-        ? lines
-        : lines.filter((l) => l.level === lvlFilter.toUpperCase())
+  // Memoized so the autoscroll effect below only fires when the visible set
+  // actually changes, not on every render.
+  const filtered = useMemo(
+    () =>
+      lines == null
+        ? []
+        : lvlFilter === 'all'
+          ? lines
+          : lines.filter((l) => l.level === lvlFilter.toUpperCase()),
+    [lines, lvlFilter],
+  )
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight

@@ -116,7 +116,10 @@ type TreeRowProps = {
   onToggle: (path: string) => void
   onSelect: (node: TreeNode) => void
   isAdmin: boolean
-  onAction: (action: 'rename' | 'delete' | 'newFolder' | 'newFile' | 'upload', node: TreeNode) => void
+  onAction: (
+    action: 'rename' | 'delete' | 'newFolder' | 'newFile' | 'upload',
+    node: TreeNode,
+  ) => void
   onDropFile: (file: File, destDir: string) => void
 }
 
@@ -238,10 +241,7 @@ function TreeRow({
           {isRoot ? `${node.name} /` : node.name}
         </span>
         {node.type === 'file' && (
-          <span
-            className="mono"
-            style={{ fontSize: 10, color: 'var(--ink-3)', flexShrink: 0 }}
-          >
+          <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', flexShrink: 0 }}>
             {fmtBytes(node.size)}
           </span>
         )}
@@ -470,9 +470,7 @@ function MediaPreview({
         </div>
       )}
 
-      {!err && !blobUrl && (
-        <div style={{ fontSize: 12, padding: '24px 0' }}>Loading preview…</div>
-      )}
+      {!err && !blobUrl && <div style={{ fontSize: 12, padding: '24px 0' }}>Loading preview…</div>}
 
       {blobUrl && kind === 'image' && (
         <img
@@ -502,9 +500,7 @@ function MediaPreview({
           }}
         />
       )}
-      {blobUrl && kind === 'audio' && (
-        <audio src={blobUrl} controls style={{ width: '100%' }} />
-      )}
+      {blobUrl && kind === 'audio' && <audio src={blobUrl} controls style={{ width: '100%' }} />}
     </div>
   )
 }
@@ -697,12 +693,7 @@ function FileEditor({
         <div style={{ fontSize: 12 }}>
           Binary or oversized file ({fmtBytes(meta.size)}) — preview / edit not available.
         </div>
-        <a
-          href={rawUrl}
-          className="btn btn-sm"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={rawUrl} className="btn btn-sm" target="_blank" rel="noreferrer">
           <Download size={12} /> Download
         </a>
       </div>
@@ -859,9 +850,7 @@ function FileEditor({
       >
         <span className="mono">
           {lineCount} lines · {charCount} chars
-          {meta && meta.modifiedAt
-            ? ` · saved ${new Date(meta.modifiedAt).toLocaleString()}`
-            : ''}
+          {meta && meta.modifiedAt ? ` · saved ${new Date(meta.modifiedAt).toLocaleString()}` : ''}
         </span>
         {!isAdmin && <span>· read-only (admin required)</span>}
       </div>
@@ -1099,9 +1088,7 @@ function JsonHighlightedEditor({
                         </span>
                       ),
                     )}
-                    {dl.folded && (
-                      <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }} />
-                    )}
+                    {dl.folded && <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }} />}
                   </div>
                 ))
               : tokens.map((tok, i) =>
@@ -1295,14 +1282,16 @@ export function WorkflowFiles({ wfId, isAdmin }: Props) {
       return
     }
     if (action === 'delete') {
-      if (!window.confirm(`Delete "${node.name}"? This cannot be undone (a snapshot will be saved for rollback).`))
+      if (
+        !window.confirm(
+          `Delete "${node.name}"? This cannot be undone (a snapshot will be saved for rollback).`,
+        )
+      )
         return
       try {
         await fetch(`/api/workflows/${wfId}/fs/file?path=${encodeURIComponent(node.path)}`, {
           method: 'DELETE',
-          headers: loadSession()
-            ? { Authorization: `Bearer ${loadSession()!.token}` }
-            : {},
+          headers: loadSession() ? { Authorization: `Bearer ${loadSession()!.token}` } : {},
         }).then(async (r) => {
           if (!r.ok) {
             const data = (await r.json().catch(() => ({}))) as { error?: string }
@@ -1401,9 +1390,7 @@ export function WorkflowFiles({ wfId, isAdmin }: Props) {
             gap: 4,
           }}
         >
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)' }}>
-            FOLDER
-          </span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)' }}>FOLDER</span>
           <span className="spacer" />
           <button
             className="btn btn-ghost btn-icon"
@@ -1439,8 +1426,7 @@ export function WorkflowFiles({ wfId, isAdmin }: Props) {
             }}
           >
             <Upload size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            Drag files onto a folder to upload. Use the ⋯ menu for rename / new
-            folder / delete.
+            Drag files onto a folder to upload. Use the ⋯ menu for rename / new folder / delete.
           </div>
         )}
       </div>
@@ -1464,9 +1450,8 @@ export function WorkflowFiles({ wfId, isAdmin }: Props) {
             <FileText size={28} />
             <div style={{ fontWeight: 600, color: 'var(--ink-2)' }}>No file selected</div>
             <div style={{ fontSize: 12.5, textAlign: 'center', maxWidth: 320 }}>
-              Pick a file from the tree on the left to view or edit it. JSON files
-              get syntax highlighting and validation; everything else opens as
-              plain text.
+              Pick a file from the tree on the left to view or edit it. JSON files get syntax
+              highlighting and validation; everything else opens as plain text.
             </div>
           </div>
         ) : (

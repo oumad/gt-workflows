@@ -1,12 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import type { Session, User } from '../types'
 import { loadSession, clearSession, updateStoredSession } from '../lib/storage'
-import {
-  type Capability,
-  type Role,
-  can as canFn,
-  derivePrimaryRole,
-} from '../lib/permissions'
+import { type Capability, type Role, can as canFn, derivePrimaryRole } from '../lib/permissions'
 
 type AuthContextValue = {
   session: Session | null

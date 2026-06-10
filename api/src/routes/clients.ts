@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { ilike, or, and, inArray, desc, eq, sql, type SQL } from 'drizzle-orm'
-import { db, gtUsers, workflowJobs, trainingJobs, servers } from '../db/index.js'
+import { desc, eq, sql } from 'drizzle-orm'
+import { db, workflowJobs, trainingJobs, servers } from '../db/index.js'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import type { AppVariables } from '../types.js'
 

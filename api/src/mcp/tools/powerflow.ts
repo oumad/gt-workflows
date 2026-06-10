@@ -29,11 +29,7 @@
  */
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import {
-  applyParamsPatch,
-  withPowerflow,
-  ParamsValidationError,
-} from '../params-patch.js'
+import { applyParamsPatch, withPowerflow, ParamsValidationError } from '../params-patch.js'
 import { toolJson, toolError } from '../tool-helpers.js'
 import { getMcpAuth } from '../auth-ctx.js'
 
@@ -122,13 +118,8 @@ function setConnectionsList(
 
 /** Find a field in a connection's fields array, returning its index + the
  *  effective field name. Handles both bare-string and object forms. */
-function findFieldIndex(
-  fields: FieldSpec[],
-  fieldName: string,
-): number {
-  return fields.findIndex((f) =>
-    typeof f === 'string' ? f === fieldName : f.name === fieldName,
-  )
+function findFieldIndex(fields: FieldSpec[], fieldName: string): number {
+  return fields.findIndex((f) => (typeof f === 'string' ? f === fieldName : f.name === fieldName))
 }
 
 /** Demote a field spec back to a bare string if it has no overrides left. */
@@ -226,14 +217,14 @@ export function registerPowerflowTools(server: McpServer): void {
         '[]` (kind="input") or `.outputs[]` (kind="output"). Each entry is ' +
         '{ nodeId, fields[] } where each field is either a bare string ' +
         '("image") or an object ({ name, label?, type? }) when you want to ' +
-        'override how it\'s displayed in the powerflow UI. ' +
+        "override how it's displayed in the powerflow UI. " +
         '\n\nNOT idempotent: if a connection with the same nodeId already ' +
         'exists in the target list, this tool errors. To modify an existing ' +
-        'connection\'s fields, use set_pf_field per field, or call ' +
+        "connection's fields, use set_pf_field per field, or call " +
         'remove_pf_connection then add_pf_connection. ' +
         '\n\nValidates: nodeId must be a non-empty string, fields must be a ' +
         'non-empty array, and each field must match the union shape. The ' +
-        'tool does NOT verify the nodeId exists in workflow.json — that\'s ' +
+        "tool does NOT verify the nodeId exists in workflow.json — that's " +
         'on the caller. Use read_workflow to confirm valid node ids first.',
       annotations: {
         readOnlyHint: false,
@@ -305,7 +296,7 @@ export function registerPowerflowTools(server: McpServer): void {
         'availableConnections.inputs[]` (kind="input") or `.outputs[]` ' +
         '(kind="output"). Idempotent — if the entry isn\'t there, the tool ' +
         'returns success with no changes. ' +
-        '\n\nAfter the removal, if the target list becomes empty it\'s ' +
+        "\n\nAfter the removal, if the target list becomes empty it's " +
         'dropped from the params.json entirely (no `"inputs": []` litter). ' +
         'If both inputs and outputs lists end up gone, ' +
         '`availableConnections` itself is removed. The powerflowConfig ' +
@@ -375,14 +366,14 @@ export function registerPowerflowTools(server: McpServer): void {
         '→ find by nodeId → fields[] → find by fieldName`. ' +
         '\n\nForm promotion/demotion: if the field is currently stored as a ' +
         'bare string ("image") and you set a label or type, it\'s ' +
-        'auto-promoted to object form ({ name, label, type }). If it\'s ' +
+        "auto-promoted to object form ({ name, label, type }). If it's " +
         'already an object and you pass `null` for both label and type, the ' +
         'field is demoted back to a bare string — keeping the on-disk shape ' +
         'canonical (no `{ name: "image" }` with no overrides). ' +
         '\n\nPass `label: null` or `type: null` to remove just that ' +
         'override; pass a string to set/replace it. At least one of label / ' +
         'type must be provided. ' +
-        '\n\nErrors if the connection or the field doesn\'t exist — use ' +
+        "\n\nErrors if the connection or the field doesn't exist — use " +
         'add_pf_connection first if the connection is missing.',
       annotations: {
         readOnlyHint: false,
@@ -399,7 +390,7 @@ export function registerPowerflowTools(server: McpServer): void {
           .min(1)
           .describe(
             'The field name to update — matches either a bare-string entry ' +
-              'or the `.name` of an object entry in the connection\'s fields[].',
+              "or the `.name` of an object entry in the connection's fields[].",
           ),
         label: z
           .string()
@@ -438,7 +429,9 @@ export function registerPowerflowTools(server: McpServer): void {
               )
             }
             const conn = { ...current[connIdx] } as Record<string, unknown>
-            const fields = Array.isArray(conn.fields) ? ([...conn.fields] as FieldSpec[]) : []
+            const fields = Array.isArray(conn.fields)
+              ? ([...(conn.fields as unknown[])] as FieldSpec[])
+              : []
             const fieldIdx = findFieldIndex(fields, fieldName)
             if (fieldIdx < 0) {
               throw new Error(

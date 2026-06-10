@@ -186,8 +186,8 @@ export function ServerSettings({
           placeholder="e.g. 4 — leave empty for uncalibrated"
         />
         <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
-          Soft cap powering the saturation heatmap on the {kindLabel}s list.
-          activeJobs / max determines the tile colour (green → red).
+          Soft cap powering the saturation heatmap on the {kindLabel}s list. activeJobs / max
+          determines the tile colour (green → red).
         </div>
       </div>
       <button

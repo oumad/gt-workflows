@@ -153,10 +153,7 @@ export interface LiveWfJob {
  * Exported so the sync service can call it without duplicating the Redis-key
  * construction (`logsKey`) which stays private to this module.
  */
-export async function detectComfyStartsForJobs(
-  client: Redis,
-  ids: string[],
-): Promise<void> {
+export async function detectComfyStartsForJobs(client: Redis, ids: string[]): Promise<void> {
   if (ids.length === 0) return
   const needsLogs = ids.filter((id) => getComfyStartedAt(id) === null)
   if (needsLogs.length === 0) return

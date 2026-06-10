@@ -140,7 +140,10 @@ export const requireAuth: MiddlewareHandler<{ Variables: AppVariables }> = async
  * Sets `c.var.user` exactly like requireAuth does, so downstream
  * requireCapability checks work identically.
  */
-export const personalTokenAuth: MiddlewareHandler<{ Variables: AppVariables }> = async (c, next) => {
+export const personalTokenAuth: MiddlewareHandler<{ Variables: AppVariables }> = async (
+  c,
+  next,
+) => {
   if (c.var.user) return next()
 
   const authHeader = c.req.header('Authorization')
@@ -208,10 +211,7 @@ export function requireCapability(
     const user = c.var.user
     if (!user) return c.json({ error: 'Unauthorized' }, 401)
     if (!can(user.role, capability)) {
-      return c.json(
-        { error: 'Forbidden', code: 'missing_capability', capability },
-        403,
-      )
+      return c.json({ error: 'Forbidden', code: 'missing_capability', capability }, 403)
     }
     return next()
   }

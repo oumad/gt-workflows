@@ -56,7 +56,7 @@ export function registerValidationTools(server: McpServer): void {
         'current value untouched. After applying, if both sub-keys end up ' +
         'unset, the `outputComparator` block itself is dropped from ' +
         'params.json to keep the file clean. ' +
-        '\n\nDoes NOT verify `inputNodeId` exists in workflow.json — that\'s ' +
+        "\n\nDoes NOT verify `inputNodeId` exists in workflow.json — that's " +
         'a `validate_params` concern. The comparator silently disables at ' +
         'runtime if the node is missing; the AI should run validate_params ' +
         'after writing to confirm.',
@@ -141,11 +141,11 @@ export function registerValidationTools(server: McpServer): void {
     {
       title: 'Validate params + workflow + SKILL.md',
       description:
-        'Runs coffee-maker\'s deep validator against a workflow\'s ' +
+        "Runs coffee-maker's deep validator against a workflow's " +
         '`params.json`, `workflow.json` and `SKILL.md`. Returns ' +
         '`{ valid, summary, checks[], issues[] }`. ' +
-        '\n\nNote: this is a *coffee-maker side* validator, not gt-plugins\' ' +
-        'authoritative validator (which doesn\'t expose a network endpoint ' +
+        "\n\nNote: this is a *coffee-maker side* validator, not gt-plugins' " +
+        "authoritative validator (which doesn't expose a network endpoint " +
         'yet). Treat passing checks as "no known coffee-maker-visible ' +
         'problems"; treat failing checks as definitive errors. When gt-' +
         'plugins exposes its validator, this tool will additionally proxy it. ' +
@@ -156,7 +156,7 @@ export function registerValidationTools(server: McpServer): void {
         ' subgraphs.nodesOrder / node_parsers.input_nodes exists in ' +
         'workflow.json.\n' +
         '  • Per-node parser inputs: every fieldName declared exists on the ' +
-        'node\'s `inputs`.\n' +
+        "node's `inputs`.\n" +
         '  • Field-level + node-level connectTo: watched nodeId/inputField ' +
         'pairs resolve.\n' +
         '  • outputComparator.inputNodeId resolves.\n' +
@@ -270,7 +270,7 @@ export function registerValidationTools(server: McpServer): void {
           .boolean()
           .describe(
             'Must be true to proceed. This is a forcing function, not a ' +
-              'permission gate — set it only after you\'ve decided the ' +
+              "permission gate — set it only after you've decided the " +
               'restore is intentional.',
           ),
       },

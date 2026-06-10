@@ -237,9 +237,7 @@ function ToolRow({
             whiteSpace: 'pre-wrap',
           }}
         >
-          {tool.description || (
-            <em style={{ color: 'var(--ink-3)' }}>No description provided.</em>
-          )}
+          {tool.description || <em style={{ color: 'var(--ink-3)' }}>No description provided.</em>}
         </div>
       )}
     </div>

@@ -50,12 +50,10 @@ export function analyzeImportBuffer(buf: Buffer, fileName: string): ImportAnalys
   let workflow: Record<string, unknown> | null = null
 
   const looksLikeWorkflow = (obj: Record<string, unknown>) =>
-    Object.values(obj).some(
-      (v) => v != null && typeof v === 'object' && 'class_type' in (v as object),
-    )
+    Object.values(obj).some((v) => v != null && typeof v === 'object' && 'class_type' in v)
   const asObject = (raw: string, label: string): Record<string, unknown> | null => {
     try {
-      const j = JSON.parse(raw)
+      const j: unknown = JSON.parse(raw)
       if (j && typeof j === 'object' && !Array.isArray(j)) return j as Record<string, unknown>
       warnings.push(`${label} is not a JSON object — skipped`)
     } catch {
@@ -121,7 +119,7 @@ export function analyzeImportBuffer(buf: Buffer, fileName: string): ImportAnalys
   let nodeCount = 0
   if (workflow) {
     nodeCount = Object.values(workflow).filter(
-      (v) => v != null && typeof v === 'object' && 'class_type' in (v as object),
+      (v) => v != null && typeof v === 'object' && 'class_type' in v,
     ).length
     if (nodeCount === 0) warnings.push('The workflow file has no recognizable ComfyUI nodes')
   }
@@ -131,7 +129,7 @@ export function analyzeImportBuffer(buf: Buffer, fileName: string): ImportAnalys
 
 /** The few string fields the create form pre-fills from an imported params.json. */
 function importMeta(params: Record<string, unknown> | null) {
-  const s = (k: string) => (params && typeof params[k] === 'string' ? (params[k] as string) : null)
+  const s = (k: string) => (params && typeof params[k] === 'string' ? params[k] : null)
   return {
     label: s('label'),
     category: s('category'),
@@ -142,14 +140,14 @@ function importMeta(params: Record<string, unknown> | null) {
 
 function importServers(params: Record<string, unknown> | null): string[] {
   if (!params) return []
-  return comfyServerUrls(params as ParamsJson)
+  return comfyServerUrls(params)
 }
 
 /** Parse the optional `params` multipart field into a plain object. The wizard
  *  sends the reviewed, server-adjusted params.json here. Throws on bad JSON. */
 function parseParamsField(raw: string | File | undefined): Record<string, unknown> | null {
   if (typeof raw !== 'string' || raw === '') return null
-  const p = JSON.parse(raw)
+  const p: unknown = JSON.parse(raw)
   if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('params must be an object')
   return p as Record<string, unknown>
 }

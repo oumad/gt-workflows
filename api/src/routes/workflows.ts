@@ -33,7 +33,7 @@ app.get('/', requireAuth, (c) => {
 })
 
 // ── GET /workflows/export — download all metadata as JSON ─
-app.get('/export', requireAuth, (c) => {
+app.get('/export', requireAuth, () => {
   return new Response(JSON.stringify(wf.listWorkflows(), null, 2), {
     headers: {
       'Content-Type': 'application/json',
@@ -299,7 +299,11 @@ app.post('/:id/test', requireAuth, async (c) => {
   c.header('X-Accel-Buffering', 'no')
 
   return stream(c, async (s) => {
-    const send = (e: TestEvent) => s.writeln(JSON.stringify(e))
+    // writeln returns a promise; the stream buffers and per-caller ordering
+    // is preserved, so fire-and-forget keeps `send` synchronous for callers.
+    const send = (e: TestEvent): void => {
+      void s.writeln(JSON.stringify(e))
+    }
     let closer: (() => void) | null = null
     s.onAbort(() => {
       try {

@@ -132,7 +132,8 @@ function isSafePlainScalar(value: string): boolean {
 function serialiseScalar(value: unknown): string {
   if (value === null || value === undefined) return 'null'
   if (typeof value === 'boolean') return value ? 'true' : 'false'
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '"' + String(value) + '"'
+  if (typeof value === 'number')
+    return Number.isFinite(value) ? String(value) : '"' + String(value) + '"'
   if (typeof value === 'string') {
     if (isSafePlainScalar(value)) return value
     // Double-quote and escape `"` and `\`. Newlines collapse to `\n` since

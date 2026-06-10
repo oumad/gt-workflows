@@ -5,12 +5,7 @@ import { eq } from 'drizzle-orm'
 import { db, users } from '../db/index.js'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
-import {
-  derivePrimaryRole,
-  deriveIsAdmin,
-  ROLES,
-  type Role,
-} from '../lib/permissions.js'
+import { derivePrimaryRole, deriveIsAdmin, ROLES, type Role } from '../lib/permissions.js'
 import type { AppVariables } from '../types.js'
 
 /* ─── Shared schemas ────────────────────────────────────────────
@@ -32,8 +27,7 @@ type DbUserRow = typeof users.$inferSelect
  *  this so the frontend always sees the same shape. */
 function projectUser(row: Omit<DbUserRow, 'passwordHash'>) {
   const roles = row.roles ?? []
-  const effective =
-    roles.length > 0 ? roles : row.isAdmin ? ['admin'] : ['designer']
+  const effective = roles.length > 0 ? roles : row.isAdmin ? ['admin'] : ['designer']
   return {
     ...row,
     roles: effective,
@@ -70,35 +64,30 @@ const changePasswordSchema = z
   })
   .strict()
 
-app.post(
-  '/me/password',
-  requireAuth,
-  zValidator('json', changePasswordSchema),
-  async (c) => {
-    const me = c.var.user
-    const { currentPassword, newPassword } = c.req.valid('json')
+app.post('/me/password', requireAuth, zValidator('json', changePasswordSchema), async (c) => {
+  const me = c.var.user
+  const { currentPassword, newPassword } = c.req.valid('json')
 
-    const row = await db.query.users.findFirst({
-      where: (u, { eq }) => eq(u.id, me.id),
-      columns: { id: true, passwordHash: true },
-    })
-    if (!row) return c.json({ error: 'Not found' }, 404)
-    if (!row.passwordHash) {
-      // Account has no password yet (created via the bootstrap admin path,
-      // never set one). Refuse the change — the caller should go through
-      // the admin reset path so we don't normalize a "no password" state.
-      return c.json({ error: 'No password is set for this account' }, 400)
-    }
-    const valid = await verifyPassword(currentPassword, row.passwordHash)
-    if (!valid) return c.json({ error: 'Current password is incorrect' }, 401)
-    if (currentPassword === newPassword) {
-      return c.json({ error: 'New password must differ from current' }, 400)
-    }
-    const hash = await hashPassword(newPassword)
-    await db.update(users).set({ passwordHash: hash }).where(eq(users.id, me.id))
-    return c.body(null, 204)
-  },
-)
+  const row = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.id, me.id),
+    columns: { id: true, passwordHash: true },
+  })
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  if (!row.passwordHash) {
+    // Account has no password yet (created via the bootstrap admin path,
+    // never set one). Refuse the change — the caller should go through
+    // the admin reset path so we don't normalize a "no password" state.
+    return c.json({ error: 'No password is set for this account' }, 400)
+  }
+  const valid = await verifyPassword(currentPassword, row.passwordHash)
+  if (!valid) return c.json({ error: 'Current password is incorrect' }, 401)
+  if (currentPassword === newPassword) {
+    return c.json({ error: 'New password must differ from current' }, 400)
+  }
+  const hash = await hashPassword(newPassword)
+  await db.update(users).set({ passwordHash: hash }).where(eq(users.id, me.id))
+  return c.body(null, 204)
+})
 
 // ── PATCH /users/me ───────────────────────────
 const patchMeSchema = z.object({ username: usernameSchema }).strict()
@@ -166,36 +155,30 @@ const createUserSchema = z
   })
   .strict()
 
-app.post(
-  '/',
-  requireAuth,
-  requireAdmin,
-  zValidator('json', createUserSchema),
-  async (c) => {
-    const { username, password, role } = c.req.valid('json')
-    const normalized = username.toLowerCase().trim()
+app.post('/', requireAuth, requireAdmin, zValidator('json', createUserSchema), async (c) => {
+  const { username, password, role } = c.req.valid('json')
+  const normalized = username.toLowerCase().trim()
 
-    const taken = await db.query.users.findFirst({
-      where: (u, { eq }) => eq(u.username, normalized),
-      columns: { id: true },
+  const taken = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.username, normalized),
+    columns: { id: true },
+  })
+  if (taken) return c.json({ error: 'Username is already taken' }, 409)
+
+  const hash = await hashPassword(password)
+  const [row] = await db
+    .insert(users)
+    .values({
+      username: normalized,
+      passwordHash: hash,
+      roles: [role],
+      isAdmin: role === 'admin' || role === 'ops',
     })
-    if (taken) return c.json({ error: 'Username is already taken' }, 409)
-
-    const hash = await hashPassword(password)
-    const [row] = await db
-      .insert(users)
-      .values({
-        username: normalized,
-        passwordHash: hash,
-        roles: [role],
-        isAdmin: role === 'admin' || role === 'ops',
-      })
-      .returning()
-    if (!row) return c.json({ error: 'Failed to create user' }, 500)
-    const { passwordHash: _pw, ...safe } = row
-    return c.json(projectUser(safe), 201)
-  },
-)
+    .returning()
+  if (!row) return c.json({ error: 'Failed to create user' }, 500)
+  const { passwordHash: _pw, ...safe } = row
+  return c.json(projectUser(safe), 201)
+})
 
 // ── DELETE /users/:id — admin removes a user ──
 // Refuses if you're deleting yourself OR you're about to leave the system
@@ -223,9 +206,7 @@ app.delete('/:id', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── POST /users/:id/password — admin resets another user's password ──
-const adminResetPasswordSchema = z
-  .object({ newPassword: passwordSchema })
-  .strict()
+const adminResetPasswordSchema = z.object({ newPassword: passwordSchema }).strict()
 
 app.post(
   '/:id/password',

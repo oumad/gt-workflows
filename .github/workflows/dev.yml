@@ -11,9 +11,9 @@ name: Dev build
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches: [main]
+    branches: [master, V2]
   workflow_dispatch:
 
 concurrency:

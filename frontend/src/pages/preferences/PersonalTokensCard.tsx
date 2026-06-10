@@ -202,10 +202,7 @@ export function PersonalTokensCard() {
               >
                 <KeyRound size={13} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
                 <div className="col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
-                  <div
-                    className="row"
-                    style={{ gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}
-                  >
+                  <div className="row" style={{ gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 13 }}>{t.label}</strong>
                     <span
                       className="mono"
@@ -215,10 +212,7 @@ export function PersonalTokensCard() {
                       {t.prefix}…
                     </span>
                   </div>
-                  <div
-                    className="row"
-                    style={{ gap: 8, fontSize: 10.5, color: 'var(--ink-3)' }}
-                  >
+                  <div className="row" style={{ gap: 8, fontSize: 10.5, color: 'var(--ink-3)' }}>
                     <span>created {relTime(t.createdAt)}</span>
                     <span>·</span>
                     <span>last used {relTime(t.lastUsedAt)}</span>
@@ -231,7 +225,11 @@ export function PersonalTokensCard() {
                   disabled={revoking === t.id}
                   title="Revoke"
                 >
-                  {revoking === t.id ? <RefreshCw size={11} className="spin" /> : <Trash2 size={11} />}
+                  {revoking === t.id ? (
+                    <RefreshCw size={11} className="spin" />
+                  ) : (
+                    <Trash2 size={11} />
+                  )}
                   Revoke
                 </button>
               </div>
@@ -248,9 +246,7 @@ export function PersonalTokensCard() {
         />
       )}
 
-      {freshToken && (
-        <FreshTokenModal token={freshToken} onClose={() => setFreshToken(null)} />
-      )}
+      {freshToken && <FreshTokenModal token={freshToken} onClose={() => setFreshToken(null)} />}
     </>
   )
 }

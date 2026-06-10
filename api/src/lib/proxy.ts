@@ -1,20 +1,27 @@
-import { setGlobalDispatcher, ProxyAgent, Agent, Dispatcher } from 'undici'
+/**
+ * Outbound HTTP policy — every fetch/WebSocket the API makes goes one of
+ * three ways:
+ *
+ *   fetch()              internet targets (Discord). Honors HTTP_PROXY /
+ *                        NO_PROXY via the global dispatcher set at boot.
+ *   internalFetch() /    LAN targets addressed by server records (ComfyUI,
+ *   internalWebSocket()  AI-Toolkit). Direct by default — operator NO_PROXY
+ *                        lists rarely cover bare GPU hostnames, which would
+ *                        wrongly route through the proxy and fail.
+ *                        MONITOR_USE_PROXY=true flips them onto the proxy.
+ *   directFetch()        targets local by definition (the RDP sidecar).
+ *                        Always direct, regardless of MONITOR_USE_PROXY.
+ *
+ * VERSION PIN: keep the npm `undici` dependency on the SAME MAJOR as the
+ * copy bundled in Node (`node -p process.versions.undici`). Native fetch()
+ * is the bundled copy and dispatchers cross that boundary — a major mismatch
+ * fails every dispatched request with UND_ERR_INVALID_ARG (this once marked
+ * all monitored services down). Verify after bumping Node or undici.
+ */
+import { setGlobalDispatcher, ProxyAgent, Agent, Dispatcher, WebSocket } from 'undici'
 import { config } from '../config/index.js'
 
-// IMPORTANT: keep the npm `undici` dependency on the SAME MAJOR as the copy
-// bundled in Node (`node -p process.versions.undici`). Native fetch() is the
-// bundled copy; every dispatcher here crosses that boundary (per-request
-// `dispatcher:` options and setGlobalDispatcher), and a major mismatch breaks
-// them — undici v8 Agents handed to Node 24's v7 fetch fail EVERY request
-// with `TypeError: fetch failed (UND_ERR_INVALID_ARG)`, which once marked all
-// monitored services down. Verify after bumping either Node or undici.
-//
-// Reads HTTP_PROXY / HTTPS_PROXY / NO_PROXY (and their lowercase variants)
-// and installs a global undici dispatcher so that ALL native fetch() calls
-// respect the proxy — including Discord webhooks and any future outbound HTTP.
-//
-// NO_PROXY is a comma-separated list of hostnames / domain suffixes.
-// Requests whose host matches are sent directly, bypassing the proxy.
+// ── Global proxy (internet-facing traffic) ──────────────────────
 
 function parseNoProxy(raw: string): string[] {
   return raw
@@ -32,6 +39,7 @@ function matchesNoProxy(hostname: string, patterns: string[]): boolean {
   })
 }
 
+/** Routes through HTTP(S)_PROXY except for NO_PROXY matches, which go direct. */
 class SelectiveProxyDispatcher extends Dispatcher {
   private readonly proxy: ProxyAgent
   private readonly direct: Agent
@@ -58,6 +66,8 @@ class SelectiveProxyDispatcher extends Dispatcher {
   }
 }
 
+/** Install the global dispatcher so ALL plain fetch() calls honor the proxy
+ *  env vars. Runs once at boot, before any fetch. No-op without a proxy. */
 export function setupGlobalProxy(): void {
   if (!config.proxyUrl) return
 
@@ -67,10 +77,39 @@ export function setupGlobalProxy(): void {
   console.log(`[proxy] routing outbound HTTP through ${config.proxyUrl}${bypass}`)
 }
 
-/** A direct (no-proxy) dispatcher for outbound HTTP that must never traverse
- *  the corporate proxy — e.g. internal-network probes against ComfyUI /
- *  AI-Toolkit. Some operator NO_PROXY env vars only list FQDNs (`*.foo.com`)
- *  while server records use bare hostnames (`worker-03:8188`), which would
- *  otherwise route through the proxy and fail. Probes are inherently internal,
- *  so we sidestep the question entirely. Singleton — cheap to share. */
+// ── Direct / internal traffic ───────────────────────────────────
+
+/** Shared no-proxy dispatcher. Singleton — cheap to share. */
 export const directDispatcher: Dispatcher = new Agent()
+
+/** RequestInit plus a convenience timeout (ignored when a signal is given). */
+export type FetchInit = RequestInit & { timeoutMs?: number }
+
+function prepare(init: FetchInit): RequestInit {
+  const { timeoutMs, ...rest } = init
+  if (timeoutMs && !rest.signal) rest.signal = AbortSignal.timeout(timeoutMs)
+  return rest
+}
+
+/** fetch() that ALWAYS bypasses the proxy — for targets local by definition
+ *  (the RDP sidecar). The cast bridges undici-types (from @types/node) and
+ *  the explicit undici package; `dispatcher` is honored by native fetch. */
+export function directFetch(url: string | URL, init: FetchInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...prepare(init),
+    dispatcher: directDispatcher,
+  } as unknown as RequestInit)
+}
+
+/** fetch() for LAN targets — anything addressed by a server record. New LAN
+ *  calls MUST use this; plain fetch() is for internet targets only. */
+export function internalFetch(url: string | URL, init: FetchInit = {}): Promise<Response> {
+  return config.MONITOR_USE_PROXY ? fetch(url, prepare(init)) : directFetch(url, init)
+}
+
+/** WebSocket with the same routing policy as internalFetch — a bare
+ *  `new WebSocket()` would use the global dispatcher, i.e. the proxy. */
+export function internalWebSocket(url: string): WebSocket {
+  const dispatcher = config.MONITOR_USE_PROXY ? undefined : directDispatcher
+  return new WebSocket(url, { dispatcher })
+}

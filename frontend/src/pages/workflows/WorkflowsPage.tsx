@@ -106,6 +106,9 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
       })
       return next
     })
+    // Deliberate: `groups` is a fresh array every render — only the SIZE
+    // matters here, and the functional update reads the latest values anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups.length])
 
   useEffect(() => {

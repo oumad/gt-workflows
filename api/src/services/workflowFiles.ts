@@ -33,10 +33,7 @@ import { badRequest, forbidden, notFound, conflict } from '../lib/httpError.js'
    - Reject NUL bytes (path-traversal nasties)
    - Return both the resolved absolute path AND the canonical relative path
      so callers can echo back a clean form. */
-function resolveSafe(
-  folderAbs: string,
-  rel: string,
-): { abs: string; rel: string } {
+function resolveSafe(folderAbs: string, rel: string): { abs: string; rel: string } {
   const cleaned = (rel ?? '').replace(/\\/g, '/').trim()
   if (cleaned.includes('\0')) throw badRequest('Invalid path')
   // Allow empty / "." → folder root
@@ -299,11 +296,7 @@ export function deletePath(id: string, path: string): void {
 
 /* ─── Upload (multipart) ───────────────────────────────────────── */
 
-export async function uploadFile(
-  id: string,
-  destFolder: string,
-  file: File,
-): Promise<FileRead> {
+export async function uploadFile(id: string, destFolder: string, file: File): Promise<FileRead> {
   const { folderAbs } = resolveFolder(id)
   const { abs: destAbs } = resolveSafe(folderAbs, destFolder)
   if (!existsSync(destAbs) || !statSync(destAbs).isDirectory()) {

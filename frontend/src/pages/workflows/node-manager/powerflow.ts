@@ -75,9 +75,11 @@ export function writePowerflow(
 /** Normalize a field spec to its canonical `{name, label, type}` shape for
  *  the editor UI. Strings collapse to `{name: <string>}` so all consumers
  *  can treat the field uniformly. */
-export function normalizeField(
-  spec: PowerflowFieldSpec,
-): { name: string; label?: string; type?: string } {
+export function normalizeField(spec: PowerflowFieldSpec): {
+  name: string
+  label?: string
+  type?: string
+} {
   if (typeof spec === 'string') return { name: spec }
   return { name: spec.name, label: spec.label, type: spec.type }
 }

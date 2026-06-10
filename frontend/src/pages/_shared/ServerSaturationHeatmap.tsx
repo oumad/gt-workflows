@@ -28,8 +28,10 @@ const TILE_H = 80
 function saturationColor(ratio: number): string {
   if (ratio <= 0) return 'color-mix(in oklab, var(--good) 22%, var(--surface))'
   if (ratio < 0.4) return `color-mix(in oklab, var(--good) ${30 + ratio * 40}%, var(--surface))`
-  if (ratio < 0.8) return `color-mix(in oklab, var(--warn) ${40 + (ratio - 0.4) * 60}%, var(--surface))`
-  if (ratio < 1) return `color-mix(in oklab, var(--bad) ${60 + (ratio - 0.8) * 100}%, var(--surface))`
+  if (ratio < 0.8)
+    return `color-mix(in oklab, var(--warn) ${40 + (ratio - 0.4) * 60}%, var(--surface))`
+  if (ratio < 1)
+    return `color-mix(in oklab, var(--bad) ${60 + (ratio - 0.8) * 100}%, var(--surface))`
   return 'var(--bad)'
 }
 

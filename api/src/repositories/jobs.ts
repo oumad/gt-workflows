@@ -213,9 +213,7 @@ export async function statsByStatus(): Promise<StatsByStatus> {
  *  UUIDs and lora ids always do. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export async function findJobAnywhere(
-  id: string,
-): Promise<
+export async function findJobAnywhere(id: string): Promise<
   | { type: 'wf'; row: { id: string; workflowName: string; status: string; serverUrl: string } }
   | {
       type: 'lora'

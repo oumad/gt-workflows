@@ -82,9 +82,7 @@ function applyArrayMode(
   values: string[] | undefined,
 ): string[] | null {
   if (mode === 'clear') return null
-  const safeCurrent = Array.isArray(current)
-    ? (current.filter((v) => typeof v === 'string') as string[])
-    : []
+  const safeCurrent = Array.isArray(current) ? current.filter((v) => typeof v === 'string') : []
   const safeValues = values ?? []
   if (mode === 'replace') return safeValues
   if (mode === 'add') {
@@ -112,7 +110,7 @@ export function registerWorkflowMetadataTools(server: McpServer): void {
     {
       title: 'Set workflow metadata',
       description:
-        'Updates the workflow\'s top-level scalar metadata fields on ' +
+        "Updates the workflow's top-level scalar metadata fields on " +
         'params.json: label (display name), description, category, order ' +
         '(sort key in the workflow list), timeout (seconds). All fields ' +
         'optional; omit a field to leave it unchanged, pass `null` to clear ' +
@@ -135,9 +133,7 @@ export function registerWorkflowMetadataTools(server: McpServer): void {
           .string()
           .nullable()
           .optional()
-          .describe(
-            'Display name. null clears (falls back to prettified folder slug).',
-          ),
+          .describe('Display name. null clears (falls back to prettified folder slug).'),
         description: z
           .string()
           .nullable()
@@ -289,7 +285,7 @@ export function registerWorkflowMetadataTools(server: McpServer): void {
         'semantics as set_workflow_tags: add / remove / replace / clear. ' +
         '\n\nLegacy compatibility: params.json historically used `serverIds` ' +
         'as an alias. This tool always writes to `servers` AND scrubs any ' +
-        'legacy `serverIds` key in the same patch, so the two can\'t drift. ' +
+        "legacy `serverIds` key in the same patch, so the two can't drift. " +
         '\n\nDoes NOT validate that the provided ids/URLs actually exist in ' +
         'the Servers table — a runtime check happens at job dispatch.',
       annotations: {
@@ -358,7 +354,7 @@ export function registerWorkflowMetadataTools(server: McpServer): void {
       title: 'Set workflow icon badge',
       description:
         'Patches `params.iconBadge` — the small overlaid label on a ' +
-        'workflow\'s card icon. Shape: ' +
+        "workflow's card icon. Shape: " +
         '`{ content?: string, backgroundColor?: string, color?: string }`. ' +
         '\n\nMerge semantics: pass a key to set it, pass `null` for a key to ' +
         'clear just that sub-key, omit a key to leave it unchanged. After ' +
@@ -395,9 +391,7 @@ export function registerWorkflowMetadataTools(server: McpServer): void {
         remove: z
           .boolean()
           .optional()
-          .describe(
-            'When true, drops the entire iconBadge block (ignores other args).',
-          ),
+          .describe('When true, drops the entire iconBadge block (ignores other args).'),
       },
     },
     async ({ workflowId, content, backgroundColor, color, remove }, extra) => {

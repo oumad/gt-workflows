@@ -11,6 +11,7 @@ import { resolve, join } from 'node:path'
 import crypto from 'node:crypto'
 import { getWorkflowsDir, isInsideDir } from '../lib/workflowFs.js'
 import { badRequest, notFound, internalError, HttpError } from '../lib/httpError.js'
+import { internalFetch, internalWebSocket } from '../lib/proxy.js'
 import { findEntry, readParams, resolveComfyServer } from './workflows.js'
 import type { AuditResult } from '../models/workflows.js'
 
@@ -41,6 +42,11 @@ function loadWorkflowAndServer(id: string, preferredServer?: string) {
 
   return { workflowJson, server }
 }
+
+/** ComfyUI event fields are strings/numbers in practice; objects are never
+ *  expected — JSON.stringify is just the safe fallback for the unexpected. */
+const asStr = (v: unknown): string =>
+  typeof v === 'object' && v != null ? JSON.stringify(v) : String(v)
 
 /* ─── Test runner (streaming) ───────────────────────────────── */
 
@@ -75,8 +81,7 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
   const { workflowJson, server } = loadWorkflowAndServer(opts.id, opts.preferredServer)
   const clientId = crypto.randomUUID()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ws: any = null
+  let ws: ReturnType<typeof internalWebSocket> | null = null
   opts.onCleanup(() => {
     try {
       ws?.close()
@@ -87,7 +92,9 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
 
   let submitRes: Response
   try {
-    submitRes = await fetch(`${server.url}/prompt`, {
+    // internalFetch: the ComfyUI server is a LAN host — must not go through
+    // the corporate HTTP_PROXY.
+    submitRes = await internalFetch(`${server.url}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflowJson, client_id: clientId }),
@@ -104,7 +111,7 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
       const j = (await submitRes.json()) as Record<string, unknown>
       if (typeof j['error'] === 'string') errMsg = j['error']
       else if (j['node_errors'])
-        errMsg = 'Node errors on: ' + Object.keys(j['node_errors'] as object).join(', ')
+        errMsg = 'Node errors on: ' + Object.keys(j['node_errors']).join(', ')
     } catch {}
     opts.send({ event: 'error', message: errMsg })
     return
@@ -139,30 +146,34 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
   const wsUrl =
     server.url.replace(/^https?/, (m) => (m === 'https' ? 'wss' : 'ws')) +
     `/ws?clientId=${clientId}`
-  const { WebSocket: UndiciWS } = await import('undici')
-  ws = new UndiciWS(wsUrl)
+  // internalWebSocket: same LAN routing policy as the HTTP calls — a bare
+  // WebSocket would dispatch through the global (proxy) dispatcher.
+  // `sock` is the non-null handle for the handlers below; `ws` mirrors it so
+  // the onCleanup closure registered above can close it.
+  const sock = internalWebSocket(wsUrl)
+  ws = sock
 
   await new Promise<void>((res) => {
     const timer = setTimeout(
       () => {
         opts.send({ event: 'error', message: 'Timed out waiting for execution' })
         try {
-          ws?.close()
+          sock.close()
         } catch {}
         res()
       },
       10 * 60 * 1000,
     )
 
-    ws.addEventListener('open', () => {
+    sock.addEventListener('open', () => {
       opts.send({ event: 'connected' })
     })
 
-    ws.addEventListener('message', (event: { data: unknown }) => {
+    sock.addEventListener('message', (event: { data: unknown }) => {
       if (typeof event.data !== 'string') return
       let msg: { type?: string; data?: Record<string, unknown> }
       try {
-        msg = JSON.parse(event.data)
+        msg = JSON.parse(event.data) as typeof msg
       } catch {
         return
       }
@@ -175,18 +186,18 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
           opts.send({ event: 'done', success: true })
           clearTimeout(timer)
           try {
-            ws?.close()
+            sock.close()
           } catch {}
           res()
         } else {
-          opts.send({ event: 'executing', node: String(data['node']) })
+          opts.send({ event: 'executing', node: asStr(data['node']) })
         }
       } else if (type === 'executed') {
-        opts.send({ event: 'executed', node: String(data['node']) })
+        opts.send({ event: 'executed', node: asStr(data['node']) })
       } else if (type === 'progress') {
         opts.send({
           event: 'progress',
-          node: String(data['node']),
+          node: asStr(data['node']),
           value: Number(data['value']),
           max: Number(data['max']),
         })
@@ -201,9 +212,9 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
         opts.send({
           event: 'done',
           success: false,
-          nodeId: String(data['node_id'] ?? ''),
-          nodeType: String(data['node_type'] ?? ''),
-          error: String(data['exception_message'] ?? 'Unknown error'),
+          nodeId: asStr(data['node_id'] ?? ''),
+          nodeType: asStr(data['node_type'] ?? ''),
+          error: asStr(data['exception_message'] ?? 'Unknown error'),
         })
         clearTimeout(timer)
         try {
@@ -220,13 +231,13 @@ export async function runWorkflowTest(opts: TestRunnerOptions): Promise<void> {
       }
     })
 
-    ws.addEventListener('error', () => {
+    sock.addEventListener('error', () => {
       opts.send({ event: 'error', message: 'WebSocket connection to ComfyUI failed' })
       clearTimeout(timer)
       res()
     })
 
-    ws.addEventListener('close', () => {
+    sock.addEventListener('close', () => {
       clearTimeout(timer)
       res()
     })
@@ -251,7 +262,9 @@ export async function auditWorkflow(id: string, preferredServer?: string): Promi
 
   let objectInfo: Record<string, ObjNode>
   try {
-    const res = await fetch(`${server.url}/object_info`, { signal: AbortSignal.timeout(15_000) })
+    const res = await internalFetch(`${server.url}/object_info`, {
+      signal: AbortSignal.timeout(15_000),
+    })
     if (!res.ok)
       throw new HttpError(
         502,

@@ -173,7 +173,7 @@ export async function entityDrilldown(
       kind,
       id,
       range: { days },
-      kpis: (kpis[0] as Record<string, unknown> | undefined) ?? null,
+      kpis: kpis[0] ?? null,
       trend,
       byError: byErrorRows,
       byServer: byServerRows,

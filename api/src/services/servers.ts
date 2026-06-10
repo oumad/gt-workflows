@@ -338,7 +338,11 @@ export async function scrapeServers(): Promise<ScrapeResult> {
         const p = join(dir, entry.name, 'params.json')
         if (!existsSync(p)) return
         try {
-          const params = JSON.parse(readFileSync(p, 'utf-8'))
+          const params = JSON.parse(readFileSync(p, 'utf-8')) as {
+            comfyui_config?: { serverUrl?: unknown }
+            servers?: unknown
+            serverIds?: unknown
+          }
           const raw: unknown = params.comfyui_config?.serverUrl
           const urls: string[] = Array.isArray(raw)
             ? raw.filter((x): x is string => typeof x === 'string')
@@ -484,9 +488,7 @@ export async function scrapeServers(): Promise<ScrapeResult> {
     // Stays in the API log even though the response doesn't carry it — the
     // result type is frozen by the wire contract. Operators see the count
     // in the deploy logs when something looks off.
-    console.warn(
-      `[scrape] skipped invalid URLs=${invalidUrls} emptyNames=${emptyNames}`,
-    )
+    console.warn(`[scrape] skipped invalid URLs=${invalidUrls} emptyNames=${emptyNames}`)
   }
 
   // Probe everything right away so freshly-scraped servers/services show their

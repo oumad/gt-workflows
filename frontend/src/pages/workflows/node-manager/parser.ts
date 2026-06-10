@@ -329,14 +329,14 @@ export function applyModelToWorkflow(model: ParsedModel, rawWorkflow: RawWorkflo
  * Untouched fields keep whatever connectTo (or lack thereof) rawParams
  * already had — we never delete a block that's only in rawParams.
  */
-export function applyFieldConnectToToParams(
-  model: ParsedModel,
-  rawParams: RawParams,
-): RawParams {
+export function applyFieldConnectToToParams(model: ParsedModel, rawParams: RawParams): RawParams {
   // Fast path: collect all fields that carry a fieldConnectTo. If none, the
   // clone-and-walk below would be wasted work.
-  const entries: { nodeId: string; fieldName: string; spec: NonNullable<ParsedField['fieldConnectTo']> }[] =
-    []
+  const entries: {
+    nodeId: string
+    fieldName: string
+    spec: NonNullable<ParsedField['fieldConnectTo']>
+  }[] = []
   for (const sec of model.sections) {
     const fields = sec.kind === 'field' ? [sec.field] : sec.kind === 'category' ? sec.children : []
     for (const f of fields) {

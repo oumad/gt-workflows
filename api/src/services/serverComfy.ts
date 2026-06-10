@@ -7,36 +7,11 @@
  * host must not hang the request thread.
  */
 import { badRequest, notFound, HttpError } from '../lib/httpError.js'
+import { comfyGet, comfyPost } from '../lib/comfy.js'
 import * as repo from '../repositories/servers.js'
 import type { ComfyStatsResponse, ComfyLogsResponse } from '../models/servers.js'
 
-const COMFY_PROXY_TIMEOUT_MS = 5_000
 const LOG_LIMIT = 100
-
-async function comfyFetch(baseUrl: string, path: string): Promise<Response> {
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), COMFY_PROXY_TIMEOUT_MS)
-  try {
-    return await fetch(`${baseUrl.replace(/\/+$/, '')}${path}`, { signal: ctl.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function comfyPost(baseUrl: string, path: string, body: unknown): Promise<Response> {
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), COMFY_PROXY_TIMEOUT_MS)
-  try {
-    return await fetch(`${baseUrl.replace(/\/+$/, '')}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctl.signal,
-    })
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 function trimLogPayload(data: unknown): unknown {
   if (typeof data === 'string') {
@@ -75,7 +50,7 @@ export async function getComfyStats(id: string): Promise<ComfyStatsResponse> {
   const row = await requireWorkflowServer(id)
   let res: Response
   try {
-    res = await comfyFetch(row.url, '/system_stats')
+    res = await comfyGet(row.url, '/system_stats')
   } catch (err) {
     throw new HttpError(
       502,
@@ -107,7 +82,7 @@ export async function getComfyStats(id: string): Promise<ComfyStatsResponse> {
 export async function getComfyLogs(id: string): Promise<ComfyLogsResponse> {
   const row = await requireWorkflowServer(id)
   try {
-    const logsRes = await comfyFetch(row.url, `/internal/logs?max_lines=${LOG_LIMIT}`)
+    const logsRes = await comfyGet(row.url, `/internal/logs?max_lines=${LOG_LIMIT}`)
     if (logsRes.ok) {
       return { source: 'logs', limit: LOG_LIMIT, data: trimLogPayload(await logsRes.json()) }
     }
@@ -116,7 +91,7 @@ export async function getComfyLogs(id: string): Promise<ComfyLogsResponse> {
   }
 
   try {
-    const histRes = await comfyFetch(row.url, `/history?max_items=${LOG_LIMIT}`)
+    const histRes = await comfyGet(row.url, `/history?max_items=${LOG_LIMIT}`)
     if (!histRes.ok)
       throw new HttpError(502, 'comfy_bad_response', `ComfyUI returned ${histRes.status}`)
     return { source: 'history', limit: LOG_LIMIT, data: await histRes.json() }
@@ -135,7 +110,7 @@ export async function getGpuInfo(id: string): Promise<unknown> {
   const row = await requireLoraServer(id)
   let res: Response
   try {
-    res = await comfyFetch(row.url, '/api/gpu')
+    res = await comfyGet(row.url, '/api/gpu')
   } catch (err) {
     throw new HttpError(
       502,

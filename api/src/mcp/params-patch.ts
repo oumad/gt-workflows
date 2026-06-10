@@ -40,9 +40,7 @@ export type ParamsMutator = (params: Record<string, unknown>) => Record<string, 
 export class ParamsValidationError extends Error {
   constructor(public readonly issues: ValidationIssue[]) {
     super(
-      `params.json failed validation: ${issues
-        .map((i) => `${i.path}: ${i.message}`)
-        .join('; ')}`,
+      `params.json failed validation: ${issues.map((i) => `${i.path}: ${i.message}`).join('; ')}`,
     )
     this.name = 'ParamsValidationError'
   }
@@ -56,10 +54,7 @@ export type PatchResult = {
   params: Record<string, unknown>
 }
 
-export function applyParamsPatch(
-  workflowId: string,
-  mutator: ParamsMutator,
-): PatchResult {
+export function applyParamsPatch(workflowId: string, mutator: ParamsMutator): PatchResult {
   const { folderAbs } = resolveFolder(workflowId)
   const before = readParams(folderAbs) as Record<string, unknown>
   // Deep clone via JSON round-trip — params.json is JSON anyway, so this is
@@ -97,10 +92,7 @@ type ComfyConfig = Record<string, unknown>
 
 /** Ensure `params.comfyui_config` exists. Returns a draft where `comfyui_config`
  *  is guaranteed to be an object — never mutates the input. */
-export function withComfyConfig(
-  params: Params,
-  mutator: (cc: ComfyConfig) => ComfyConfig,
-): Params {
+export function withComfyConfig(params: Params, mutator: (cc: ComfyConfig) => ComfyConfig): Params {
   const cc = (params.comfyui_config ?? {}) as ComfyConfig
   const next = mutator({ ...cc })
   return { ...params, comfyui_config: next }
@@ -118,7 +110,7 @@ export function withNodeParser(
   return withComfyConfig(params, (cc) => {
     const np = (cc.node_parsers ?? {}) as Record<string, unknown>
     const inputNodes = (np.input_nodes ?? {}) as Record<string, Record<string, unknown>>
-    const current = (inputNodes[nodeId] ?? {}) as Record<string, unknown>
+    const current = inputNodes[nodeId] ?? {}
     const next = mutator({ ...current })
     const updatedInputNodes = { ...inputNodes }
     if (next === null) delete updatedInputNodes[nodeId]

@@ -117,7 +117,8 @@ function validateFrontmatterAgainst(
     issues.push({
       level: 'error',
       path: 'SKILL.md',
-      message: 'SKILL.md has no YAML frontmatter — add `---\\nname: ...\\nmediaType: ...\\n---` at the top.',
+      message:
+        'SKILL.md has no YAML frontmatter — add `---\\nname: ...\\nmediaType: ...\\n---` at the top.',
     })
     return issues
   }
@@ -164,13 +165,13 @@ export function registerImagineTools(server: McpServer): void {
       description:
         'Sets/updates `params.imagine.mainMediaNode` — the single anchor ' +
         'that tells the Imagine app which ComfyUI node + input carries the ' +
-        'workflow\'s primary media (image / video / 3d). ' +
+        "workflow's primary media (image / video / 3d). " +
         '\n\nProduces:\n```\nimagine: {\n  mainMediaNode: { id, fieldName, type }\n}\n```\n\n' +
         'Always REPLACES mainMediaNode entirely — pass all three keys ' +
         '(id, fieldName, type). To clear the imagine block, use ' +
         'remove_imagine_config. ' +
         '\n\nDoes NOT verify the node/field actually exists in workflow.json ' +
-        '— that\'s what validate_imagine is for. After setting, run ' +
+        "— that's what validate_imagine is for. After setting, run " +
         'validate_imagine to confirm everything cross-references correctly. ' +
         'If SKILL.md exists and has a mediaType, also remember to update ' +
         'it via write_skill_md so the two agree.',
@@ -224,7 +225,7 @@ export function registerImagineTools(server: McpServer): void {
         'Removes the entire `imagine` block from params.json — including ' +
         'mainMediaNode and any other future imagine-related keys. ' +
         'Idempotent: a no-op if `imagine` is already absent. ' +
-        '\n\nDoes NOT touch SKILL.md. After removal, SKILL.md\'s mediaType ' +
+        "\n\nDoes NOT touch SKILL.md. After removal, SKILL.md's mediaType " +
         '(if any) is no longer anchored — consider clearing it via ' +
         'write_skill_md or leaving it for documentation.',
       annotations: {
@@ -270,14 +271,14 @@ export function registerImagineTools(server: McpServer): void {
     {
       title: 'Read SKILL.md',
       description:
-        'Reads `SKILL.md` from the workflow\'s folder root. Returns ' +
+        "Reads `SKILL.md` from the workflow's folder root. Returns " +
         '{ exists, raw, frontmatter, body, warnings, modifiedAt }. ' +
         '\n\nfrontmatter is the parsed YAML object from between the leading ' +
         '`---` delimiters (or null if no frontmatter block exists). body is ' +
         'the markdown body after the closing `---`. warnings flags ' +
         'indented/list-style frontmatter lines this minimal parser skipped — ' +
         'expect them empty for well-formed files. ' +
-        '\n\nIf the file doesn\'t exist, returns `{ exists: false }` with ' +
+        "\n\nIf the file doesn't exist, returns `{ exists: false }` with " +
         'empty raw/body — never errors on missing file (write_skill_md ' +
         'creates it).',
       annotations: {
@@ -304,7 +305,7 @@ export function registerImagineTools(server: McpServer): void {
     {
       title: 'Write SKILL.md',
       description:
-        'Writes/updates the workflow\'s SKILL.md. Re-serialises the ' +
+        "Writes/updates the workflow's SKILL.md. Re-serialises the " +
         'provided frontmatter into the `---` block at the top, followed by ' +
         'the markdown body. ' +
         '\n\nValidation BEFORE write — refuses to persist if any check ' +
@@ -332,10 +333,7 @@ export function registerImagineTools(server: McpServer): void {
       inputSchema: {
         workflowId: workflowIdSchema,
         frontmatter: z
-          .record(
-            z.string(),
-            z.union([z.string(), z.number(), z.boolean(), z.null()]),
-          )
+          .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
           .describe(
             'YAML frontmatter as a flat key/value object. Required keys: ' +
               '`name` (must equal the workflow slug), and `mediaType` if ' +
@@ -397,7 +395,7 @@ export function registerImagineTools(server: McpServer): void {
         '\n\nChecks performed:\n' +
         '  • `params.imagine.mainMediaNode` is set with id/fieldName/type.\n' +
         '  • The referenced node id exists in workflow.json.\n' +
-        '  • The referenced fieldName exists on that node\'s `inputs`.\n' +
+        "  • The referenced fieldName exists on that node's `inputs`.\n" +
         '  • SKILL.md exists in the workflow folder.\n' +
         '  • SKILL.md has YAML frontmatter.\n' +
         '  • SKILL.md frontmatter.name == workflow slug.\n' +
@@ -405,7 +403,7 @@ export function registerImagineTools(server: McpServer): void {
         'mainMediaNode.type.\n\n' +
         'No side effects — purely diagnostic. Use after set_imagine_config ' +
         'and write_skill_md to confirm everything ties up. Surface the ' +
-        '`issues[]` to the user verbatim — they\'re written for human reading.',
+        "`issues[]` to the user verbatim — they're written for human reading.",
       annotations: {
         readOnlyHint: true,
         idempotentHint: true,
@@ -439,7 +437,7 @@ export function registerImagineTools(server: McpServer): void {
             path: 'params.imagine.mainMediaNode',
             message:
               'Imagine block is not configured. Run set_imagine_config to point at ' +
-              'the workflow\'s primary media node.',
+              "the workflow's primary media node.",
           })
         }
 
@@ -455,7 +453,10 @@ export function registerImagineTools(server: McpServer): void {
             id: 'mainMediaNode_shape',
             label: 'mainMediaNode has id/fieldName/type',
             ok: idOk && fieldOk && typeOk,
-            detail: !idOk || !fieldOk || !typeOk ? `id=${idOk} fieldName=${fieldOk} type=${typeOk}` : undefined,
+            detail:
+              !idOk || !fieldOk || !typeOk
+                ? `id=${idOk} fieldName=${fieldOk} type=${typeOk}`
+                : undefined,
           })
           if (!(idOk && fieldOk && typeOk)) {
             issues.push({
@@ -477,7 +478,7 @@ export function registerImagineTools(server: McpServer): void {
               level: 'error',
               path: 'workflow.json',
               message:
-                'workflow.json is missing or unreadable. The Imagine reference can\'t be resolved.',
+                "workflow.json is missing or unreadable. The Imagine reference can't be resolved.",
             })
           } else if (idOk) {
             const node = wf[mn.id] as { inputs?: Record<string, unknown> } | undefined
@@ -494,7 +495,7 @@ export function registerImagineTools(server: McpServer): void {
                 message: `Node "${mn.id}" doesn't exist in workflow.json. Run read_workflow to see valid node ids.`,
               })
             } else if (fieldOk) {
-              const inputs = node.inputs as Record<string, unknown> | undefined
+              const inputs = node.inputs
               const fieldExists =
                 inputs != null && typeof inputs === 'object' && mn.fieldName in inputs
               checks.push({

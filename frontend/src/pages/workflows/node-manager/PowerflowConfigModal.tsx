@@ -94,9 +94,7 @@ export function PowerflowConfigModal({
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600 }}
-            >
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600 }}>
               PowerFlow configuration
             </div>
             <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
@@ -323,8 +321,7 @@ function NodeSpecRow({
 
   const addField = () => {
     const nextName = knownInputs.find(
-      (n) =>
-        !spec.fields.some((f) => (typeof f === 'string' ? f === n : f.name === n)),
+      (n) => !spec.fields.some((f) => (typeof f === 'string' ? f === n : f.name === n)),
     )
     onChange({ fields: [...spec.fields, nextName ?? 'new_field'] })
   }
@@ -347,9 +344,7 @@ function NodeSpecRow({
         flexDirection: 'column',
       }}
     >
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
         <button
           className="btn btn-sm btn-icon"
           onClick={() => setOpen((v) => !v)}
@@ -399,11 +394,7 @@ function NodeSpecRow({
               onRemove={() => removeField(i)}
             />
           ))}
-          <button
-            className="btn btn-sm"
-            onClick={addField}
-            style={{ alignSelf: 'flex-start' }}
-          >
+          <button className="btn btn-sm" onClick={addField} style={{ alignSelf: 'flex-start' }}>
             <Plus size={12} /> Add field
           </button>
         </div>

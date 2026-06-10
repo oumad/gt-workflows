@@ -10,7 +10,13 @@ import { Workflow, Briefcase, Boxes, Server, ArrowRight, Zap, Cpu, BarChart2 } f
 import { isHostRecord } from '../../lib/serverLinks'
 import { useData } from '../../context/DataContext'
 import type { Page } from '../../types'
-import { JobModal, unifiedToRow, type UnifiedJob, type UnifiedJobsPage, type Row } from '../jobs/shared'
+import {
+  JobModal,
+  unifiedToRow,
+  type UnifiedJob,
+  type UnifiedJobsPage,
+  type Row,
+} from '../jobs/shared'
 import type { UnifiedLiveResponse } from '../jobs/jobs-types'
 
 interface JobsStats {

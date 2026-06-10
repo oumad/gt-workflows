@@ -92,7 +92,8 @@ export function ServerTopUsersWidget({
           rows.map((u) => {
             const widthPct = (u.total / maxTotal) * 100
             const failPct = u.total > 0 ? (u.failed / u.total) * 100 : 0
-            const tone = failPct >= 25 ? 'var(--bad)' : failPct >= 10 ? 'var(--warn)' : 'var(--accent)'
+            const tone =
+              failPct >= 25 ? 'var(--bad)' : failPct >= 10 ? 'var(--warn)' : 'var(--accent)'
             const clickable = !!(u.userId && navigate)
             return (
               <button
@@ -144,7 +145,9 @@ export function ServerTopUsersWidget({
                     fontFamily: 'var(--font-mono)',
                   }}
                 >
-                  {u.running > 0 && <span style={{ color: 'var(--info)' }}>{u.running} running</span>}
+                  {u.running > 0 && (
+                    <span style={{ color: 'var(--info)' }}>{u.running} running</span>
+                  )}
                   <span style={{ color: 'var(--good)' }}>{u.completed} ok</span>
                   {u.failed > 0 && <span style={{ color: 'var(--bad)' }}>{u.failed} failed</span>}
                 </div>

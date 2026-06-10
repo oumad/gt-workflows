@@ -513,6 +513,9 @@ export function WorkflowDetail({
       .then((res) => setJobs(res.items ?? []))
       .catch(() => {})
       .finally(() => setJobsLoading(false))
+    // Deliberate: refetch only when the workflow identity changes — name and
+    // path always change together with id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wf.id])
 
   const isComfyUI = wf.parser?.toLowerCase() === 'comfyui'

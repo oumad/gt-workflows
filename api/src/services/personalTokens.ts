@@ -106,9 +106,7 @@ export async function createPersonalToken(
   return { token, row: projectToken(row) }
 }
 
-export async function listPersonalTokensForUser(
-  userId: string,
-): Promise<PersonalTokenView[]> {
+export async function listPersonalTokensForUser(userId: string): Promise<PersonalTokenView[]> {
   const rows = await db.query.personalTokens.findMany({
     where: (t, { eq }) => eq(t.userId, userId),
     orderBy: (t) => [desc(t.createdAt)],
@@ -172,8 +170,7 @@ export async function resolveBearerToken(rawToken: string): Promise<ResolvedToke
   // Index lookup by prefix narrows the search to a handful of rows; the
   // constant-time hash compare is the actual auth.
   const candidates = await db.query.personalTokens.findMany({
-    where: (t, { eq, and, isNull }) =>
-      and(eq(t.prefix, prefix), isNull(t.revokedAt)),
+    where: (t, { eq, and, isNull }) => and(eq(t.prefix, prefix), isNull(t.revokedAt)),
   })
 
   for (const t of candidates) {

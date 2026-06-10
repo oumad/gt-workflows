@@ -6,7 +6,12 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import type { User } from '../../types'
 import { Search, X, Check, Shield, Plus, KeyRound, Trash2, AlertCircle } from 'lucide-react'
-import { ROLES as ROLE_VALUES, ROLE_LABEL, ROLE_DESCRIPTION, type Role } from '../../lib/permissions'
+import {
+  ROLES as ROLE_VALUES,
+  ROLE_LABEL,
+  ROLE_DESCRIPTION,
+  type Role,
+} from '../../lib/permissions'
 
 /* ─── Shared password rule (mirrors api/src/routes/users.ts validators) ──
    Min 8 chars. Documented in the create/reset modals so admins know up front
@@ -246,9 +251,7 @@ function UserDrawer({
                     style={{
                       gap: 6,
                       fontSize: 11.5,
-                      color: pwMsg.startsWith('Password updated')
-                        ? 'var(--good)'
-                        : 'var(--bad)',
+                      color: pwMsg.startsWith('Password updated') ? 'var(--good)' : 'var(--bad)',
                     }}
                   >
                     {pwMsg.startsWith('Password updated') ? (
@@ -282,11 +285,7 @@ function UserDrawer({
           <button className="btn btn-sm" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={save}
-            disabled={busy || !dirty}
-          >
+          <button className="btn btn-sm btn-primary" onClick={save} disabled={busy || !dirty}>
             {busy ? 'Saving…' : 'Save changes'}
           </button>
         </div>

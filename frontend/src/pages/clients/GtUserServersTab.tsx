@@ -68,15 +68,11 @@ export function ServersTab({
         {error ? (
           <div style={{ padding: 24, color: 'var(--bad)', fontSize: 13 }}>{error}</div>
         ) : rows == null ? (
-          <div
-            style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}
-          >
+          <div style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
             Loading…
           </div>
         ) : rows.length === 0 ? (
-          <div
-            style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}
-          >
+          <div style={{ padding: 24, color: 'var(--ink-3)', fontSize: 13, textAlign: 'center' }}>
             This user has not run any jobs on a tracked service.
           </div>
         ) : (
@@ -94,8 +90,7 @@ export function ServersTab({
             <tbody>
               {rows.map((r) => {
                 const userMs = Number(r.userDurationMs ?? 0)
-                const sharePct =
-                  r.totalJobs > 0 ? Math.round((r.userJobs / r.totalJobs) * 100) : 0
+                const sharePct = r.totalJobs > 0 ? Math.round((r.userJobs / r.totalJobs) * 100) : 0
                 return (
                   <tr key={r.serverId ?? r.serverName}>
                     <td>

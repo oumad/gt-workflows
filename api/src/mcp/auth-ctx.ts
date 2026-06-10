@@ -34,7 +34,7 @@ export function buildAuthInfo(ctx: McpAuthExtra): AuthInfo {
     token: ctx.tokenPrefix,
     clientId: ctx.user.username,
     scopes: ctx.user.roles,
-    extra: ctx as unknown as Record<string, unknown>,
+    extra: ctx,
   }
 }
 

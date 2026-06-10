@@ -52,7 +52,7 @@ const fieldNameSchema = z
   .string()
   .min(1)
   .describe(
-    'The input field name on a ComfyUI node (the key under the node\'s `inputs` ' +
+    "The input field name on a ComfyUI node (the key under the node's `inputs` " +
       'object). Examples: "text", "ckpt_name", "seed", "steps", "image".',
   )
 
@@ -80,7 +80,7 @@ export function registerWorkflowTools(server: McpServer): void {
         '(human-readable label), parser (e.g. "comfyui", "script"), category, ' +
         'powerflow (true when the workflow has powerflowConfig in params.json), ' +
         'and tags. Use this as the entry point when the user mentions a ' +
-        'workflow by name but you don\'t know its id. The result is sorted by ' +
+        "workflow by name but you don't know its id. The result is sorted by " +
         'category then name. Lightweight — does not read workflow.json.',
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
       inputSchema: {
@@ -221,9 +221,8 @@ export function registerWorkflowTools(server: McpServer): void {
           parserConfig: parserCfg ?? null,
           isHidden: Array.isArray(cc?.hiddenNodeIds) && cc.hiddenNodeIds.includes(nodeId),
           isWrapped: Array.isArray(cc?.wrappedNodeIds) && cc.wrappedNodeIds.includes(nodeId),
-          inputCount: node.inputs && typeof node.inputs === 'object'
-            ? Object.keys(node.inputs as object).length
-            : 0,
+          inputCount:
+            node.inputs && typeof node.inputs === 'object' ? Object.keys(node.inputs).length : 0,
         })
       } catch (err) {
         return toolError(err instanceof Error ? err.message : 'get_node_info failed')
@@ -255,7 +254,9 @@ export function registerWorkflowTools(server: McpServer): void {
     async ({ workflowId, nodeId, fieldName }) => {
       try {
         const wf = readWorkflowJson(workflowId)
-        const node = wf[nodeId] as { class_type?: string; inputs?: Record<string, unknown> } | undefined
+        const node = wf[nodeId] as
+          | { class_type?: string; inputs?: Record<string, unknown> }
+          | undefined
         if (!node) return toolError(`Node ${nodeId} not found`)
         const currentValue = node.inputs?.[fieldName]
         const { folderAbs } = resolveFolder(workflowId)
@@ -289,7 +290,7 @@ export function registerWorkflowTools(server: McpServer): void {
             fieldOverride &&
             typeof fieldOverride === 'object' &&
             !Array.isArray(fieldOverride) &&
-            'connectTo' in (fieldOverride as object)
+            'connectTo' in fieldOverride
               ? (fieldOverride as { connectTo?: unknown }).connectTo
               : null,
           nodeConnectTo: nodeEntry?.connectTo ?? null,
@@ -322,7 +323,7 @@ export function registerWorkflowTools(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            'Snapshot id from the workflow\'s .history folder, e.g. ' +
+            "Snapshot id from the workflow's .history folder, e.g. " +
               '"2025-05-19T10-30-45-123Z__params". Omit to compare against ' +
               'the most recent snapshot.',
           ),
@@ -336,9 +337,7 @@ export function registerWorkflowTools(server: McpServer): void {
         if (snaps.length === 0) {
           return toolError('No snapshots exist for this workflow yet — nothing to diff against')
         }
-        const target = snapshotId
-          ? snaps.find((s) => s.id === snapshotId)
-          : snaps[0] // newest first
+        const target = snapshotId ? snaps.find((s) => s.id === snapshotId) : snaps[0] // newest first
         if (!target) {
           return toolError(`Snapshot ${snapshotId} not found`, {
             available: snaps.map((s) => s.id).slice(0, 10),

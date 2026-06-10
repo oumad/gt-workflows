@@ -109,35 +109,32 @@ export const gtUsers = pgTable(
 // ─────────────────────────────────────────────
 // servers
 // ─────────────────────────────────────────────
-export const servers = pgTable(
-  'servers',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    url: text('url').unique().notNull(),
-    tags: text('tags')
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
-    color: text('color'),
-    description: text('description'),
-    type: text('type').notNull().default('workflow'),
-    gpu: text('gpu'),
-    lastPingAt: timestamp('last_ping_at', { withTimezone: true }),
-    lastPingOk: boolean('last_ping_ok'),
-    lastPingMs: integer('last_ping_ms'),
-    isMaintenance: boolean('is_maintenance').notNull().default(false),
-    // Soft cap for the saturation heatmap: tiles colour by activeJobs / maxConcurrent.
-    // null means the server hasn't been calibrated yet — the UI shows a neutral tile
-    // and the operator can fill it in via the Settings tab.
-    maxConcurrent: integer('max_concurrent'),
-    downSince: timestamp('down_since', { withTimezone: true }),
-    lastAlertAt: timestamp('last_alert_at', { withTimezone: true }),
-    alertCount: integer('alert_count').notNull().default(0),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-)
+export const servers = pgTable('servers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  url: text('url').unique().notNull(),
+  tags: text('tags')
+    .array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+  color: text('color'),
+  description: text('description'),
+  type: text('type').notNull().default('workflow'),
+  gpu: text('gpu'),
+  lastPingAt: timestamp('last_ping_at', { withTimezone: true }),
+  lastPingOk: boolean('last_ping_ok'),
+  lastPingMs: integer('last_ping_ms'),
+  isMaintenance: boolean('is_maintenance').notNull().default(false),
+  // Soft cap for the saturation heatmap: tiles colour by activeJobs / maxConcurrent.
+  // null means the server hasn't been calibrated yet — the UI shows a neutral tile
+  // and the operator can fill it in via the Settings tab.
+  maxConcurrent: integer('max_concurrent'),
+  downSince: timestamp('down_since', { withTimezone: true }),
+  lastAlertAt: timestamp('last_alert_at', { withTimezone: true }),
+  alertCount: integer('alert_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
 
 // ─────────────────────────────────────────────
 // workflows — minimal FK anchor; full config lives in params.json on disk

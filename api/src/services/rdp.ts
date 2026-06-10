@@ -25,7 +25,7 @@ import * as serversRepo from '../repositories/servers.js'
 import * as credentialsRepo from '../repositories/credentials.js'
 import { deriveHealth } from './servers.js'
 import { config } from '../config/index.js'
-import { directDispatcher } from '../lib/proxy.js'
+import { directFetch } from '../lib/proxy.js'
 
 const HOLD_SECONDS = 15
 // Display numbers above :100 are conventional for one-off virtual displays.
@@ -135,7 +135,7 @@ export async function rdpConnect(serverId: string): Promise<RdpConnectResult> {
     throw new HttpError(
       500,
       'decrypt_failed',
-      `Could not decrypt the linked credential: ${err instanceof Error ? err.message : err}`,
+      `Could not decrypt the linked credential: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 
@@ -170,11 +170,10 @@ async function runRdpEmbedded(p: RdpParams): Promise<RdpConnectResult> {
   const start = Date.now()
 
   // 1. Start Xvfb. -nolisten tcp keeps it local to the container.
-  const xvfb = spawn(
-    'Xvfb',
-    [display, '-screen', '0', '1280x800x24', '-nolisten', 'tcp'],
-    { stdio: 'ignore', detached: false },
-  )
+  const xvfb = spawn('Xvfb', [display, '-screen', '0', '1280x800x24', '-nolisten', 'tcp'], {
+    stdio: 'ignore',
+    detached: false,
+  })
   xvfb.on('error', (err) => {
     // Reachable when Xvfb isn't installed — surface as a 500 from the route.
     console.error('[rdp] Xvfb failed to launch:', err.message)
@@ -274,27 +273,18 @@ async function runRdpSidecar(
   token: string | undefined,
 ): Promise<RdpConnectResult> {
   const url = `${bridgeUrl.replace(/\/+$/, '')}/rdp`
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), SIDECAR_TIMEOUT_MS)
   try {
-    // The bridge lives next to the API (sidecar container / same host), so go
-    // direct — a corporate HTTP_PROXY must never sit in this path. Operator
-    // NO_PROXY lists rarely include localhost / 127.0.0.1, which would route
-    // this call through the proxy and fail. Same rationale as the health
-    // probes' directDispatcher in serverHealth.ts. The double cast bridges
-    // undici-types (bundled with @types/node) and the explicit undici package
-    // the Agent comes from; `dispatcher` is honored by native fetch since 18.
-    const init = {
+    // directFetch: the sidecar is local by definition — never proxied, even
+    // when MONITOR_USE_PROXY routes GPU traffic through the corporate proxy.
+    const res = await directFetch(url, {
       method: 'POST',
-      signal: ctl.signal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(p),
-      dispatcher: directDispatcher,
-    } as unknown as RequestInit
-    const res = await fetch(url, init)
+      timeoutMs: SIDECAR_TIMEOUT_MS,
+    })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       throw new HttpError(
@@ -321,8 +311,6 @@ async function runRdpSidecar(
       'rdp_bridge_unreachable',
       err instanceof Error ? err.message : 'RDP bridge request failed',
     )
-  } finally {
-    clearTimeout(timer)
   }
 }
 

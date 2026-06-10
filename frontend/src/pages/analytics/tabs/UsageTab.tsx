@@ -62,6 +62,9 @@ export function UsageTab({ range }: { range: Range }) {
   const [selected, setSelected] = useState<string[]>([])
   useEffect(() => {
     setSelected(dense.map((s) => s.entity))
+    // Deliberate: reset the selection only on group/metric/SIZE change —
+    // `dense` is recomputed every data refresh with a fresh identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBy, metric, dense.length])
 
   const visible = dense.filter((s) => selected.includes(s.entity))

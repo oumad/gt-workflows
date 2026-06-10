@@ -6,7 +6,6 @@ import type { NewWorkflowJob, NewTrainingJob } from '../db/schema.js'
 import {
   parseJobData,
   str,
-  deepFind,
   extractWfServerUrl,
   extractLoraServerUrl,
   extractUserName,
@@ -59,7 +58,7 @@ function pickCreatedAt(h: Record<string, string>): Date {
   if (h['timestamp']) return new Date(Number(h['timestamp']))
   const candidates = [h['processedOn'], h['finishedOn']]
     .map((v) => (v ? Number(v) : NaN))
-    .filter((n) => Number.isFinite(n)) as number[]
+    .filter((n) => Number.isFinite(n))
   if (candidates.length > 0) return new Date(Math.min(...candidates))
   return new Date()
 }
@@ -110,16 +109,23 @@ class SyncService {
   }
 
   start(): void {
-    setTimeout(() => this.run(), 15_000) // first job sync after 15s startup
-    this.timer = setInterval(() => this.run(), INTERVAL)
+    setTimeout(() => void this.run(), 15_000) // first job sync after 15s startup
+    this.timer = setInterval(() => void this.run(), INTERVAL)
 
     // Health probing runs on its own cadence (MONITOR_INTERVAL_MS) so it can be
     // tuned independently of the Redis→Postgres job sync. MONITOR_STAGGER_MS
     // delays the first probe so we don't hammer everything at boot.
+    // `busy` is a re-entrancy guard: if a probe round outlasts the interval
+    // (many servers x full timeouts), skip the tick instead of overlapping.
+    let healthBusy = false
     const runHealth = () => {
-      void syncServerHealth().catch((e) =>
-        console.error('[health] sync failed:', e instanceof Error ? e.message : e),
-      )
+      if (healthBusy) return
+      healthBusy = true
+      void syncServerHealth()
+        .catch((e) => console.error('[health] sync failed:', e instanceof Error ? e.message : e))
+        .finally(() => {
+          healthBusy = false
+        })
     }
     setTimeout(() => {
       runHealth()
@@ -138,17 +144,27 @@ class SyncService {
   }
 
   private async run(): Promise<void> {
+    // Re-entrancy guard: with a large Redis dataset a cycle can outlast the
+    // interval; overlapping cycles upsert the same rows concurrently and
+    // stack DB load for no benefit. Skip the tick instead.
+    if (syncState.running) {
+      console.warn('[sync] previous cycle still running — skipping this tick')
+      return
+    }
     syncState.running = true
-    const results = await Promise.allSettled([
-      this.syncWorkflowJobs(),
-      this.syncLoraJobs(),
-      checkCalendarReminders(),
-    ])
-    syncState.running = false
-    syncState.firstSyncDone = true
-    syncState.lastSyncAt = new Date().toISOString()
-    syncState.lastSyncOk = results.every((r) => r.status === 'fulfilled')
-    syncState.syncCount += 1
+    try {
+      const results = await Promise.allSettled([
+        this.syncWorkflowJobs(),
+        this.syncLoraJobs(),
+        checkCalendarReminders(),
+      ])
+      syncState.lastSyncOk = results.every((r) => r.status === 'fulfilled')
+    } finally {
+      syncState.running = false
+      syncState.firstSyncDone = true
+      syncState.lastSyncAt = new Date().toISOString()
+      syncState.syncCount += 1
+    }
   }
 
   // ── Workflow jobs ─────────────────────────────
@@ -221,7 +237,7 @@ class SyncService {
           // One-time structure debug (set SYNC_DEBUG=1 to enable)
           if (config.SYNC_DEBUG && synced === 0 && pending.length === 0) {
             console.log('[sync:debug] WF job data top-level keys:', Object.keys(data))
-            const wf = (data as Record<string, unknown>)['workflow']
+            const wf = data['workflow']
             if (wf && typeof wf === 'object') {
               console.log('[sync:debug] workflow keys:', Object.keys(wf))
               const cfg = (wf as Record<string, unknown>)['config']

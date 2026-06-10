@@ -185,12 +185,11 @@ export function NodeManager({ wf, isAdmin: _isAdmin, hidden, onDirtyChange, save
    * receives a snapshot and pushes back the full next config; we splice it
    * onto rawParams via writePowerflow. */
   const powerflowCfg = readPowerflow(rawParams as RawParams | null)
-  const handlePowerflowChange = useCallback(
-    (next: PowerflowConfig | null) => {
-      setRawParams((prev) => writePowerflow(prev as RawParams | null, next) as Record<string, unknown>)
-    },
-    [],
-  )
+  const handlePowerflowChange = useCallback((next: PowerflowConfig | null) => {
+    setRawParams(
+      (prev) => writePowerflow(prev as RawParams | null, next) as Record<string, unknown>,
+    )
+  }, [])
   const powerflowEnabled = powerflowCfg?.enabled ?? false
 
   const HEADER_H = 40

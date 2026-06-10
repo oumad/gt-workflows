@@ -5,7 +5,7 @@ import { db, servers } from '../db/index.js'
 import { config } from '../config/index.js'
 import { sendServerStatusAlert, type ServerAlertEvent } from '../lib/discord.js'
 import { recordServerAlerts } from './alerts.js'
-import { directDispatcher } from '../lib/proxy.js'
+import { internalFetch } from '../lib/proxy.js'
 
 // Per-record health monitoring. Two kinds of record, distinguished by URL shape,
 // each checked by its OWN method — they are NOT coupled:
@@ -186,21 +186,12 @@ async function checkServiceReachable(
 ): Promise<{ ok: boolean; ms: number | null }> {
   const path = SERVICE_PATH[type] ?? ''
   const url = `${base}${path}`
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), SERVICE_TIMEOUT_MS)
   const start = Date.now()
   try {
-    // The `dispatcher` option is undici-specific but recognized by Node's
-    // native fetch since 18. Omit it (undefined) → use the global dispatcher
-    // (which honors HTTP_PROXY + NO_PROXY via SelectiveProxyDispatcher).
-    // The cast bridges undici-types (bundled with @types/node) and the
-    // explicit undici package the Agent comes from.
-    const init = {
-      method: 'GET',
-      signal: ctl.signal,
-      ...(config.MONITOR_USE_PROXY ? {} : { dispatcher: directDispatcher }),
-    } as RequestInit
-    const res = await fetch(url, init)
+    // internalFetch goes direct by default and honors MONITOR_USE_PROXY —
+    // the routing policy lives in lib/proxy.ts so every ComfyUI/AI-Toolkit
+    // call (probes, logs, actions, workflow tests) behaves identically.
+    const res = await internalFetch(url, { timeoutMs: SERVICE_TIMEOUT_MS })
     await res.body?.cancel().catch(() => {})
     const ms = Date.now() - start
     if (config.MONITOR_VERBOSE) {
@@ -219,8 +210,6 @@ async function checkServiceReachable(
       )
     }
     return { ok: false, ms: null }
-  } finally {
-    clearTimeout(timer)
   }
 }
 

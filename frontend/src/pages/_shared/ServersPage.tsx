@@ -303,6 +303,9 @@ export function ServersPage({
     if (!loading && detail && !servers.find((x) => x.id === detail)) {
       closeDetail()
     }
+    // closeDetail is recreated every render; the guard above defines when
+    // this effect acts, so depending on it would only add no-op re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, detail, servers])
 
   // Detail view
@@ -549,10 +552,7 @@ export function ServersPage({
                   // misleading in those states.
                   const status = serverStatus(s)
                   const ms = s.health?.latencyMs ?? null
-                  const hasLat =
-                    status !== 'down' &&
-                    status !== 'maintenance' &&
-                    ms != null
+                  const hasLat = status !== 'down' && status !== 'maintenance' && ms != null
                   const latColor = !hasLat
                     ? 'var(--ink-3)'
                     : ms! > 200
@@ -936,7 +936,12 @@ export function ServersPage({
           <ServersMetrics servers={servers} onOpen={setDetail} kindLabel={kindLabel} />
         )}
         {tab === 'insights' && (
-          <ServersInsights servers={servers} onOpen={setDetail} kindLabel={kindLabel} range={range} />
+          <ServersInsights
+            servers={servers}
+            onOpen={setDetail}
+            kindLabel={kindLabel}
+            range={range}
+          />
         )}
         {tab === 'incidents' && (
           <ServersIncidents servers={servers} onOpen={setDetail} kindLabel={kindLabel} />
@@ -1124,31 +1129,31 @@ export function ServersPage({
                       }}
                     />
                   )}
-                <button
-                  className="btn btn-ghost"
-                  style={{
-                    width: '100%',
-                    justifyContent: 'flex-start',
-                    borderRadius: 6,
-                    padding: '7px 12px',
-                    fontSize: 13,
-                    gap: 9,
-                    whiteSpace: 'nowrap',
-                  }}
-                  onClick={item.action}
-                >
-                  <span
+                  <button
+                    className="btn btn-ghost"
                     style={{
-                      color: item.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexShrink: 0,
+                      width: '100%',
+                      justifyContent: 'flex-start',
+                      borderRadius: 6,
+                      padding: '7px 12px',
+                      fontSize: 13,
+                      gap: 9,
+                      whiteSpace: 'nowrap',
                     }}
+                    onClick={item.action}
                   >
-                    {item.icon}
-                  </span>
-                  {item.label}
-                </button>
+                    <span
+                      style={{
+                        color: item.color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </button>
                 </Fragment>
               ))}
             </div>

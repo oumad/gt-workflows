@@ -108,7 +108,7 @@ function checkComfyConfig(
   if (subgraphs && typeof subgraphs === 'object') {
     for (const [sgId, sg] of Object.entries(subgraphs)) {
       if (!sg || typeof sg !== 'object') continue
-      const order = (sg as { nodesOrder?: unknown }).nodesOrder
+      const order = sg.nodesOrder
       if (!Array.isArray(order)) continue
       const missing = order.filter((id) => typeof id === 'string' && !getNode(workflow, id))
       const ok = missing.length === 0
@@ -163,7 +163,7 @@ function checkComfyConfig(
           issues.push({
             level: 'error',
             path: `comfyui_config.node_parsers.input_nodes.${nodeId}.inputs.${fieldName}`,
-            message: `Field "${fieldName}" is not declared on node ${nodeId}\'s inputs.`,
+            message: `Field "${fieldName}" is not declared on node ${nodeId}'s inputs.`,
           })
         }
 
@@ -259,7 +259,10 @@ function checkPowerflow(
   const pf = params.powerflowConfig as Record<string, unknown> | undefined
   if (!pf) return
   const ac = pf.availableConnections as
-    | { inputs?: Array<{ nodeId?: string; fields?: unknown }>; outputs?: Array<{ nodeId?: string; fields?: unknown }> }
+    | {
+        inputs?: Array<{ nodeId?: string; fields?: unknown }>
+        outputs?: Array<{ nodeId?: string; fields?: unknown }>
+      }
     | undefined
   if (!ac) return
 
@@ -298,7 +301,7 @@ function checkPowerflow(
             issues.push({
               level: 'error',
               path: `powerflowConfig.availableConnections.${side}[].fields.${fname}`,
-              message: `Field "${fname}" is not declared on node ${nodeId}\'s inputs.`,
+              message: `Field "${fname}" is not declared on node ${nodeId}'s inputs.`,
             })
           }
         }
@@ -314,7 +317,9 @@ function checkImagine(
   checks: ValidationCheck[],
   issues: ValidationIssue[],
 ): void {
-  const imagine = params.imagine as { mainMediaNode?: { id?: string; fieldName?: string; type?: string } } | undefined
+  const imagine = params.imagine as
+    | { mainMediaNode?: { id?: string; fieldName?: string; type?: string } }
+    | undefined
   if (!imagine) return // imagine is optional — skip the section entirely
 
   const mn = imagine.mainMediaNode
@@ -322,7 +327,8 @@ function checkImagine(
     issues.push({
       level: 'warning',
       path: 'imagine',
-      message: 'imagine block is present but mainMediaNode is missing — set it via set_imagine_config.',
+      message:
+        'imagine block is present but mainMediaNode is missing — set it via set_imagine_config.',
     })
     return
   }

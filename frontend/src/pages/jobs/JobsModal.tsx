@@ -62,13 +62,7 @@ export function JobName({ row }: { row: Row }) {
 const SLOW_THRESHOLD = 1.5
 const VERY_SLOW_THRESHOLD = 2
 
-export function SlowChip({
-  row,
-  avgSec,
-}: {
-  row: Row
-  avgSec: number | undefined
-}) {
+export function SlowChip({ row, avgSec }: { row: Row; avgSec: number | undefined }) {
   if (!avgSec || avgSec <= 0) return null
   // Don't pass judgment on a run that didn't complete cleanly.
   if (row.status === 'failed' || row.status === 'cancelled') return null
@@ -156,7 +150,7 @@ function JsonHighlight({ text, highlight }: { text: string; highlight: string })
   const tokenize = (line: string) => {
     const out: Array<{ t: string; v: string }> = []
     const re =
-      /("(?:\\.|[^"\\])*")(\s*:)?|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|\b(true|false)\b|\b(null)\b|([{}\[\],])/g
+      /("(?:\\.|[^"\\])*")(\s*:)?|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|\b(true|false)\b|\b(null)\b|([{}[\],])/g
     let i = 0,
       m: RegExpExecArray | null
     while ((m = re.exec(line)) !== null) {

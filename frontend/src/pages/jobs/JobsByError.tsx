@@ -118,7 +118,10 @@ export function JobsByError() {
       ) : error ? (
         <div className="alert alert-error">{error}</div>
       ) : groups.length === 0 ? (
-        <div className="card card-pad" style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 40 }}>
+        <div
+          className="card card-pad"
+          style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 40 }}
+        >
           No failures in this range.
         </div>
       ) : (
@@ -202,11 +205,7 @@ export function JobsByError() {
                     </thead>
                     <tbody>
                       {g.jobs.map((r) => (
-                        <tr
-                          key={r.key}
-                          onClick={() => setOpenRow(r)}
-                          style={{ cursor: 'pointer' }}
-                        >
+                        <tr key={r.key} onClick={() => setOpenRow(r)} style={{ cursor: 'pointer' }}>
                           <td>
                             <JobKindBadge kind={r.kind} />
                           </td>
@@ -221,7 +220,10 @@ export function JobsByError() {
                           <td style={{ color: r.who === '—' ? 'var(--ink-3)' : undefined }}>
                             {r.who}
                           </td>
-                          <td className="mono" style={{ color: !r.server ? 'var(--ink-3)' : undefined }}>
+                          <td
+                            className="mono"
+                            style={{ color: !r.server ? 'var(--ink-3)' : undefined }}
+                          >
                             {r.server ?? '—'}
                           </td>
                           <td className="mono">{fmtSec(r.totalSec)}</td>

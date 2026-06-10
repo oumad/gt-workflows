@@ -674,9 +674,7 @@ async function checkServer(serverId: string, cfg: Cfg): Promise<Finding[]> {
     // record with a port shares the host with its sibling services, so we
     // aggregate caps from all of them (including svr itself).
     const sameHostServers = all.filter((s) => hostnameOf(s.url) === hostname)
-    const hostCap = sameHostServers
-      .map((s) => s.maxConcurrent ?? 0)
-      .reduce((a, b) => a + b, 0)
+    const hostCap = sameHostServers.map((s) => s.maxConcurrent ?? 0).reduce((a, b) => a + b, 0)
     const crowd = crowdingFinding({
       scope: 'host',
       active: load.serverJobs,
@@ -726,42 +724,42 @@ const ERROR_ADVICE: Record<string, { label: string; advice: string }> = {
   LOSS_NAN: {
     label: 'Training loss diverged',
     advice:
-      'Training collapsed — most often a learning rate too high or a bad batch. Lower lr (try /10), check the dataset for outliers, and confirm the checkpoint isn\'t corrupt.',
+      "Training collapsed — most often a learning rate too high or a bad batch. Lower lr (try /10), check the dataset for outliers, and confirm the checkpoint isn't corrupt.",
   },
   DATA_BAD: {
     label: 'Corrupt input data',
     advice:
-      'A checksum / hash check failed on inputs. Re-download or re-extract the dataset and rerun. If the source is a remote URL, verify the upstream wasn\'t mid-rotation when fetched.',
+      "A checksum / hash check failed on inputs. Re-download or re-extract the dataset and rerun. If the source is a remote URL, verify the upstream wasn't mid-rotation when fetched.",
   },
   CKPT_IO: {
     label: 'Checkpoint I/O error',
     advice:
-      'Read or write of a checkpoint failed — disk full, permissions, or a flaky network share. Check the server\'s disk usage and the path the workflow writes to.',
+      "Read or write of a checkpoint failed — disk full, permissions, or a flaky network share. Check the server's disk usage and the path the workflow writes to.",
   },
   SHAPE: {
     label: 'Tensor shape mismatch',
     advice:
-      'A node produced a tensor the next node didn\'t expect. Audit the workflow (Workflows → Audit) against the active ComfyUI server\'s /object_info to confirm node versions match.',
+      "A node produced a tensor the next node didn't expect. Audit the workflow (Workflows → Audit) against the active ComfyUI server's /object_info to confirm node versions match.",
   },
   EADDRINUSE: {
     label: 'Port already in use',
     advice:
-      'Another process is on the same port — usually a previous job that didn\'t shut down cleanly. Use Doctor → RDP In (admin) and `lsof -i :<port>` to find and kill the squatter.',
+      "Another process is on the same port — usually a previous job that didn't shut down cleanly. Use Doctor → RDP In (admin) and `lsof -i :<port>` to find and kill the squatter.",
   },
   ECONNREFUSED: {
     label: 'Connection refused',
     advice:
-      'The workflow couldn\'t reach the ComfyUI server. Check the Servers page — is the service offline or in maintenance? If it just came back, retry the job.',
+      "The workflow couldn't reach the ComfyUI server. Check the Servers page — is the service offline or in maintenance? If it just came back, retry the job.",
   },
   ECONNRESET: {
     label: 'Connection reset',
     advice:
-      'The connection dropped mid-job. Either the ComfyUI server crashed (check its logs / restart it) or there\'s a flaky network path. Look at server uptime and last-ping in the Servers list.',
+      "The connection dropped mid-job. Either the ComfyUI server crashed (check its logs / restart it) or there's a flaky network path. Look at server uptime and last-ping in the Servers list.",
   },
   ENETUNREACH: {
     label: 'Network unreachable',
     advice:
-      'Routing or DNS issue — the runner couldn\'t see the server at all. Verify the server URL and the network between coffee-maker and the host.',
+      "Routing or DNS issue — the runner couldn't see the server at all. Verify the server URL and the network between coffee-maker and the host.",
   },
   ETIMEDOUT: {
     label: 'Operation timed out',
@@ -776,12 +774,12 @@ const ERROR_ADVICE: Record<string, { label: string; advice: string }> = {
   ABORTED: {
     label: 'Aborted by user',
     advice:
-      'Someone (or a job-stop API call) cancelled this run. Not necessarily a problem — but if it\'s frequent, check whether automated retries are misfiring.',
+      "Someone (or a job-stop API call) cancelled this run. Not necessarily a problem — but if it's frequent, check whether automated retries are misfiring.",
   },
   UNKNOWN: {
     label: 'Unclassified failure',
     advice:
-      'The error message doesn\'t match any known pattern. Open one of the recent samples below and look at the stacktrace — if it\'s a new failure mode worth tracking, add a classifier rule.',
+      "The error message doesn't match any known pattern. Open one of the recent samples below and look at the stacktrace — if it's a new failure mode worth tracking, add a classifier rule.",
   },
 }
 
@@ -801,7 +799,7 @@ async function checkError(code: string): Promise<Finding[]> {
       code: 'err_unknown',
       severity: 'info',
       title: `Error code: ${code}`,
-      body: 'No classifier entry for this code yet. Look at recent samples below to understand what\'s happening.',
+      body: "No classifier entry for this code yet. Look at recent samples below to understand what's happening.",
     })
   }
 
@@ -827,7 +825,7 @@ async function checkError(code: string): Promise<Finding[]> {
     body:
       stats.total90d > 0
         ? `24h: ${stats.total24h} · 7d: ${stats.total7d} · 90d: ${stats.total90d}.`
-        : 'This error code hasn\'t shown up in the last 90 days.',
+        : "This error code hasn't shown up in the last 90 days.",
   })
 
   if (stats.topWorkflows.length > 0) {
@@ -888,7 +886,7 @@ async function checkWorkflow(id: string): Promise<Finding[]> {
       code: 'wf_quiet',
       severity: 'info',
       title: 'No runs in the last 7 days',
-      body: 'Workflow hasn\'t executed recently. Either traffic dropped, or the workflow is staged for later use.',
+      body: "Workflow hasn't executed recently. Either traffic dropped, or the workflow is staged for later use.",
     })
   } else {
     const sev: Finding['severity'] = fail7dPct >= 50 ? 'bad' : fail7dPct >= 20 ? 'warn' : 'info'

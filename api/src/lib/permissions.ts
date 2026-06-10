@@ -104,10 +104,10 @@ const CAPABILITY_BY_ROLE: Record<Capability, Set<Role>> = {
   // Destructive
   'delete-service': new Set<Role>(['admin', 'ops']),
   'delete-server': new Set<Role>(['admin', 'ops']),
-  'scrape': new Set<Role>(['admin', 'ops']),
+  scrape: new Set<Role>(['admin', 'ops']),
   // Operational
   'stop-job': new Set<Role>(['admin', 'ops', 'designer']),
-  'rdp': new Set<Role>(['admin', 'ops']),
+  rdp: new Set<Role>(['admin', 'ops']),
 }
 
 export function can(role: Role, capability: Capability): boolean {

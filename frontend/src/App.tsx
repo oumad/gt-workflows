@@ -134,9 +134,7 @@ function AppShell() {
   // page and fire API requests that 403. Block here so the UX is "page
   // doesn't open" instead of "page opens then breaks". `canSee` is the
   // source of truth, mirrored by the backend's requireCapability checks.
-  const role = derivePrimaryRole(
-    user.roles ?? (user.isAdmin ? ['admin'] : ['designer']),
-  )
+  const role = derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : ['designer']))
   const blockedByAuth = !canSee(role, page)
 
   return (

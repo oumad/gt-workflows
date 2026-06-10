@@ -63,7 +63,7 @@ const fieldNameSchema = z
   .string()
   .min(1)
   .describe(
-    'Input field name on a ComfyUI node — the key under that node\'s `inputs` ' +
+    "Input field name on a ComfyUI node — the key under that node's `inputs` " +
       'object in workflow.json. Examples: "text", "ckpt_name", "seed", "steps".',
   )
 
@@ -92,9 +92,7 @@ const nodeConnectToSchema = z
     nodeId: z
       .string()
       .describe('The id of the WATCHED node — the one whose field value drives the rule.'),
-    inputField: z
-      .string()
-      .describe('The field name on the watched node to compare.'),
+    inputField: z.string().describe('The field name on the watched node to compare.'),
     conditions: z
       .array(
         z
@@ -209,8 +207,7 @@ export function registerNodeConfigTools(server: McpServer): void {
         const result = applyParamsPatch(workflowId, (params) =>
           withNodeParser(params, nodeId, (entry) => {
             const currentInputs = (entry.inputs ?? {}) as Record<string, unknown>
-            const nextInputs =
-              mode === 'replace' ? { ...fields } : { ...currentInputs, ...fields }
+            const nextInputs = mode === 'replace' ? { ...fields } : { ...currentInputs, ...fields }
             // If the result is an empty inputs map AND the entry has no other
             // keys (e.g. no connectTo), drop the entry entirely.
             const keptInputs = Object.keys(nextInputs).length > 0 ? nextInputs : undefined
@@ -247,11 +244,11 @@ export function registerNodeConfigTools(server: McpServer): void {
     {
       title: 'Set node visibility',
       description:
-        'Adds or removes a node from coffee-maker\'s UI visibility lists: ' +
+        "Adds or removes a node from coffee-maker's UI visibility lists: " +
         '`comfyui_config.hiddenNodeIds[]` (node not rendered in the editor ' +
         'at all) and `comfyui_config.wrappedNodeIds[]` (node folded into a ' +
         'subgraph wrapper). Pass `true` to ensure the node IS in the list, ' +
-        '`false` to ensure it ISN\'T, or `null`/omit to leave that list ' +
+        "`false` to ensure it ISN'T, or `null`/omit to leave that list " +
         'unchanged. Both lists can be touched in one call. ' +
         '\n\nThis tool is idempotent — calling it twice with the same args ' +
         'is a no-op the second time. ' +
@@ -328,10 +325,10 @@ export function registerNodeConfigTools(server: McpServer): void {
       description:
         'Sets the node-level `connectTo` on a node parser entry — i.e. ' +
         '`params.comfyui_config.node_parsers.input_nodes[nodeId].connectTo`. ' +
-        'This rule gates the node\'s VISIBILITY: when a watched field on ' +
+        "This rule gates the node's VISIBILITY: when a watched field on " +
         'another node has a specific value, this node is either shown ' +
         '(displayedWhen) or hidden (hiddenWhen) in the editor. ' +
-        '\n\nDistinct from set_field_condition: that one auto-sets a field\'s ' +
+        "\n\nDistinct from set_field_condition: that one auto-sets a field's " +
         'value based on another field. Pick the right tool: visibility = ' +
         'set_node_condition; auto-set value = set_field_condition. ' +
         '\n\nPass `connectTo: null` to remove the rule entirely. The shape ' +
@@ -402,7 +399,7 @@ export function registerNodeConfigTools(server: McpServer): void {
         'parameter cascades (e.g. when "model" is "flux-dev" auto-set ' +
         '"steps" to 28). ' +
         '\n\nNot the same as set_node_condition: that one gates whether a ' +
-        'NODE is shown; this one rewrites a FIELD\'s value. Both can coexist ' +
+        "NODE is shown; this one rewrites a FIELD's value. Both can coexist " +
         'on the same node. ' +
         '\n\nIf the field has no FieldConfig yet, an empty one is created ' +
         'first ({ connectTo: ... }) — the field becomes "parsed". Pass ' +
@@ -421,9 +418,7 @@ export function registerNodeConfigTools(server: McpServer): void {
         fieldName: fieldNameSchema,
         connectTo: fieldConnectToSchema
           .nullable()
-          .describe(
-            'The auto-set rule, or null to remove the existing one from this field.',
-          ),
+          .describe('The auto-set rule, or null to remove the existing one from this field.'),
       },
     },
     async ({ workflowId, nodeId, fieldName, connectTo }, extra) => {
@@ -442,10 +437,11 @@ export function registerNodeConfigTools(server: McpServer): void {
                   'Use set_node_parser to give it a config first.',
               )
             }
-            const fieldCfg =
-              (currentField && typeof currentField === 'object' && !Array.isArray(currentField)
+            const fieldCfg = (
+              currentField && typeof currentField === 'object' && !Array.isArray(currentField)
                 ? { ...(currentField as Record<string, unknown>) }
-                : {}) as Record<string, unknown>
+                : {}
+            ) as Record<string, unknown>
             if (connectTo === null) delete fieldCfg.connectTo
             else fieldCfg.connectTo = connectTo
             if (Object.keys(fieldCfg).length === 0) {
@@ -494,7 +490,7 @@ export function registerNodeConfigTools(server: McpServer): void {
         'a cleaner inner layout. ' +
         '\n\nKeys (all optional, all merged by default): ' +
         '\n- label: human-readable title for the subgraph ' +
-        '\n- hideNodeLabels: `true` to hide every inner node\'s label, an ' +
+        "\n- hideNodeLabels: `true` to hide every inner node's label, an " +
         'array of node ids to hide selectively, or `false`/omit to show them ' +
         '\n- nodesOrder: ordered array of node ids — controls the display ' +
         'order of inner nodes within the subgraph. ' +
@@ -526,7 +522,7 @@ export function registerNodeConfigTools(server: McpServer): void {
               .union([z.boolean(), z.array(z.string())])
               .optional()
               .describe(
-                '`true` to hide every inner node\'s label; an array of node ' +
+                "`true` to hide every inner node's label; an array of node " +
                   'ids to hide selectively; false/omit to show.',
               ),
             nodesOrder: z
@@ -550,7 +546,7 @@ export function registerNodeConfigTools(server: McpServer): void {
             if (config === null) {
               delete updated[subgraphId]
             } else {
-              const existing = (updated[subgraphId] ?? {}) as Record<string, unknown>
+              const existing = updated[subgraphId] ?? {}
               updated[subgraphId] = mode === 'replace' ? { ...config } : { ...existing, ...config }
             }
             if (Object.keys(updated).length > 0) return { ...cc, subgraphs: updated }

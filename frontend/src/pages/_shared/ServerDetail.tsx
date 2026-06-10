@@ -146,8 +146,7 @@ export function ServerDetail({
   // (edit-server). Actions tab is admin/ops only (it owns Delete + the
   // ComfyUI control buttons).
   const { can } = useAuth()
-  const canEdit =
-    kindLabel === 'service' ? can('edit-service') : can('edit-server')
+  const canEdit = kindLabel === 'service' ? can('edit-service') : can('edit-server')
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'jobs', label: 'Jobs' },

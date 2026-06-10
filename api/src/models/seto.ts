@@ -23,13 +23,7 @@ export interface Cfg {
   maxServerServices: number
 }
 
-export type CheckKind =
-  | 'live-job'
-  | 'history-job'
-  | 'service'
-  | 'server'
-  | 'error'
-  | 'workflow'
+export type CheckKind = 'live-job' | 'history-job' | 'service' | 'server' | 'error' | 'workflow'
 
 export interface CheckResponse {
   greeting: string

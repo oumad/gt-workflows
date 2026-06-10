@@ -31,8 +31,8 @@ import { eq, sql } from 'drizzle-orm'
 import { db, workflowJobs } from '../db/index.js'
 import { getRedisJobLogs } from './redis.js'
 import { badRequest, notFound, HttpError } from '../lib/httpError.js'
+import { comfyGet, comfyPost } from '../lib/comfy.js'
 
-const COMFY_TIMEOUT_MS = 5_000
 const STOP_CONFIRM_TIMEOUT_MS = 5_000
 const STOP_CONFIRM_INTERVAL_MS = 500
 // Don't fetch the whole log list if it's huge — the line we care about is
@@ -60,31 +60,6 @@ type AuditEntry = {
   action: string
   message: string
   extra?: Record<string, unknown>
-}
-
-async function comfyFetch(baseUrl: string, path: string): Promise<Response> {
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), COMFY_TIMEOUT_MS)
-  try {
-    return await fetch(`${baseUrl.replace(/\/+$/, '')}${path}`, { signal: ctl.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function comfyPost(baseUrl: string, path: string, body: unknown): Promise<Response> {
-  const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), COMFY_TIMEOUT_MS)
-  try {
-    return await fetch(`${baseUrl.replace(/\/+$/, '')}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctl.signal,
-    })
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 /** Scrape ComfyUI's prompt id off the service log. Returns null if the
@@ -118,7 +93,7 @@ function promptStateFromQueue(
 async function isInHistory(serverUrl: string, promptId: string): Promise<boolean> {
   let res: Response
   try {
-    res = await comfyFetch(serverUrl, `/history/${encodeURIComponent(promptId)}`)
+    res = await comfyGet(serverUrl, `/history/${encodeURIComponent(promptId)}`)
   } catch {
     return false
   }
@@ -162,7 +137,7 @@ export async function stopWfJob(jobId: string, username: string): Promise<StopRe
   // 2. Inspect the queue to choose the right cancellation primitive.
   let state: 'running' | 'pending' | 'unknown' = 'unknown'
   try {
-    const queueRes = await comfyFetch(job.serverUrl, '/queue')
+    const queueRes = await comfyGet(job.serverUrl, '/queue')
     if (queueRes.ok) {
       const queueBody = (await queueRes.json().catch(() => ({}))) as ComfyQueueState
       state = promptStateFromQueue(queueBody, promptId)
@@ -171,7 +146,7 @@ export async function stopWfJob(jobId: string, username: string): Promise<StopRe
     throw new HttpError(
       502,
       'comfy_unreachable',
-      `Could not reach ComfyUI at ${job.serverUrl}: ${err instanceof Error ? err.message : err}`,
+      `Could not reach ComfyUI at ${job.serverUrl}: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
 

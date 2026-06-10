@@ -1,7 +1,6 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 import { bodyLimit } from 'hono/body-limit'
 import { sql, eq } from 'drizzle-orm'
@@ -12,6 +11,7 @@ import { sync } from './services/sync.js'
 import { db, users, servers } from './db/index.js'
 import { applyMigrations } from './db/migrate.js'
 import { setupGlobalProxy } from './lib/proxy.js'
+import { requestLog } from './lib/requestLog.js'
 import { hashPassword } from './lib/password.js'
 
 // ─────────────────────────────────────────────
@@ -19,7 +19,7 @@ import { hashPassword } from './lib/password.js'
 // ─────────────────────────────────────────────
 const app = new Hono()
 
-app.use('*', logger())
+app.use('*', requestLog())
 app.use('*', secureHeaders())
 app.use(
   '/api/*',
@@ -41,6 +41,9 @@ const DEFAULT_BODY_LIMIT = 1 * 1024 * 1024
 const UPLOAD_BODY_LIMIT = 50 * 1024 * 1024
 app.use('/api/*', async (c, next) => {
   const limit = UPLOAD_ROUTE_RE.test(c.req.path) ? UPLOAD_BODY_LIMIT : DEFAULT_BODY_LIMIT
+  // hono's bodyLimit generics don't line up with a path-scoped Context — the
+  // call is runtime-correct; the mismatch is purely in the type parameters.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   return bodyLimit({ maxSize: limit })(c, next)
 })
 
@@ -159,14 +162,11 @@ await seedTestServer()
 // hostname, @hono/node-server defaults to IPv6 only on Windows, which makes
 // 127.0.0.1 connections (curl, Vite proxy with default Node DNS) fail with
 // ECONNREFUSED / EADDRINUSE. Override via HOST in the env if ever needed.
-const server = serve(
-  { fetch: app.fetch, port: config.PORT, hostname: config.HOST },
-  (info) => {
-    console.log(
-      `[coffee-maker-api] listening on http://127.0.0.1:${info.port} (bound ${info.address}:${info.port})`,
-    )
-  },
-)
+const server = serve({ fetch: app.fetch, port: config.PORT, hostname: config.HOST }, (info) => {
+  console.log(
+    `[coffee-maker-api] listening on http://127.0.0.1:${info.port} (bound ${info.address}:${info.port})`,
+  )
+})
 
 // Keep-alive tuning. The frontend proxy (vite dev/preview) holds pooled
 // sockets to us; Node's default keepAliveTimeout of 5s races clients that

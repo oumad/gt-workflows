@@ -59,7 +59,7 @@ export function tokenizeJson(text: string): Token[] {
     if (c === '-' || (c >= '0' && c <= '9')) {
       let j = i
       if (text[j] === '-') j++
-      while (j < len && /[0-9.eE+\-]/.test(text[j])) j++
+      while (j < len && /[0-9.eE+-]/.test(text[j])) j++
       tokens.push({ type: 'num', value: text.slice(i, j) })
       i = j
       continue

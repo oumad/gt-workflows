@@ -322,7 +322,9 @@ export function WFCard({
                 />
               )}
               <DotItem icon={Download} label="Download" onClick={downloadWorkflow} />
-              {navigate && <DotItem icon={Activity} label="Service logs" onClick={openServiceLogs} />}
+              {navigate && (
+                <DotItem icon={Activity} label="Service logs" onClick={openServiceLogs} />
+              )}
               <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
               <DotItem
                 icon={Bot}
@@ -622,12 +624,7 @@ export function WFCard({
         />
       )}
       {setoOpen && (
-        <SetoModal
-          kind="workflow"
-          id={wf.id}
-          label={wf.name}
-          onClose={() => setSetoOpen(false)}
-        />
+        <SetoModal kind="workflow" id={wf.id} label={wf.name} onClose={() => setSetoOpen(false)} />
       )}
     </>
   )

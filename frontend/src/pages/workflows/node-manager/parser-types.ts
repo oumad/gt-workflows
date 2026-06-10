@@ -178,9 +178,7 @@ export interface ComfyConfig {
  *
  * The shape is read straight from params.json — backend doesn't validate it.
  * Persisted as part of `RawParams` (NOT under comfyui_config). */
-export type PowerflowFieldSpec =
-  | string
-  | { name: string; label?: string; type?: string }
+export type PowerflowFieldSpec = string | { name: string; label?: string; type?: string }
 
 export interface PowerflowNodeSpec {
   nodeId: string

@@ -114,6 +114,9 @@ export function ComparisonTab({ range }: { range: Range }) {
   const [selected, setSelected] = useState<string[]>([])
   useEffect(() => {
     setSelected(items.slice(0, 3).map((x) => x.name))
+    // Deliberate: reset the default selection only when the grouping or list
+    // SIZE changes — `items` itself is a fresh array every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBy, items.length])
 
   const toggle = (name: string) =>

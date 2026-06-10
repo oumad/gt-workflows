@@ -61,7 +61,7 @@ const filePathSchema = z
     'Path inside the workflow folder, POSIX-style ("/" separators), relative ' +
       'to the folder root. Examples: "params.json", "workflow.json", ' +
       '"SKILL.md", "prompts/positive.txt", "icons/logo.png". Use list_files ' +
-      'to enumerate. Absolute paths or "..\" traversal are rejected.',
+      'to enumerate. Absolute paths or ".." traversal are rejected.',
   )
 
 /* ─── Tool registrations ──────────────────────────────────────── */
@@ -157,15 +157,13 @@ export function registerFileTools(server: McpServer): void {
         const isParams = path === 'params.json' || path.endsWith('/params.json')
         const isWorkflow = path === 'workflow.json' || path.endsWith('/workflow.json')
         if (isParams || isWorkflow) {
-          const issues = isParams
-            ? validateParamsShape(parsed)
-            : validateWorkflowShape(parsed)
+          const issues = isParams ? validateParamsShape(parsed) : validateWorkflowShape(parsed)
           const blocking = issues.filter((i) => i.level === 'error')
           if (blocking.length > 0) {
-            return toolError(
-              `Refusing to write ${path} — shape validation failed`,
-              { phase: 'validate', issues: blocking },
-            )
+            return toolError(`Refusing to write ${path} — shape validation failed`, {
+              phase: 'validate',
+              issues: blocking,
+            })
           }
         }
       }
@@ -174,11 +172,15 @@ export function registerFileTools(server: McpServer): void {
       // then writes. Any FS error bubbles up as a tool error.
       try {
         const result = svcWriteFile(workflowId, path, text)
-        auditMcp('write_file', {
-          userId: auth.user.id,
-          username: auth.user.username,
-          tokenPrefix: auth.tokenPrefix,
-        }, { workflowId, path: result.path, size: result.size })
+        auditMcp(
+          'write_file',
+          {
+            userId: auth.user.id,
+            username: auth.user.username,
+            tokenPrefix: auth.tokenPrefix,
+          },
+          { workflowId, path: result.path, size: result.size },
+        )
         return toolJson({
           ...result,
           snapshotted: true,
@@ -235,11 +237,15 @@ export function registerFileTools(server: McpServer): void {
       }
       try {
         deletePath(workflowId, path)
-        auditMcp('delete_file', {
-          userId: auth.user.id,
-          username: auth.user.username,
-          tokenPrefix: auth.tokenPrefix,
-        }, { workflowId, path })
+        auditMcp(
+          'delete_file',
+          {
+            userId: auth.user.id,
+            username: auth.user.username,
+            tokenPrefix: auth.tokenPrefix,
+          },
+          { workflowId, path },
+        )
         return toolJson({
           deleted: true,
           workflowId,

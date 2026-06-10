@@ -197,7 +197,9 @@ export function DoctorErrorsTab({
             {pageRows.map((r) => (
               <tr
                 key={r.code}
-                onClick={() => onDrill({ kind: 'error', id: r.code, color: r.color, label: r.label })}
+                onClick={() =>
+                  onDrill({ kind: 'error', id: r.code, color: r.color, label: r.label })
+                }
                 style={{ cursor: 'pointer' }}
               >
                 <td>
@@ -245,13 +247,8 @@ export function DoctorErrorsTab({
             ))}
             {pageRows.length === 0 && (
               <tr>
-                <td
-                  colSpan={6}
-                  style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 32 }}
-                >
-                  {query
-                    ? `No errors match “${query}”.`
-                    : 'No errors recorded in this range.'}
+                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 32 }}>
+                  {query ? `No errors match “${query}”.` : 'No errors recorded in this range.'}
                 </td>
               </tr>
             )}

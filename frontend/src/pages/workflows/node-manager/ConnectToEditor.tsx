@@ -1,11 +1,6 @@
 import { useMemo } from 'react'
 import { Link2, Plus, Trash2, Unlink } from 'lucide-react'
-import {
-  type FieldValue,
-  type ParsedField,
-  type ParsedModel,
-  type ShowWhenRule,
-} from './parser'
+import { type FieldValue, type ParsedField, type ParsedModel, type ShowWhenRule } from './parser'
 import { Section } from './EditNodeModal'
 import { FieldRow, inputStyle } from './FieldEditor'
 
@@ -142,8 +137,8 @@ export function ConnectToEditor({
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Enable connection</div>
           <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-            Gate visibility on another field's value. Multiple rules supported — OR for
-            "show when", AND-not for "hide when".
+            Gate visibility on another field's value. Multiple rules supported — OR for "show when",
+            AND-not for "hide when".
           </div>
         </div>
         <input
@@ -231,7 +226,11 @@ function RuleRow({
       </FieldRow>
       <FieldRow label="Target field">
         {fields.length > 0 ? (
-          <select value={rule.fieldId} onChange={(e) => onTarget(e.target.value)} style={inputStyle}>
+          <select
+            value={rule.fieldId}
+            onChange={(e) => onTarget(e.target.value)}
+            style={inputStyle}
+          >
             <option value="">— Pick a field —</option>
             {grouped.map(([groupName, items]) => (
               <optgroup key={groupName} label={groupName}>

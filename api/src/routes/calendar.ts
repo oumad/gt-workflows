@@ -13,7 +13,6 @@ const app = new Hono<{ Variables: AppVariables }>()
  * is derived from the `alerts` table (past server-health incidents). Only
  * `maintenance` and `workshop` are user-creatable and live in calendar_events. */
 const USER_CATS = ['maintenance', 'workshop'] as const
-type UserCategory = (typeof USER_CATS)[number]
 
 const ALL_CATS = ['run', 'training', 'alert', ...USER_CATS] as const
 type AnyCategory = (typeof ALL_CATS)[number]
@@ -359,7 +358,7 @@ app.get('/export.ics', requireAuth, async (c) => {
   if (q['categories']) params.set('categories', q['categories'])
 
   // We could call our own GET / handler but it's cleaner to inline the merge.
-  const feedRes = await app.request(`/?${params}`, {
+  const feedRes = await app.request(`/?${params.toString()}`, {
     headers: c.req.raw.headers,
   })
   const feed = (await feedRes.json()) as { items: CalendarEvent[] }

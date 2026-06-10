@@ -196,16 +196,24 @@ export async function mainStats(days: number) {
     // it back as a string for large sums.
     db
       .select({
-        avgMs: sql<number | null>`cast(avg(duration_ms) filter (where duration_ms is not null) as integer)`,
-        totalMs: sql<number | null>`cast(sum(duration_ms) filter (where duration_ms is not null) as double precision)`,
+        avgMs: sql<
+          number | null
+        >`cast(avg(duration_ms) filter (where duration_ms is not null) as integer)`,
+        totalMs: sql<
+          number | null
+        >`cast(sum(duration_ms) filter (where duration_ms is not null) as double precision)`,
       })
       .from(workflowJobs)
       .where(dateGate(days)),
 
     db
       .select({
-        avgMs: sql<number | null>`cast(avg(duration_ms) filter (where duration_ms is not null) as integer)`,
-        totalMs: sql<number | null>`cast(sum(duration_ms) filter (where duration_ms is not null) as double precision)`,
+        avgMs: sql<
+          number | null
+        >`cast(avg(duration_ms) filter (where duration_ms is not null) as integer)`,
+        totalMs: sql<
+          number | null
+        >`cast(sum(duration_ms) filter (where duration_ms is not null) as double precision)`,
       })
       .from(trainingJobs)
       .where(dateGate(days)),

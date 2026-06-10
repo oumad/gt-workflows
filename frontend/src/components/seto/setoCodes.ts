@@ -70,7 +70,7 @@ export const SETO_CODE_INFO: Record<string, SetoCodeInfo> = {
   si_crowded: {
     label: 'Service is busy or crowded',
     description:
-      'Active jobs are above 70% (info) or 90% (warning) of the service\'s maxConcurrent cap — incoming jobs may queue. Lift maxConcurrent or scale out to relieve.',
+      "Active jobs are above 70% (info) or 90% (warning) of the service's maxConcurrent cap — incoming jobs may queue. Lift maxConcurrent or scale out to relieve.",
   },
   sv_crowded: {
     label: 'Host is busy or crowded',
@@ -103,7 +103,7 @@ export const SETO_CODE_INFO: Record<string, SetoCodeInfo> = {
   },
   wf_quiet: {
     label: 'Workflow has no recent runs',
-    description: 'Workflow hasn\'t been executed in the last 7 days.',
+    description: "Workflow hasn't been executed in the last 7 days.",
   },
   wf_recent: {
     label: 'Workflow recent activity (7d)',
@@ -127,11 +127,11 @@ export const SETO_CODE_INFO: Record<string, SetoCodeInfo> = {
   },
   wf_server_down: {
     label: 'Configured server is down',
-    description: 'At least one of the workflow\'s servers is unreachable right now.',
+    description: "At least one of the workflow's servers is unreachable right now.",
   },
   wf_server_maint: {
     label: 'Configured server in maintenance',
-    description: 'At least one of the workflow\'s servers has been put into maintenance.',
+    description: "At least one of the workflow's servers has been put into maintenance.",
   },
   wf_slower: {
     label: 'Workflow running slower than usual',

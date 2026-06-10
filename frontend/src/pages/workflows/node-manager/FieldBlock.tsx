@@ -95,7 +95,16 @@ export function FieldBlock({
         >
           {field.title}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--ink-3)', display: 'flex', gap: 6, marginTop: 1, alignItems: 'center' }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--ink-3)',
+            display: 'flex',
+            gap: 6,
+            marginTop: 1,
+            alignItems: 'center',
+          }}
+        >
           <span>{meta.label}</span>
           {field.showWhen && field.showWhen.length > 0 && (
             <>
@@ -103,14 +112,11 @@ export function FieldBlock({
               <span
                 title={field.showWhen
                   .map(
-                    (r) =>
-                      `${r.inverted ? 'Hidden' : 'Visible'} when ${r.fieldId} = ${r.equals}`,
+                    (r) => `${r.inverted ? 'Hidden' : 'Visible'} when ${r.fieldId} = ${r.equals}`,
                   )
                   .join('\n')}
               >
-                {field.showWhen.length === 1
-                  ? 'gated'
-                  : `gated · ${field.showWhen.length} rules`}
+                {field.showWhen.length === 1 ? 'gated' : `gated · ${field.showWhen.length} rules`}
               </span>
             </>
           )}

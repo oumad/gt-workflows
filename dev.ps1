@@ -1,29 +1,13 @@
-# dev.ps1 -- start the API and the frontend in DEV mode (hot reload), ONE
-# console window per service, two windows total.
+# dev.ps1 -- API + frontend in DEV mode (hot reload), one console window per
+# service. Windows run node directly: closing a window kills its service, and
+# no npm nesting means no extra windows.
 #
-# Each window runs node DIRECTLY (cmd /k title ... && node <entry>) instead
-# of going through npm: no nested shells means no extra windows, and because
-# node is attached to its window's console, CLOSING THE WINDOW KILLS THE
-# SERVICE -- no orphaned node left holding the port. The cmd /k wrapper only
-# exists so the window stays open after a crash (you can read the error) and
-# carries a recognizable title.
+#   .\dev.ps1 [-ApiPort 3001] [-FrontendPort 5173]
 #
-# NOTE: keep this file pure ASCII. Windows PowerShell 5.1 reads BOM-less
-# files as ANSI, and bytes from chars like em dashes decode to smart quotes
-# that the parser treats as string delimiters.
-#
-# Usage (from repo root):
-#   .\dev.ps1                                # api :3001, frontend :5173
-#   .\dev.ps1 -ApiPort 3005 -FrontendPort 5500
-#
-#   API window      [coffee-api]       tsx watch src/index.ts   (cwd api\)
-#   Frontend window [coffee-frontend]  vite with HMR            (cwd frontend\)
-#
-# Ports come from the parameters and are exported into both windows, so the
-# Vite proxy ALWAYS points at the API's real port (http://127.0.0.1:<ApiPort>).
-# -ApiPort takes precedence over PORT in api\.env. If a port is already in
-# use -- usually an orphaned node from a previous run -- the script names the
-# process and exits instead of half-starting.
+# Ports are exported into both windows (they override PORT in api\.env) so
+# the /api proxy always targets the real API port. Busy ports abort with the
+# owning process named. Keep this file pure ASCII: PS 5.1 reads BOM-less
+# files as ANSI, where em-dash bytes decode to quote chars and break parsing.
 
 param(
   [int]$ApiPort = 3001,
@@ -33,10 +17,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
-# ---- preflight ------------------------------------------------------------
-
 if (-not (Test-Path "$root\api\.env")) {
-  Write-Warning "api\.env not found. The API will refuse to boot without DATABASE_URL, REDIS_URL and JWT_SECRET (>=16 chars). Create it from api\.env.example before running."
+  Write-Warning "api\.env not found -- create it from api\.env.example (DATABASE_URL, REDIS_URL and JWT_SECRET are required)."
 }
 if (-not (Test-Path "$root\api\node_modules")) {
   Write-Warning "api\node_modules missing -- run 'npm install' inside api\ first."
@@ -51,8 +33,7 @@ function Test-PortFree([int]$Port, [string]$ParamName) {
   $owners = $conns | ForEach-Object OwningProcess | Sort-Object -Unique | ForEach-Object {
     try { $p = Get-Process -Id $_ -ErrorAction Stop; "$($p.ProcessName) (PID $_)" } catch { "PID $_" }
   }
-  Write-Warning "Port $Port is already in use by: $($owners -join ', ')."
-  Write-Warning "Likely an orphan from a previous run. Kill it with: taskkill /PID <pid> /T /F   (or pass a different -$ParamName)"
+  Write-Warning "Port $Port is in use by: $($owners -join ', '). Kill it (taskkill /PID <pid> /T /F) or pass a different -$ParamName."
   return $false
 }
 
@@ -60,12 +41,8 @@ $ok = (Test-PortFree $ApiPort 'ApiPort')
 $ok = (Test-PortFree $FrontendPort 'FrontendPort') -and $ok
 if (-not $ok) { exit 1 }
 
-# ---- launcher ---------------------------------------------------------------
-# Sets env vars in THIS process (inherited by the child), spawns the window,
-# then restores the previous values so the calling shell isn't polluted.
-# Every -ArgumentList element is space-free on purpose: Start-Process leaves
-# them unquoted, so cmd sees the raw '&&' and chains title -> node.
-
+# Spawns `cmd /k title <t> && node <args>` with env vars set for the child
+# only. Space-free args stay unquoted, so cmd sees the raw '&&'.
 function Start-NodeWindow([string]$Title, [string]$Dir, [string[]]$NodeArgs, [hashtable]$EnvVars) {
   $saved = @{}
   foreach ($k in $EnvVars.Keys) {
@@ -82,15 +59,12 @@ function Start-NodeWindow([string]$Title, [string]$Dir, [string[]]$NodeArgs, [ha
   }
 }
 
-# ---- go ---------------------------------------------------------------------
-
 Write-Host "[dev] starting API window [coffee-api] on port $ApiPort..."
 Start-NodeWindow 'coffee-api' "$root\api" @('node_modules\tsx\dist\cli.mjs', 'watch', 'src\index.ts') @{
   PORT = "$ApiPort"
 }
 
-# Small head start so the frontend's first /api/health poll lands on
-# something -- avoids the initial "offline" banner flash.
+# Head start so the frontend's first /api/health poll lands on something.
 Start-Sleep -Seconds 2
 
 Write-Host "[dev] starting frontend window [coffee-frontend] on port $FrontendPort..."
@@ -101,4 +75,4 @@ Start-NodeWindow 'coffee-frontend' "$root\frontend" @('node_modules\vite\bin\vit
 
 Write-Host ""
 Write-Host "[dev] launched. Open http://127.0.0.1:$FrontendPort" -ForegroundColor Green
-Write-Host "[dev] closing a window stops its service (node dies with its console)." -ForegroundColor DarkGray
+Write-Host "[dev] closing a window stops its service." -ForegroundColor DarkGray

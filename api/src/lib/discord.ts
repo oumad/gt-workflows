@@ -23,10 +23,13 @@ export type DiscordPayload = {
 export async function sendWebhook(payload: DiscordPayload): Promise<void> {
   if (!WEBHOOK_URL) return
 
+  // Plain fetch on purpose (internet target — goes through the proxy). The
+  // timeout keeps a wedged proxy from stalling the alert path / sync tick.
   const res = await fetch(WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
   })
 
   if (!res.ok) {

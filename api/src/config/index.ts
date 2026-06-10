@@ -73,16 +73,22 @@ const envSchema = z.object({
   https_proxy: z.string().optional(),
   no_proxy: z.string().optional(),
 
+  // ── Internal HTTP (ComfyUI / AI-Toolkit) ──────
+  // Timeout for non-probe calls to GPU servers: stats, logs, actions, job
+  // control. Health probes use MONITOR_TIMEOUT_MS instead.
+  COMFY_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+
   // ── Server health monitor ─────────────────────
   MONITOR_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   MONITOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   MONITOR_STAGGER_MS: z.coerce.number().int().nonnegative().default(1_000),
-  // When true, ComfyUI / AI-Toolkit probes go through the global HTTP_PROXY
-  // (if configured). When false (default), they always go direct — most
-  // operator NO_PROXY lists don't cover bare hostnames / IPs used for GPU
-  // servers, which then erroneously route through the corporate proxy and
-  // fail. Flip this back to true only if your probe targets genuinely live
-  // behind your corporate proxy.
+  // When true, ALL ComfyUI / AI-Toolkit traffic (health probes, log fetching,
+  // ComfyUI actions, workflow tests — everything going through internalFetch)
+  // uses the global HTTP_PROXY (if configured). When false (default) it goes
+  // direct — most operator NO_PROXY lists don't cover bare hostnames / IPs
+  // used for GPU servers, which then erroneously route through the corporate
+  // proxy and fail. Flip to true only if your GPU hosts genuinely live behind
+  // the corporate proxy.
   MONITOR_USE_PROXY: bool.default(false),
   // When true, every probe (host + service) logs its target, duration, and
   // pass/fail reason. Heavy when monitoring many records — enable only while

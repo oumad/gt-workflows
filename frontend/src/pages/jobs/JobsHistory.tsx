@@ -1,15 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { api, isAbortError } from '../../lib/api'
 import { useData } from '../../context/DataContext'
-import {
-  RefreshCw,
-  Download,
-  Search,
-  X,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
+import { RefreshCw, Download, Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   type UnifiedJobsPage,
   type Row,
@@ -233,7 +225,9 @@ export function History({
       load(page, kind, status, focus, qApplied, range, mineOnly)
     }, ms)
     return () => clearInterval(id)
-  }, [refresh, page, kind, status, focus, qApplied, load])
+    // range/mineOnly included so the auto-refresh interval never reloads
+    // with stale filter values captured by an old closure.
+  }, [refresh, page, kind, status, focus, qApplied, range, mineOnly, load])
 
   const goNext = () => {
     if (page < totalPages) load(page + 1, kind, status, focus, qApplied, range, mineOnly)
