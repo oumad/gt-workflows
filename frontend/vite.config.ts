@@ -36,6 +36,10 @@ const apiProxy = {
     target: apiProxyTarget,
     changeOrigin: true,
     agent: keepAliveAgent,
+    // Don't let a wedged API pin browser requests (and their sockets) open
+    // indefinitely — give up after 30s and return a 504 instead.
+    timeout: 30_000,
+    proxyTimeout: 30_000,
   },
 }
 

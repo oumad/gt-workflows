@@ -59,6 +59,16 @@ function nextAlertDelayMs(alertCount: number): number {
   return ALERT_GAPS_MS[alertCount - 1] ?? ALERT_REPEAT_MS
 }
 
+// Flap damping: an UP record needs this many CONSECUTIVE failed probes before
+// the alert state machine treats it as down. A single blip (probe starved
+// while the API is busy, transient network hiccup) used to fire dozens of
+// down+recovered Discord pairs in adjacent rounds. The counter is in-memory —
+// a restart just costs one extra confirming probe. The raw probe result still
+// lands in the ping columns every round, so the UI stays honest; only
+// ALERTING is damped. Force checks (probeOneServer) bypass this on purpose.
+const DOWN_AFTER_CONSECUTIVE = 2
+const consecutiveFails = new Map<string, number>()
+
 type HostReach = { reachable: boolean; rttMs: number | null; via: 'icmp' | 'tcp' | null }
 
 // Unified probe outcome. `kind` records which check ran (a server's ping vs a
@@ -358,8 +368,8 @@ function classifyTransition(
   row: HealthRow,
   result: ProbeResult,
   now: Date,
+  healthy: boolean = isHealthy(result),
 ): { update: AlertUpdate | null; event: ServerAlertEvent | null } {
-  const healthy = isHealthy(result)
   const alerting = !row.isMaintenance
   const wasDown = row.downSince !== null
 
@@ -497,8 +507,18 @@ export async function syncServerHealth(): Promise<void> {
       }
       const result = await probeRecord(row.url, row.type)
       probesPerformed++
-      if (result.ok) upCount++
-      const { update, event } = classifyTransition(row, result, now)
+      if (result.ok) {
+        upCount++
+        consecutiveFails.delete(row.id)
+      } else {
+        consecutiveFails.set(row.id, (consecutiveFails.get(row.id) ?? 0) + 1)
+      }
+      // Damped view for the alert machine only — see DOWN_AFTER_CONSECUTIVE.
+      const damped =
+        result.ok ||
+        row.downSince !== null ||
+        (consecutiveFails.get(row.id) ?? 0) >= DOWN_AFTER_CONSECUTIVE
+      const { update, event } = classifyTransition(row, result, now, damped)
       writes.push(buildWrite(row, result, update, now))
       if (event) events.push(event)
     }),

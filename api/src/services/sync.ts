@@ -1,5 +1,5 @@
 import Redis from 'ioredis'
-import { sql, eq, and, isNull } from 'drizzle-orm'
+import { sql, eq, and, isNull, inArray } from 'drizzle-orm'
 import { config } from '../config/index.js'
 import { db, workflowJobs, trainingJobs, gtUsers } from '../db/index.js'
 import type { NewWorkflowJob, NewTrainingJob } from '../db/schema.js'
@@ -42,6 +42,13 @@ function parseLoraStatus(h: Record<string, string>): string {
   if (h['finishedOn']) return 'completed'
   if (h['processedOn']) return 'running'
   return 'pending'
+}
+
+/** Lifecycle signature for the incremental sync — covers exactly the fields
+ *  the status mappers read, so "signature unchanged" implies the row would be
+ *  upserted identically and the whole job can be skipped. */
+function jobSig(h: Record<string, string>): string {
+  return `${h['processedOn'] ?? ''}|${h['finishedOn'] ?? ''}|${h['failedReason'] ? 1 : ''}`
 }
 
 /** Derive a best-known creation time for a BullMQ job hash.
@@ -94,6 +101,14 @@ class SyncService {
   private timer: NodeJS.Timeout | null = null
   private healthTimer: NodeJS.Timeout | null = null
   private client: Redis | null = null
+  // Incremental-sync caches: job id → lifecycle signature at the last
+  // SUCCESSFUL upsert. With ~50k completed jobs sitting in Redis, blindly
+  // re-upserting every row each cycle saturated the connection pool —
+  // multi-second /api/health responses, starved health probes, flapping
+  // Discord alerts. Unchanged jobs now skip parse + upsert entirely.
+  // Entries are pruned once Redis forgets the job.
+  private seenWf = new Map<string, string>()
+  private seenLora = new Map<string, string>()
 
   private redis(): Redis {
     if (!this.client) {
@@ -185,6 +200,7 @@ class SyncService {
       const svByKey = new Map(svRows.map((s) => [serverMatchKey(s.url), s.id]))
 
       let synced = 0
+      let skipped = 0
       for (let i = 0; i < ids.length; i += BATCH) {
         const batch = ids.slice(i, i + BATCH)
         const pipeline = this.redis().pipeline()
@@ -197,6 +213,9 @@ class SyncService {
           _userEmail: string
         }
         const pending: Pending[] = []
+        // Signatures for this batch — committed to seenWf only AFTER the
+        // upsert lands, so a failed write is retried in full next cycle.
+        const batchSigs = new Map<string, string>()
         // Ids in this batch whose Redis logs we should sweep for the
         // ComfyUI "running" marker — active jobs (likely to have the marker
         // arriving any tick now) and recently-finished jobs (job ran and
@@ -214,6 +233,17 @@ class SyncService {
           if (!res || res[0]) continue
           const h = res[1] as Record<string, string>
           if (!h || Object.keys(h).length === 0) continue
+
+          // Incremental sync: unchanged lifecycle → skip parse + upsert.
+          // Active jobs still feed the comfy-start detector — the log marker
+          // can appear after the hash last changed (detection dedups).
+          const sig = jobSig(h)
+          if (this.seenWf.get(id) === sig) {
+            skipped++
+            if (h['processedOn'] && !h['finishedOn'] && !h['failedReason']) detectIds.push(id)
+            continue
+          }
+          batchSigs.set(id, sig)
 
           const data = parseJobData(h)
           const serverUrl = extractWfServerUrl(data)
@@ -375,6 +405,7 @@ class SyncService {
             },
           })
         synced += rows.length
+        for (const [sid, s] of batchSigs) this.seenWf.set(sid, s)
 
         // Flush any liveTracker comfyStartedAt values to Postgres for jobs
         // that have just completed or failed.  One UPDATE per job — runs at
@@ -394,7 +425,37 @@ class SyncService {
         }
       }
       if (synced > 0)
-        console.log(`[sync] workflow jobs: ${synced} upserted (${ids.length} in Redis)`)
+        console.log(
+          `[sync] workflow jobs: ${synced} upserted, ${skipped} unchanged (${ids.length} in Redis)`,
+        )
+
+      // Ghost reaper: rows still open in Postgres whose job no longer exists
+      // in Redis can never progress (hash evicted or producer crashed) — they
+      // inflate the "running" badge forever. Close them as failed. The age
+      // guard covers jobs enqueued between scan and query; a Redis outage
+      // never reaches here (ids.length === 0 returns early above).
+      const liveIds = new Set(ids)
+      const openRows = await db.query.workflowJobs.findMany({
+        where: (j, { inArray: ia }) => ia(j.status, ['waiting', 'active']),
+        columns: { id: true, createdAt: true },
+      })
+      const cutoff = Date.now() - 5 * 60_000
+      const ghostIds = openRows
+        .filter((r) => !liveIds.has(r.id) && r.createdAt.getTime() < cutoff)
+        .map((r) => r.id)
+      if (ghostIds.length > 0) {
+        await db
+          .update(workflowJobs)
+          .set({
+            status: 'failed',
+            failedReason: 'Job disappeared from Redis (evicted or crashed) — auto-closed by sync.',
+            finishedAt: new Date(),
+          })
+          .where(inArray(workflowJobs.id, ghostIds))
+        console.log(`[sync] workflow jobs: auto-closed ${ghostIds.length} ghost rows`)
+      }
+      // Prune signature-cache entries Redis has forgotten.
+      for (const k of this.seenWf.keys()) if (!liveIds.has(k)) this.seenWf.delete(k)
     } catch (e) {
       console.error('[sync] workflow jobs error:', e instanceof Error ? e.message : e)
     }
@@ -412,6 +473,7 @@ class SyncService {
       const svByKey = new Map(svRows.map((s) => [serverMatchKey(s.url), s.id]))
 
       let synced = 0
+      let skipped = 0
       for (let i = 0; i < ids.length; i += BATCH) {
         const batch = ids.slice(i, i + BATCH)
         const pipeline = this.redis().pipeline()
@@ -420,6 +482,8 @@ class SyncService {
 
         type Pending = NewTrainingJob & { _extId: string; _userName: string; _userEmail: string }
         const pending: Pending[] = []
+        // See syncWorkflowJobs — committed to seenLora only after the upsert.
+        const batchSigs = new Map<string, string>()
 
         for (let j = 0; j < batch.length; j++) {
           const id = batch[j]!
@@ -427,6 +491,14 @@ class SyncService {
           if (!res || res[0]) continue
           const h = res[1] as Record<string, string>
           if (!h || Object.keys(h).length === 0) continue
+
+          // Incremental sync: unchanged lifecycle → skip parse + upsert.
+          const sig = jobSig(h)
+          if (this.seenLora.get(String(id)) === sig) {
+            skipped++
+            continue
+          }
+          batchSigs.set(String(id), sig)
 
           const data = parseJobData(h)
           // Real payload shape: flat keys — aiToolkitServerUrl, modelArch, resolvedTotalSteps,
@@ -577,8 +649,35 @@ class SyncService {
             },
           })
         synced += rows.length
+        for (const [sid, s] of batchSigs) this.seenLora.set(sid, s)
       }
-      if (synced > 0) console.log(`[sync] lora jobs: ${synced} upserted (${ids.length} in Redis)`)
+      if (synced > 0)
+        console.log(
+          `[sync] lora jobs: ${synced} upserted, ${skipped} unchanged (${ids.length} in Redis)`,
+        )
+
+      // Ghost reaper — see syncWorkflowJobs for the rationale.
+      const liveIds = new Set(ids.map(String))
+      const openRows = await db.query.trainingJobs.findMany({
+        where: (j, { inArray: ia }) => ia(j.status, ['pending', 'running']),
+        columns: { processId: true, createdAt: true },
+      })
+      const cutoff = Date.now() - 5 * 60_000
+      const ghostIds = openRows
+        .filter((r) => !liveIds.has(r.processId) && r.createdAt.getTime() < cutoff)
+        .map((r) => r.processId)
+      if (ghostIds.length > 0) {
+        await db
+          .update(trainingJobs)
+          .set({
+            status: 'failed',
+            failedReason: 'Job disappeared from Redis (evicted or crashed) — auto-closed by sync.',
+            finishedAt: new Date(),
+          })
+          .where(inArray(trainingJobs.processId, ghostIds))
+        console.log(`[sync] lora jobs: auto-closed ${ghostIds.length} ghost rows`)
+      }
+      for (const k of this.seenLora.keys()) if (!liveIds.has(k)) this.seenLora.delete(k)
     } catch (e) {
       console.error('[sync] lora jobs error:', e instanceof Error ? e.message : e)
     }
