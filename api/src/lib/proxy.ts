@@ -1,6 +1,14 @@
 import { setGlobalDispatcher, ProxyAgent, Agent, Dispatcher } from 'undici'
 import { config } from '../config/index.js'
 
+// IMPORTANT: keep the npm `undici` dependency on the SAME MAJOR as the copy
+// bundled in Node (`node -p process.versions.undici`). Native fetch() is the
+// bundled copy; every dispatcher here crosses that boundary (per-request
+// `dispatcher:` options and setGlobalDispatcher), and a major mismatch breaks
+// them — undici v8 Agents handed to Node 24's v7 fetch fail EVERY request
+// with `TypeError: fetch failed (UND_ERR_INVALID_ARG)`, which once marked all
+// monitored services down. Verify after bumping either Node or undici.
+//
 // Reads HTTP_PROXY / HTTPS_PROXY / NO_PROXY (and their lowercase variants)
 // and installs a global undici dispatcher so that ALL native fetch() calls
 // respect the proxy — including Discord webhooks and any future outbound HTTP.

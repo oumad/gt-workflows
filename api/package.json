@@ -21,6 +21,7 @@
     "db:studio": "drizzle-kit studio",
     "db:check": "drizzle-kit check",
     "_db:push:DANGEROUS": "drizzle-kit push",
+    "probe:service": "node scripts/probe-service.mjs",
     "seed:workflows": "tsx scripts/seed-workflows.ts",
     "migrate:redis": "tsx scripts/migrate-redis.ts",
     "test:jobs:create": "tsx scripts/test-jobs-create.ts",
@@ -39,7 +40,7 @@
     "hono": "^4.12.23",
     "ioredis": "^5.4.2",
     "postgres": "^3.4.5",
-    "undici": "^8.3.0",
+    "undici": "^7.27.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
