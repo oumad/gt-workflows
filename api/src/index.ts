@@ -168,6 +168,15 @@ const server = serve(
   },
 )
 
+// Keep-alive tuning. The frontend proxy (vite dev/preview) holds pooled
+// sockets to us; Node's default keepAliveTimeout of 5s races clients that
+// fire a request exactly as the server closes an idle socket (spurious
+// ECONNRESET → 502 through the proxy). 65s makes idle closes rare for a UI
+// that polls every few seconds; headersTimeout must stay above it.
+const httpServer = server as import('node:http').Server
+httpServer.keepAliveTimeout = 65_000
+httpServer.headersTimeout = 66_000
+
 // 5. Start continuous Redis → Postgres sync
 sync.start()
 

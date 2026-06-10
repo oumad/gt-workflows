@@ -1,3 +1,4 @@
+import { Agent } from 'node:http'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -17,6 +18,16 @@ const apiProxyTarget = process.env.VITE_DEV_API_PROXY ?? 'http://127.0.0.1:3001'
 const devPort = Number(process.env.FRONTEND_PORT ?? 5173)
 const previewPort = Number(process.env.FRONTEND_PORT ?? 4173)
 
+// One keep-alive agent shared by the dev + preview proxies. Without it,
+// http-proxy opens a BRAND-NEW TCP connection for every /api call and closes
+// it after the response (it defaults to `Connection: close` when no agent is
+// set). With the app polling several endpoints, Windows piles up thousands
+// of TIME_WAIT sockets toward 127.0.0.1:<api> until the ephemeral-port pool
+// runs dry — then connects fail with EADDRINUSE, the proxy returns 502, and
+// the whole box's networking (RDP sessions included) crawls while Task
+// Manager shows nothing. Pooled keep-alive sockets make the churn ~zero.
+const keepAliveAgent = new Agent({ keepAlive: true, maxSockets: 32 })
+
 // Shared /api proxy. `vite preview` reuses it so the BUILT SPA can be served
 // production-style on a native Windows box (npm start → build + preview) with
 // the same same-origin /api shape nginx provides in the docker stack.
@@ -24,6 +35,7 @@ const apiProxy = {
   '/api': {
     target: apiProxyTarget,
     changeOrigin: true,
+    agent: keepAliveAgent,
   },
 }
 

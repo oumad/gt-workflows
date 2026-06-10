@@ -1,9 +1,14 @@
 # start.ps1 -- build + serve the API and frontend in PROD-style mode (no hot
-# reload), each in its own PowerShell window. This is the native-Windows
-# equivalent of the docker prod stack: use it on a box where Docker only runs
-# postgres + the RDP sidecar (docker-compose-templates/postgres-rdp.yml) and
-# node serves the rest -- e.g. when the workflows folder lives on a UNC share
-# the containers can't reach.
+# reload), ONE console window per service, two windows total. Native-Windows
+# equivalent of the docker prod stack: Docker only runs postgres + the RDP
+# sidecar (docker-compose-templates/postgres-rdp.yml), node serves the rest.
+#
+# Both BUILDS run here in the CURRENT window first -- a build error stops the
+# script before anything launches, and you read it right here. The spawned
+# windows then run node DIRECTLY (cmd /k title ... && node <entry>): no npm
+# nesting means no extra windows, and node is attached to its window's
+# console, so CLOSING THE WINDOW KILLS THE SERVICE -- no orphaned node left
+# holding the port.
 #
 # NOTE: keep this file pure ASCII. Windows PowerShell 5.1 reads BOM-less
 # files as ANSI, and bytes from chars like em dashes decode to smart quotes
@@ -13,20 +18,14 @@
 #   .\start.ps1                                # api :3001, frontend :4173
 #   .\start.ps1 -ApiPort 3001 -FrontendPort 8080
 #
-# What each window does:
-#   API      -- cd api      ; npm start
-#               'prestart' runs 'npm run build' (tsc) first, so the server can
-#               NEVER run a stale dist\. Env comes from api\.env; PORT comes
-#               from -ApiPort (overrides api\.env so the frontend proxy always
-#               matches). Binds HOST (default 0.0.0.0 = IPv4 only).
-#   Frontend -- cd frontend ; npm start
-#               'prestart' runs the full build (tsc + vite build), then
-#               'vite preview' serves the built dist\ and proxies /api to the
-#               API -- same same-origin shape nginx provides in docker, no
-#               nginx needed. strictPort: a taken port fails loudly.
+#   API window      [coffee-api]       node dist\index.js       (cwd api\)
+#   Frontend window [coffee-frontend]  vite preview (built SPA,
+#                                      proxies /api to the API) (cwd frontend\)
 #
-# First start is slower -- both builds run before anything serves. To stop:
-# close the windows (Ctrl+C inside them works too).
+# Ports come from the parameters and are exported into both windows; -ApiPort
+# takes precedence over PORT in api\.env. If a port is already in use --
+# usually an orphaned node from a previous run -- the script names the
+# process and exits.
 
 param(
   [int]$ApiPort = 3001,
@@ -35,6 +34,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+
+# ---- preflight ------------------------------------------------------------
 
 if (-not (Test-Path "$root\api\.env")) {
   Write-Warning "api\.env not found. The API will refuse to boot without DATABASE_URL, REDIS_URL and JWT_SECRET (>=16 chars). Create it from api\.env.example before running."
@@ -46,35 +47,72 @@ if (-not (Test-Path "$root\frontend\node_modules")) {
   Write-Warning "frontend\node_modules missing -- run 'npm install' inside frontend\ first."
 }
 
-Write-Host "[start] starting API window (build + serve, port $ApiPort)..."
-Start-Process powershell -ArgumentList @(
-  '-NoExit',
-  '-Command',
-  @"
-Set-Location '$root\api'
-`$env:PORT = '$ApiPort'
-Write-Host '[api] npm start (build + node dist, PORT=$ApiPort)' -ForegroundColor Cyan
-npm start
-"@
-)
+function Test-PortFree([int]$Port, [string]$ParamName) {
+  $conns = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+  if ($conns.Count -eq 0) { return $true }
+  $owners = $conns | ForEach-Object OwningProcess | Sort-Object -Unique | ForEach-Object {
+    try { $p = Get-Process -Id $_ -ErrorAction Stop; "$($p.ProcessName) (PID $_)" } catch { "PID $_" }
+  }
+  Write-Warning "Port $Port is already in use by: $($owners -join ', ')."
+  Write-Warning "Likely an orphan from a previous run. Kill it with: taskkill /PID <pid> /T /F   (or pass a different -$ParamName)"
+  return $false
+}
 
-Write-Host "[start] starting frontend window (build + preview, port $FrontendPort)..."
-Start-Process powershell -ArgumentList @(
-  '-NoExit',
-  '-Command',
-  @"
-Set-Location '$root\frontend'
-# 127.0.0.1 (not localhost) so the proxy never resolves to the IPv6 loopback.
-`$env:VITE_DEV_API_PROXY = 'http://127.0.0.1:$ApiPort'
-`$env:FRONTEND_PORT = '$FrontendPort'
-Write-Host '[frontend] proxy /api -> ' -NoNewline -ForegroundColor DarkGray
-Write-Host `$env:VITE_DEV_API_PROXY -ForegroundColor Yellow
-Write-Host '[frontend] npm start (build + vite preview, port $FrontendPort)' -ForegroundColor Magenta
-npm start
-"@
-)
+$ok = (Test-PortFree $ApiPort 'ApiPort')
+$ok = (Test-PortFree $FrontendPort 'FrontendPort') -and $ok
+if (-not $ok) { exit 1 }
+
+# ---- build (in this window, so failures are visible and fatal) -------------
+
+Write-Host "[start] building api (tsc)..." -ForegroundColor Cyan
+Push-Location "$root\api"
+npm run build
+$buildOk = ($LASTEXITCODE -eq 0)
+Pop-Location
+if (-not $buildOk) { Write-Host "[start] API build FAILED -- nothing launched." -ForegroundColor Red; exit 1 }
+
+Write-Host "[start] building frontend (tsc + vite build)..." -ForegroundColor Cyan
+Push-Location "$root\frontend"
+npm run build
+$buildOk = ($LASTEXITCODE -eq 0)
+Pop-Location
+if (-not $buildOk) { Write-Host "[start] frontend build FAILED -- nothing launched." -ForegroundColor Red; exit 1 }
+
+# ---- launcher ---------------------------------------------------------------
+# Sets env vars in THIS process (inherited by the child), spawns the window,
+# then restores the previous values so the calling shell isn't polluted.
+# Every -ArgumentList element is space-free on purpose: Start-Process leaves
+# them unquoted, so cmd sees the raw '&&' and chains title -> node.
+
+function Start-NodeWindow([string]$Title, [string]$Dir, [string[]]$NodeArgs, [hashtable]$EnvVars) {
+  $saved = @{}
+  foreach ($k in $EnvVars.Keys) {
+    $saved[$k] = [Environment]::GetEnvironmentVariable($k)
+    Set-Item "env:$k" $EnvVars[$k]
+  }
+  try {
+    Start-Process cmd -WorkingDirectory $Dir -ArgumentList (@('/k', 'title', $Title, '&&', 'node') + $NodeArgs)
+  } finally {
+    foreach ($k in $EnvVars.Keys) {
+      if ($null -ne $saved[$k]) { Set-Item "env:$k" $saved[$k] }
+      else { Remove-Item "env:$k" -ErrorAction SilentlyContinue }
+    }
+  }
+}
+
+# ---- go ---------------------------------------------------------------------
+
+Write-Host "[start] starting API window [coffee-api] on port $ApiPort..."
+Start-NodeWindow 'coffee-api' "$root\api" @('dist\index.js') @{
+  PORT = "$ApiPort"
+}
+
+Write-Host "[start] starting frontend window [coffee-frontend] on port $FrontendPort..."
+Start-NodeWindow 'coffee-frontend' "$root\frontend" @('node_modules\vite\bin\vite.js', 'preview') @{
+  FRONTEND_PORT      = "$FrontendPort"
+  VITE_DEV_API_PROXY = "http://127.0.0.1:$ApiPort"
+}
 
 Write-Host ""
-Write-Host "[start] launched. Both windows build first -- give them a moment." -ForegroundColor Green
-Write-Host "[start] then open http://127.0.0.1:$FrontendPort" -ForegroundColor Green
-Write-Host "[start] close the two spawned windows to stop." -ForegroundColor DarkGray
+Write-Host "[start] launched. Open http://127.0.0.1:$FrontendPort" -ForegroundColor Green
+Write-Host "[start] closing a window stops its service (node dies with its console)." -ForegroundColor DarkGray

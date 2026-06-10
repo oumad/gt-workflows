@@ -94,6 +94,10 @@ coffee-maker-*-deploy.tar.gz
 coffee-maker-*-bundle.tar.gz
 out/
 
+# `docker save` output used to hand-carry the sidecar image to offline
+# hosts — build output, never commit (it's ~50MB+).
+rdp-sidecar/*.tar
+
 # ── Misc ───────────────────────────────────────────────────────
 # Ad-hoc local notes — useful during exploration, not for the repo.
 NOTES.md
