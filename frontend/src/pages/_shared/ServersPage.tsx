@@ -405,7 +405,11 @@ export function ServersPage({
 
             {/* Saturation heatmap — 5-second triage view above the card list. */}
             {!loading && pageServers.length > 0 && (
-              <ServerSaturationHeatmap servers={pageServers} onOpen={openDetail} />
+              <ServerSaturationHeatmap
+                servers={pageServers}
+                onOpen={openDetail}
+                kindLabel={kindLabel}
+              />
             )}
 
             {/* Scrape message */}

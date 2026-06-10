@@ -33,6 +33,11 @@ const envSchema = z.object({
   // ── Standard ──────────────────────────────────
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
+  // Bind address. 0.0.0.0 = every IPv4 interface, IPv4 ONLY — without an
+  // explicit hostname @hono/node-server binds IPv6-only on Windows and
+  // 127.0.0.1 connections fail with ECONNREFUSED. Set HOST=:: only if you
+  // genuinely need dual-stack.
+  HOST: z.string().min(1).default('0.0.0.0'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
   // ── CORS / dev bypass ─────────────────────────
@@ -72,6 +77,17 @@ const envSchema = z.object({
   MONITOR_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   MONITOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   MONITOR_STAGGER_MS: z.coerce.number().int().nonnegative().default(1_000),
+  // When true, ComfyUI / AI-Toolkit probes go through the global HTTP_PROXY
+  // (if configured). When false (default), they always go direct — most
+  // operator NO_PROXY lists don't cover bare hostnames / IPs used for GPU
+  // servers, which then erroneously route through the corporate proxy and
+  // fail. Flip this back to true only if your probe targets genuinely live
+  // behind your corporate proxy.
+  MONITOR_USE_PROXY: bool.default(false),
+  // When true, every probe (host + service) logs its target, duration, and
+  // pass/fail reason. Heavy when monitoring many records — enable only while
+  // debugging "server shows down but I can reach it" mysteries.
+  MONITOR_VERBOSE: bool.default(false),
 
   // ── RDP execution ─────────────────────────────
   // When RDP_BRIDGE_URL is set (e.g. http://rdp-sidecar:8080), the API forwards

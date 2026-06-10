@@ -5,6 +5,7 @@ import { db, servers } from '../db/index.js'
 import { config } from '../config/index.js'
 import { sendServerStatusAlert, type ServerAlertEvent } from '../lib/discord.js'
 import { recordServerAlerts } from './alerts.js'
+import { directDispatcher } from '../lib/proxy.js'
 
 // Per-record health monitoring. Two kinds of record, distinguished by URL shape,
 // each checked by its OWN method — they are NOT coupled:
@@ -168,23 +169,55 @@ async function checkHostReachable(hostname: string): Promise<HostReach> {
 }
 
 /** Service reachability — is the service answering HTTP on its own port?
- *  Lenient: any HTTP response means the process is up and serving. `ms` is the
- *  round-trip time when reachable. */
+ *  Lenient: any 2xx/3xx response means the process is up and serving.
+ *
+ *  By default uses a direct (no-proxy) dispatcher so internal probe targets
+ *  never traverse the corporate HTTP_PROXY — operator NO_PROXY lists rarely
+ *  cover bare hostnames or IPs like `worker-03:8188` / `10.0.0.5:8188`, which
+ *  would otherwise route through the proxy and fail. Set MONITOR_USE_PROXY=true
+ *  to flip back to global-dispatcher behavior if your probes genuinely need
+ *  the corporate proxy.
+ *
+ *  When MONITOR_VERBOSE=true, every probe logs its target, duration, and
+ *  failure reason — invaluable when "server shows down but I can reach it". */
 async function checkServiceReachable(
   base: string,
   type: string,
 ): Promise<{ ok: boolean; ms: number | null }> {
   const path = SERVICE_PATH[type] ?? ''
+  const url = `${base}${path}`
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), SERVICE_TIMEOUT_MS)
   const start = Date.now()
   try {
-    const res = await fetch(`${base}${path}`, { method: 'GET', signal: ctl.signal })
+    // The `dispatcher` option is undici-specific but recognized by Node's
+    // native fetch since 18. Omit it (undefined) → use the global dispatcher
+    // (which honors HTTP_PROXY + NO_PROXY via SelectiveProxyDispatcher).
+    // The cast bridges undici-types (bundled with @types/node) and the
+    // explicit undici package the Agent comes from.
+    const init = {
+      method: 'GET',
+      signal: ctl.signal,
+      ...(config.MONITOR_USE_PROXY ? {} : { dispatcher: directDispatcher }),
+    } as RequestInit
+    const res = await fetch(url, init)
     await res.body?.cancel().catch(() => {})
-    // Require a 2xx/3xx — a 4xx/5xx means the port answers but the service isn't
-    // actually serving (wrong process, crashed handler, auth wall).
-    return { ok: res.ok, ms: res.ok ? Date.now() - start : null }
-  } catch {
+    const ms = Date.now() - start
+    if (config.MONITOR_VERBOSE) {
+      console.log(
+        `[health.probe] service ${url} -> ${res.status}${res.ok ? '' : ' (treated as down)'} in ${ms}ms (proxy=${config.MONITOR_USE_PROXY})`,
+      )
+    }
+    // Require a 2xx/3xx — a 4xx/5xx means the port answers but the service
+    // isn't actually serving (wrong process, crashed handler, auth wall).
+    return { ok: res.ok, ms: res.ok ? ms : null }
+  } catch (err) {
+    if (config.MONITOR_VERBOSE) {
+      const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      console.warn(
+        `[health.probe] service ${url} FAILED in ${Date.now() - start}ms (proxy=${config.MONITOR_USE_PROXY}): ${reason}`,
+      )
+    }
     return { ok: false, ms: null }
   } finally {
     clearTimeout(timer)

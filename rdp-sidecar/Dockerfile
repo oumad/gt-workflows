@@ -9,7 +9,7 @@
 # ── Build stage ─────────────────────────────────────────────────
 # Pinning the toolchain version keeps the image reproducible. The bridge
 # uses stdlib only — no module downloads, fast cold builds.
-FROM golang:1.22-alpine AS build
+FROM docker.io/golang:1.22-alpine AS build
 WORKDIR /src
 COPY go.mod ./
 COPY main.go ./
@@ -19,7 +19,7 @@ COPY main.go ./
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o rdp-bridge .
 
 # ── Runtime stage ───────────────────────────────────────────────
-FROM alpine:3.20
+FROM docker.io/alpine:3.20
 # freerdp provides xfreerdp; xvfb provides the virtual X display the binary
 # needs to start. procps gives us a usable `kill` for shutdown.
 # Pinning is loose by design — security fixes from alpine roll forward.
@@ -34,6 +34,13 @@ USER bridge
 
 EXPOSE 8080
 ENV PORT=8080
+# HOST defaults to 0.0.0.0 inside the binary (every IPv4 interface, IPv4
+# only); override at runtime if dual-stack is ever needed.
+#
+# Corporate-proxy builds: docker's PREDEFINED build args (HTTP_PROXY,
+# HTTPS_PROXY, NO_PROXY) are honored by the `apk add` step automatically —
+# no ARG declarations needed. postgres-rdp.yml forwards them from your .env.
+#
 # RDP_BRIDGE_TOKEN should be set at runtime via compose env_file or -e flag.
 # When unset the bridge logs a warning and runs unauthenticated — only OK
 # on a fully-private network.

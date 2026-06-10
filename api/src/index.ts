@@ -153,10 +153,20 @@ await applyMigrations()
 await seedDefaultAdmin()
 await seedTestServer()
 
-// 4. Start the HTTP server — DB is proven reachable
-const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
-  console.log(`[coffee-maker-api] listening on http://localhost:${info.port}`)
-})
+// 4. Start the HTTP server — DB is proven reachable.
+// HOST defaults to '0.0.0.0' (every IPv4 interface, IPv4 only): accepts
+// 127.0.0.1 from native clients AND the Vite proxy. Without an explicit
+// hostname, @hono/node-server defaults to IPv6 only on Windows, which makes
+// 127.0.0.1 connections (curl, Vite proxy with default Node DNS) fail with
+// ECONNREFUSED / EADDRINUSE. Override via HOST in the env if ever needed.
+const server = serve(
+  { fetch: app.fetch, port: config.PORT, hostname: config.HOST },
+  (info) => {
+    console.log(
+      `[coffee-maker-api] listening on http://127.0.0.1:${info.port} (bound ${info.address}:${info.port})`,
+    )
+  },
+)
 
 // 5. Start continuous Redis → Postgres sync
 sync.start()

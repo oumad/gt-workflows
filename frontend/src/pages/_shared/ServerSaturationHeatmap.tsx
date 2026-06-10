@@ -15,6 +15,9 @@ import { serverStatus } from './serverHelpers'
 type Props = {
   servers: Server[]
   onOpen: (id: string) => void
+  /** What these records are called in this view. Drives the "N services" /
+   *  "N servers" pill label so the Services tab doesn't say "servers". */
+  kindLabel?: 'server' | 'service'
 }
 
 const TILE_W = 120
@@ -30,24 +33,21 @@ function saturationColor(ratio: number): string {
   return 'var(--bad)'
 }
 
-export function ServerSaturationHeatmap({ servers, onOpen }: Props) {
+export function ServerSaturationHeatmap({ servers, onOpen, kindLabel = 'server' }: Props) {
   if (servers.length === 0) return null
 
   return (
     <div
       className="card"
-      style={{
-        marginBottom: 14,
-        // Sticky so the heatmap stays visible while scrolling the list below.
-        position: 'sticky',
-        top: 0,
-        zIndex: 5,
-      }}
+      // Inline-flowing (not sticky/fixed) so it doesn't cover the rows below
+      // when the page scrolls — earlier sticky positioning was hiding content.
+      style={{ marginBottom: 14 }}
     >
       <div className="card-head">
         <div className="card-title">Saturation</div>
         <span className="chip" style={{ fontSize: 10 }}>
-          {servers.length} {servers.length === 1 ? 'server' : 'servers'}
+          {servers.length} {kindLabel}
+          {servers.length === 1 ? '' : 's'}
         </span>
         <span className="spacer" />
         <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>

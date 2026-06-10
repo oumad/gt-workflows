@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -91,6 +92,14 @@ func main() {
 	if port == "" {
 		port = defaultPort
 	}
+	// Bind address. 0.0.0.0 (default) = every IPv4 interface, IPv4 ONLY —
+	// the old ":port" form bound dual-stack, and Windows clients resolving
+	// "localhost" to ::1 have bitten this stack before. Set HOST=:: to
+	// restore dual-stack if genuinely needed.
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "0.0.0.0"
+	}
 	token := os.Getenv("RDP_BRIDGE_TOKEN")
 	if token == "" {
 		log.Println("[rdp-sidecar] WARNING: RDP_BRIDGE_TOKEN is empty — endpoint is unauthenticated. Only run this on a fully-private network.")
@@ -104,7 +113,8 @@ func main() {
 	mux.HandleFunc("/rdp", handleRDP(token))
 
 	srv := &http.Server{
-		Addr:              ":" + port,
+		// JoinHostPort brackets IPv6 hosts correctly (HOST=:: → "[::]:8080").
+		Addr:              net.JoinHostPort(host, port),
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		// No write timeout: a single /rdp call can legitimately hold for
@@ -112,7 +122,7 @@ func main() {
 		// maxHoldSecs). Connection idle time is bounded by the client.
 	}
 
-	log.Printf("[rdp-sidecar] listening on :%s", port)
+	log.Printf("[rdp-sidecar] listening on %s", net.JoinHostPort(host, port))
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("[rdp-sidecar] server error: %v", err)
 	}

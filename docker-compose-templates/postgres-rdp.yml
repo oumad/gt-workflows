@@ -18,9 +18,11 @@
 #   docker compose -f docker-compose-templates/postgres-rdp.yml --project-directory . logs -f rdp-sidecar
 #   docker compose -f docker-compose-templates/postgres-rdp.yml --project-directory . down
 #
-# Native-api env (point at these containers):
-#   DATABASE_URL=postgresql://postgres:devpassword@localhost:5432/coffee_maker
-#   RDP_BRIDGE_URL=http://localhost:8080
+# Native-api env (point at these containers). 127.0.0.1, NOT "localhost" —
+# Windows resolves localhost to ::1 first while these ports only publish on
+# the IPv4 loopback:
+#   DATABASE_URL=postgresql://postgres:devpassword@127.0.0.1:5432/coffee_maker
+#   RDP_BRIDGE_URL=http://127.0.0.1:8080
 #   RDP_BRIDGE_TOKEN=<same-as-below>
 
 services:
@@ -51,11 +53,24 @@ services:
     build:
       context: ./rdp-sidecar
       dockerfile: Dockerfile
+      # Corporate-proxy support for the image BUILD (the `apk add` step needs
+      # outbound HTTPS). These are docker's predefined proxy args — empty
+      # values mean "direct". Set them in your .env on proxied hosts.
+      args:
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+        NO_PROXY: "${NO_PROXY:-}"
     environment:
       # Shared secret — clients must send `Authorization: Bearer <token>`.
       # Leave unset only on a fully-private network.
       RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
       PORT: "8080"
+      # Outbound proxy for the bridge at RUNTIME — unused today (the bridge
+      # makes no outbound HTTP; xfreerdp speaks raw RDP), but wired through so
+      # a future need is a .env edit, not a compose change.
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-}"
     ports:
       # Localhost-only by default. Override BRIDGE_BIND=0.0.0.0 only if you
       # KNOW the network is private and you've set RDP_BRIDGE_TOKEN.

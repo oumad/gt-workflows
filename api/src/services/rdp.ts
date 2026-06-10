@@ -25,6 +25,7 @@ import * as serversRepo from '../repositories/servers.js'
 import * as credentialsRepo from '../repositories/credentials.js'
 import { deriveHealth } from './servers.js'
 import { config } from '../config/index.js'
+import { directDispatcher } from '../lib/proxy.js'
 
 const HOLD_SECONDS = 15
 // Display numbers above :100 are conventional for one-off virtual displays.
@@ -276,7 +277,14 @@ async function runRdpSidecar(
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), SIDECAR_TIMEOUT_MS)
   try {
-    const res = await fetch(url, {
+    // The bridge lives next to the API (sidecar container / same host), so go
+    // direct — a corporate HTTP_PROXY must never sit in this path. Operator
+    // NO_PROXY lists rarely include localhost / 127.0.0.1, which would route
+    // this call through the proxy and fail. Same rationale as the health
+    // probes' directDispatcher in serverHealth.ts. The double cast bridges
+    // undici-types (bundled with @types/node) and the explicit undici package
+    // the Agent comes from; `dispatcher` is honored by native fetch since 18.
+    const init = {
       method: 'POST',
       signal: ctl.signal,
       headers: {
@@ -284,7 +292,9 @@ async function runRdpSidecar(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(p),
-    })
+      dispatcher: directDispatcher,
+    } as unknown as RequestInit
+    const res = await fetch(url, init)
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       throw new HttpError(

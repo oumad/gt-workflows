@@ -58,3 +58,11 @@ export function setupGlobalProxy(): void {
   const bypass = config.noProxy ? ` (bypassing: ${config.noProxy})` : ''
   console.log(`[proxy] routing outbound HTTP through ${config.proxyUrl}${bypass}`)
 }
+
+/** A direct (no-proxy) dispatcher for outbound HTTP that must never traverse
+ *  the corporate proxy — e.g. internal-network probes against ComfyUI /
+ *  AI-Toolkit. Some operator NO_PROXY env vars only list FQDNs (`*.foo.com`)
+ *  while server records use bare hostnames (`worker-03:8188`), which would
+ *  otherwise route through the proxy and fail. Probes are inherently internal,
+ *  so we sidestep the question entirely. Singleton — cheap to share. */
+export const directDispatcher: Dispatcher = new Agent()

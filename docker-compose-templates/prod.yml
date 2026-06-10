@@ -102,6 +102,8 @@ services:
       MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
       MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
       MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      MONITOR_USE_PROXY: "${MONITOR_USE_PROXY:-false}"
+      MONITOR_VERBOSE: "${MONITOR_VERBOSE:-false}"
       # RDP execution. Unset → api runs xfreerdp/Xvfb itself (the image bundles
       # them). Set to `http://rdp-sidecar:8080` and add the sidecar service
       # below to delegate RDP tests to a dedicated container.
