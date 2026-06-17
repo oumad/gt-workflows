@@ -88,7 +88,9 @@ export const STATUS_TONE: Record<string, string> = {
 }
 export const STATUS_LABEL: Record<string, string> = {
   ok: 'Online',
-  warn: 'Warning',
+  // 'warn' = reachable + idle (no active/waiting jobs) but slow (latency >200ms).
+  // Labeled "Slow" — it is a distinct signal from "Busy" (has jobs).
+  warn: 'Slow',
   down: 'Down',
   busy: 'Busy',
   unknown: 'Unknown',

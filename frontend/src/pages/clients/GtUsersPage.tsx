@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search, Download, Users } from 'lucide-react'
 import { PageHead } from '../../components/shell/PageHead'
 import { SortableHeader, type SortDir } from '../../components/ui/SortableHeader'
+import { Pagination } from '../../components/ui/Pagination'
 import { GtUserDetailPage } from './GtUserDetailPage'
 import { avatarColor, initials, relTime } from './gtUserDetailHelpers'
 import { api, isAbortError } from '../../lib/api'
@@ -85,25 +86,24 @@ async function fetchAllAndExport(q: string, sort: SortKey, dir: SortDir): Promis
 }
 
 /* ─── List view ──────────────────────────────────────────────────── */
-const PAGE_LIMIT = 200
+const PAGE_LIMIT = 20
 
 function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
   const [items, setItems] = useState<GtUser[]>([])
   const [total, setTotal] = useState<number | null>(null)
-  const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('jobs')
   const [dir, setDir] = useState<SortDir>('desc')
+  const [page, setPage] = useState(1)
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Tracks the in-flight list request so the latest filter/sort wins. Stale
-  // responses are dropped instead of clobbering newer state.
   const inflightRef = useRef<AbortController | null>(null)
 
-  async function load(q: string, off: number, sk: SortKey, sd: SortDir, append = false) {
+  const totalPages = total != null ? Math.max(1, Math.ceil(total / PAGE_LIMIT)) : null
+
+  async function load(q: string, pg: number, sk: SortKey, sd: SortDir) {
     inflightRef.current?.abort()
     const ctrl = new AbortController()
     inflightRef.current = ctrl
@@ -111,20 +111,18 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
     try {
       const params = new URLSearchParams({
         limit: String(PAGE_LIMIT),
-        offset: String(off),
+        offset: String((pg - 1) * PAGE_LIMIT),
         sort: sk,
         dir: sd,
       })
       if (q) params.set('q', q)
       const res = await api.get<ListResponse>(`/api/gt-users?${params}`, { signal: ctrl.signal })
       if (inflightRef.current !== ctrl) return
-      setItems((prev) => (append ? [...prev, ...res.items] : res.items))
-      setOffset(off + res.items.length)
-      setHasMore(res.hasMore)
+      setItems(res.items)
       setTotal(res.total)
     } catch (e) {
       if (isAbortError(e)) return
-      if (!append) setItems([])
+      setItems([])
     } finally {
       if (inflightRef.current === ctrl) {
         setLoading(false)
@@ -141,7 +139,7 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
   )
 
   useEffect(() => {
-    load('', 0, sort, dir)
+    load('', 1, sort, dir)
     api
       .get<StatsResponse>('/api/gt-users/stats')
       .then(setStats)
@@ -154,7 +152,8 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
     if (searchRef.current) clearTimeout(searchRef.current)
     searchRef.current = setTimeout(() => {
       setQuery(val)
-      load(val, 0, sort, dir)
+      setPage(1)
+      load(val, 1, sort, dir)
     }, 300)
   }
 
@@ -162,14 +161,20 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
     if (sort === k) {
       const nd: SortDir = dir === 'asc' ? 'desc' : 'asc'
       setDir(nd)
-      load(query, 0, k, nd)
+      setPage(1)
+      load(query, 1, k, nd)
     } else {
-      // First click: descending for numeric/recency columns, ascending for text.
       const nd: SortDir = k === 'name' || k === 'email' ? 'asc' : 'desc'
       setSort(k)
       setDir(nd)
-      load(query, 0, k, nd)
+      setPage(1)
+      load(query, 1, k, nd)
     }
+  }
+
+  function goToPage(pg: number) {
+    setPage(pg)
+    load(query, pg, sort, dir)
   }
 
   const activePct = stats && stats.total > 0 ? Math.round((stats.active7d / stats.total) * 100) : 0
@@ -265,7 +270,7 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
           <span className="spacer" />
           {total != null && (
             <span style={{ fontSize: 12, color: 'var(--ink-3)', alignSelf: 'center' }}>
-              {items.length} of {total}
+              {total} user{total !== 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -384,17 +389,13 @@ function GtUsersList({ onSelect }: { onSelect: (id: string) => void }) {
                 )}
               </tbody>
             </table>
-            {hasMore && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--line)' }}>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => load(query, offset, sort, dir, true)}
-                  disabled={loading}
-                  style={{ width: '100%' }}
-                >
-                  {loading ? 'Loading…' : 'Load more'}
-                </button>
-              </div>
+            {totalPages != null && totalPages > 1 && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onChange={goToPage}
+                disabled={loading}
+              />
             )}
           </div>
         )}

@@ -24,19 +24,57 @@ type NavItem = {
   id: Page
   label: string
   icon: React.ReactNode
+  tooltip: string
   badge?: number
   badgeWarn?: boolean
 }
 
-const WORKSPACE: NavItem[] = [{ id: 'home', label: 'Home', icon: <Home size={16} /> }]
+const WORKSPACE: NavItem[] = [
+  {
+    id: 'home',
+    label: 'Home',
+    icon: <Home size={16} />,
+    tooltip: 'Your home base — the whole cluster at a glance',
+  },
+]
 
 const TOOLS: NavItem[] = [
-  { id: 'workflows', label: 'Workflows', icon: <Workflow size={16} /> },
-  { id: 'jobs', label: 'Jobs', icon: <Briefcase size={16} /> },
-  { id: 'services', label: 'Services', icon: <Boxes size={16} /> },
-  { id: 'servers', label: 'Servers', icon: <Server size={16} /> },
-  { id: 'doctor', label: 'Doctor', icon: <Stethoscope size={16} /> },
-  { id: 'analytics', label: 'Analytics', icon: <BarChart2 size={16} /> },
+  {
+    id: 'workflows',
+    label: 'Workflows',
+    icon: <Workflow size={16} />,
+    tooltip: 'Browse and run your ComfyUI pipelines',
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs',
+    icon: <Briefcase size={16} />,
+    tooltip: "Live feed — what's running and waiting",
+  },
+  {
+    id: 'services',
+    label: 'Services',
+    icon: <Boxes size={16} />,
+    tooltip: 'ComfyUI & AI-Toolkit, running on your servers',
+  },
+  {
+    id: 'servers',
+    label: 'Servers',
+    icon: <Server size={16} />,
+    tooltip: 'The physical hosts behind your services',
+  },
+  {
+    id: 'doctor',
+    label: 'Doctor',
+    icon: <Stethoscope size={16} />,
+    tooltip: 'Diagnose failures and slow jobs',
+  },
+  {
+    id: 'analytics',
+    label: 'Analytics',
+    icon: <BarChart2 size={16} />,
+    tooltip: 'Numbers, time-series and breakdowns',
+  },
 ]
 
 // Side-bar visibility is gated by `canSee(role, page)` from lib/permissions
@@ -44,12 +82,27 @@ const TOOLS: NavItem[] = [
 // source of truth, mirrored on the backend so a hidden item also gets a
 // 403 if someone hits its API directly.
 const ADMIN: NavItem[] = [
-  { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
-  { id: 'clients', label: 'GT Users', icon: <Building2 size={16} /> },
-  { id: 'users', label: 'Users', icon: <Users size={16} /> },
-  { id: 'credentials', label: 'Credentials', icon: <KeyRound size={16} /> },
-  { id: 'seto', label: 'Seto', icon: <Bot size={16} /> },
-  { id: 'preferences', label: 'Preferences', icon: <Settings size={16} /> },
+  {
+    id: 'calendar',
+    label: 'Calendar',
+    icon: <Calendar size={16} />,
+    tooltip: 'Manage your calendar',
+  },
+  { id: 'clients', label: 'GT Users', icon: <Users size={16} />, tooltip: 'GearTracker users' },
+  { id: 'users', label: 'Users', icon: <Building2 size={16} />, tooltip: 'Coffee Maker users' },
+  {
+    id: 'credentials',
+    label: 'Credentials',
+    icon: <KeyRound size={16} />,
+    tooltip: 'Server logins, all in one place',
+  },
+  { id: 'seto', label: 'Seto', icon: <Bot size={16} />, tooltip: 'Your in-app assistant' },
+  {
+    id: 'preferences',
+    label: 'Preferences',
+    icon: <Settings size={16} />,
+    tooltip: 'Tweak your preferences',
+  },
 ]
 
 type Props = { page: Page; navigate: (p: Page) => void }
@@ -74,7 +127,7 @@ function NavGroup({
           key={item.id}
           className={`nav-item${page === item.id ? ' active' : ''}`}
           onClick={() => navigate(item.id)}
-          title={item.label}
+          title={item.tooltip}
         >
           <span className="nav-icon">{item.icon}</span>
           <span className="nav-label">{item.label}</span>

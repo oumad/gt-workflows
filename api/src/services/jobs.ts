@@ -6,9 +6,11 @@
  * because they're a cross-cutting concern, not a DB property. The route file
  * stays a thin HTTP adapter.
  */
-import { getLiveWfJobs, getLiveLoraJobs } from './redis.js'
+import { eq, or, sql } from 'drizzle-orm'
+import { db, workflowJobs, trainingJobs } from '../db/index.js'
+import { getLiveWfJobs, getLiveLoraJobs, forceFailRedisJob } from './redis.js'
 import { sendJobReport } from '../lib/discord.js'
-import { notFound } from '../lib/httpError.js'
+import { notFound, conflict, HttpError } from '../lib/httpError.js'
 import { serverMatchKey } from '../lib/serverUrl.js'
 import { TtlCache } from '../lib/ttlCache.js'
 import * as repo from '../repositories/jobs.js'
@@ -98,12 +100,22 @@ export async function list(q: ListJobsQuery): Promise<JobsListResponse> {
   }
 }
 
-// ── stats (60s in-memory cache) ───────────────────
-const statsCache = new TtlCache(60_000)
+// ── stats (5s in-memory cache) ────────────────────
+// The wf/lora status breakdowns come from Postgres (synced job rows). The
+// top-level running/waiting totals come from the LIVE Redis queues instead, so
+// the sidebar badge matches the Live feed exactly and never under-counts a job
+// whose Postgres status hasn't synced yet (a WF job in BullMQ's :active list
+// whose hash lacks processedOn was previously mapped to 'waiting' and dropped).
+// Short cache because it now reflects live state polled every ~30s by the UI.
+const statsCache = new TtlCache(5_000)
 
 export function stats(): Promise<JobsStatsResponse> {
   return statsCache.memo('stats', async () => {
-    const { wfByStatus, loraByStatus } = await repo.statsByStatus()
+    const [{ wfByStatus, loraByStatus }, wfLive, loraLive] = await Promise.all([
+      repo.statsByStatus(),
+      getLiveWfJobs(),
+      getLiveLoraJobs(),
+    ])
     const sumVals = (m: Record<string, number>) => Object.values(m).reduce((a, b) => a + b, 0)
     return {
       wf: {
@@ -120,8 +132,8 @@ export function stats(): Promise<JobsStatsResponse> {
         completed: loraByStatus['completed'] ?? 0,
         failed: loraByStatus['failed'] ?? 0,
       },
-      running: (wfByStatus['active'] ?? 0) + (loraByStatus['running'] ?? 0),
-      waiting: (wfByStatus['waiting'] ?? 0) + (loraByStatus['pending'] ?? 0),
+      running: wfLive.active.length + loraLive.active.length,
+      waiting: wfLive.waiting.length + loraLive.waiting.length,
     }
   })
 }
@@ -182,6 +194,95 @@ export function live(): Promise<JobsLivePayload> {
   })
 }
 
+// ── force stop ────────────────────────────────────
+const FORCE_TERMINAL = new Set(['completed', 'failed', 'cancelled'])
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export type ForceStopResult = {
+  kind: 'wf' | 'lora'
+  /** Whether the BullMQ hash was force-failed in Redis (false = evicted). */
+  redisUpdated: boolean
+  /** Whether a Postgres row was updated (false = redis-only ghost). */
+  dbUpdated: boolean
+}
+
+/** Terminate a job that no runner will ever finish — e.g. the AI-Toolkit job
+ *  was deleted on the trainer while BullMQ still lists it active, or the row
+ *  is stale/invisible to checks. Marks BOTH stores: the BullMQ hash is
+ *  force-failed (the one deliberate Redis write this stack makes) and the
+ *  Postgres row goes terminal. No runner is contacted.
+ *
+ *  `kindHint` disambiguates: wf ids and lora processIds are both numeric
+ *  BullMQ sequences, so an unhinted id could match the wrong table. Callers
+ *  that know the kind (the job modal) always send it; the Seto fallback
+ *  (no hint) resolves wf-then-lora. */
+export async function forceStop(
+  id: string,
+  username: string,
+  kindHint?: 'wf' | 'lora',
+): Promise<ForceStopResult> {
+  const now = new Date()
+  const reason = `Force-stopped by ${username} via coffee-maker — the runner lost this job or it went stale.`
+
+  if (kindHint !== 'lora') {
+    const wf = await db.query.workflowJobs.findFirst({
+      where: eq(workflowJobs.id, id),
+      columns: { id: true, status: true },
+    })
+    if (wf) {
+      if (FORCE_TERMINAL.has(wf.status)) throw conflict('Job is already in a terminal state.')
+      const redisUpdated = await forceFailRedisJob('wf', wf.id, reason).catch(() => false)
+      await db
+        .update(workflowJobs)
+        .set({
+          // Match what the sync would derive from the hash we just stamped.
+          status: redisUpdated ? 'failed' : 'cancelled',
+          finishedAt: sql`COALESCE(${workflowJobs.finishedAt}, now())`,
+          failedReason: reason,
+          cmAuditLog: sql`COALESCE(${workflowJobs.cmAuditLog}, '[]'::jsonb) || ${JSON.stringify([
+            { at: now.toISOString(), who: username, action: 'force_stop', message: reason },
+          ])}::jsonb`,
+        })
+        .where(eq(workflowJobs.id, wf.id))
+      return { kind: 'wf', redisUpdated, dbUpdated: true }
+    }
+  }
+
+  if (kindHint !== 'wf') {
+    const lora = await db.query.trainingJobs.findFirst({
+      where: UUID_RE.test(id)
+        ? or(eq(trainingJobs.id, id), eq(trainingJobs.processId, id))
+        : eq(trainingJobs.processId, id),
+      columns: { id: true, processId: true, status: true },
+    })
+    if (lora) {
+      if (FORCE_TERMINAL.has(lora.status)) throw conflict('Job is already in a terminal state.')
+      const redisUpdated = await forceFailRedisJob('lora', lora.processId, reason).catch(
+        () => false,
+      )
+      await db
+        .update(trainingJobs)
+        .set({
+          status: redisUpdated ? 'failed' : 'cancelled',
+          finishedAt: sql`COALESCE(${trainingJobs.finishedAt}, now())`,
+          failedReason: reason,
+        })
+        .where(eq(trainingJobs.id, lora.id))
+      return { kind: 'lora', redisUpdated, dbUpdated: true }
+    }
+  }
+
+  // No Postgres row — the job may still exist ONLY in Redis (live feed reads
+  // Redis directly). Force-fail it there; the sync then upserts a terminal
+  // row on its next tick.
+  for (const kind of kindHint ? [kindHint] : (['wf', 'lora'] as const)) {
+    const redisUpdated = await forceFailRedisJob(kind, id, reason).catch(() => false)
+    if (redisUpdated) return { kind, redisUpdated: true, dbUpdated: false }
+  }
+
+  throw notFound('No database or Redis record for this job — nothing to force-stop.')
+}
+
 export async function report(
   id: string,
   input: JobReportInput,
@@ -208,6 +309,14 @@ export async function report(
       findings: input.findings,
     })
   } catch (err) {
+    // Surface the failure — a green "report sent" for a timed-out webhook
+    // erodes trust. Same contract as reportServer. Usually a missing
+    // DISCORD_WEBHOOK_URL or an unset proxy (HTTPS_PROXY) on the API.
     console.warn('[discord] job-report webhook failed:', err instanceof Error ? err.message : err)
+    throw new HttpError(
+      502,
+      'discord_failed',
+      `Discord webhook failed (${err instanceof Error ? err.message : 'unknown error'}) — the report was NOT delivered. Check DISCORD_WEBHOOK_URL and proxy settings (HTTPS_PROXY) on the API.`,
+    )
   }
 }

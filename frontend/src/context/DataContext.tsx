@@ -60,8 +60,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const fetchRunningJobs = useCallback(async () => {
     try {
-      // /api/jobs/stats returns an aggregate "running" total across both
-      // workflow_jobs (active) and training_jobs (running).
+      // /api/jobs/stats returns an aggregate "running" total from the live Redis
+      // queues (active WF + LoRA jobs) so the badge matches the Live feed.
       const stats = await api.get<{ running: number }>('/api/jobs/stats')
       setRunningJobs(stats.running ?? 0)
     } catch {}
@@ -69,8 +69,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchRunningJobs()
-    const id = setInterval(fetchRunningJobs, 30_000)
-    return () => clearInterval(id)
+    // Skip the poll while the tab is hidden; refresh immediately on return so
+    // the badge isn't stale when the user comes back.
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchRunningJobs()
+    }, 30_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void fetchRunningJobs()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fetchRunningJobs])
 
   useEffect(() => {
@@ -88,8 +99,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // Server health (online/offline + latency) is refreshed server-side every
     // sync tick. Poll so the Servers/Services pages, sidebar badges, and
     // dashboard reflect it without a manual refresh. Silent = no loading flash.
-    const id = setInterval(() => reloadServers({ silent: true }), 15_000)
-    return () => clearInterval(id)
+    // Gated on visibility — no point polling a backgrounded tab; refreshed on
+    // return so the view isn't stale.
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void reloadServers({ silent: true })
+    }, 15_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reloadServers({ silent: true })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [reloadServers])
 
   // Watch the initial Redis->Postgres sync. On cold boot, jobs/analytics/etc.

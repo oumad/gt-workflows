@@ -5,6 +5,7 @@
  * avg-duration aggregate (used by the per-job ETA finding).
  */
 import { TtlCache } from '../lib/ttlCache.js'
+import { db } from '../db/index.js'
 import * as repo from '../repositories/seto.js'
 import type { Cfg, Finding, JobLookup, CheckResponse, CheckKind } from '../models/seto.js'
 import type { PatchConfigInput } from '../validators/seto.js'
@@ -126,9 +127,19 @@ async function lookupJob(id: string): Promise<JobLookup | null> {
       failedReason: wf.failedReason,
     }
   }
-  // LoRA ids are uuids — guard the lookup so malformed ids don't error.
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null
-  const lora = await repo.findLoraJob(id)
+  // LoRA ids are uuids in Postgres, but live rows reference the BullMQ
+  // processId (numeric) — resolve that to the uuid first so "Ask Seto" on a
+  // live LoRA row finds the job instead of reporting it missing.
+  let loraId = id
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    const byProcess = await db.query.trainingJobs.findFirst({
+      where: (t, { eq }) => eq(t.processId, id),
+      columns: { id: true },
+    })
+    if (!byProcess) return null
+    loraId = byProcess.id
+  }
+  const lora = await repo.findLoraJob(loraId)
   if (lora) {
     const waitMs = lora.startedAt
       ? Math.max(0, lora.startedAt.getTime() - lora.createdAt.getTime())
@@ -386,7 +397,9 @@ async function checkHistoryJob(jobId: string, cfg: Cfg): Promise<Finding[]> {
     if (aborted) {
       findings.push({
         code: 'jo_aborted',
-        severity: 'info',
+        // warn, not info — an abort is a notable event worth amber, even when
+        // it was the user's own doing.
+        severity: 'warn',
         title: 'Job was aborted',
         body: `Cancelled by the user or the service. Wait: ${fmtDuration(waitSec)}. Ran for: ${fmtDuration(totalSec)}. Users often stop a job when the wait + run gets too long; that may be the case here.`,
       })
@@ -613,6 +626,29 @@ async function checkServer(serverId: string, cfg: Cfg): Promise<Finding[]> {
     })
   }
 
+  // Host reachability — the server's own ping. Without this (and the
+  // services check below) a host with dead services rendered the green
+  // "everything is fine" card, which read as "services are OK".
+  const hostDown = !svr.lastPingAt || !svr.lastPingOk
+  if (!svr.isMaintenance && hostDown) {
+    findings.push({
+      code: 'sv_down',
+      severity: 'bad',
+      title: 'Server is unreachable',
+      body: 'The host has failed its recent health probes (no ping response). Everything running on it is effectively offline.',
+    })
+  } else if (!svr.isMaintenance) {
+    // Positive confirmation so the modal always states the ping verdict
+    // explicitly instead of implying it by omission.
+    findings.push({
+      code: 'sv_ping_ok',
+      severity: 'ok',
+      title:
+        svr.lastPingMs != null ? `Host answers ping (${svr.lastPingMs} ms)` : 'Host answers ping',
+      body: 'The box itself is reachable. The health of its services is reported separately below.',
+    })
+  }
+
   if (svr.lastPingMs != null && svr.lastPingMs > cfg.maxServerLatencyMs) {
     findings.push({
       code: 'sv_slow_net',
@@ -645,6 +681,30 @@ async function checkServer(serverId: string, cfg: Cfg): Promise<Finding[]> {
         severity: 'warn',
         title: `${sameHost.length} services on this server`,
         body: `Threshold is ${cfg.maxServerServices}. Running this many services on one host can lead to GPU / VRAM contention.`,
+      })
+    }
+
+    // Health of the services living on this host — the question people
+    // actually open Seto on a server with ("the box pings, but is ComfyUI
+    // up?"). Health comes from the same probe columns the Servers page uses.
+    const downSvcs = sameHost.filter((s) => !s.isMaintenance && isServiceDown(s))
+    if (downSvcs.length > 0) {
+      findings.push({
+        code: 'sv_services_down',
+        severity: 'bad',
+        title: `${downSvcs.length} of ${sameHost.length} service${sameHost.length === 1 ? '' : 's'} on this host ${downSvcs.length === 1 ? 'is' : 'are'} unreachable`,
+        body: `Down: ${downSvcs.map((s) => s.name).join(', ')}. ${
+          hostDown
+            ? 'The host itself is also failing pings — the box (or its network) is the problem.'
+            : 'The host answers pings, so the box is up — the service process(es) crashed or stopped, not the machine.'
+        }`,
+      })
+    } else if (sameHost.length > 0) {
+      findings.push({
+        code: 'sv_services_ok',
+        severity: 'ok',
+        title: `All ${sameHost.length} service${sameHost.length === 1 ? '' : 's'} on this host ${sameHost.length === 1 ? 'is' : 'are'} responding`,
+        body: 'Health probes for the sibling services are green.',
       })
     }
   }

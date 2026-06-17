@@ -1,15 +1,18 @@
 /**
- * Cluster-wide status summary — powers the multi-issue header banner.
+ * Cluster-wide status summary — powers the ops transition toasts.
  *
- * Aggregates four facets that ops needs at a glance:
- *   • serversDown            — hosts/services that aren't healthy right now
- *   • servicesInMaintenance  — anything intentionally taken offline
- *   • failedJobs5m           — non-aborted job failures in the last 5 minutes
- *   • slowJobs5m             — currently-running wf jobs already past 1.5× avg
+ * Returns the IDENTITIES (id + name) of down hosts/services, not just counts,
+ * so the client can set-diff between polls: that catches simultaneous
+ * down+recover within one poll window (a count delta would net to zero and
+ * miss both) and lets toasts name the actual record. Plus two rolling 5-minute
+ * job facets the client edge-triggers on:
+ *   • downServers / downServices — confirmed-offline records (excl. maintenance)
+ *   • servicesInMaintenance      — intentionally offline, count only
+ *   • failedJobs5m               — non-aborted job failures in the last 5 min
+ *   • slowJobs5m                 — running wf jobs already past 1.5× avg
  *
- * Counts are cached for 5s so a busy cluster doesn't hammer the DB while
- * every page polls this on a short interval. The banner clears within one
- * cache window when issues resolve.
+ * Counts are cached for 5s so a busy cluster doesn't hammer the DB while the
+ * client polls on a short interval.
  */
 import { Hono } from 'hono'
 import { sql } from 'drizzle-orm'
@@ -89,8 +92,9 @@ app.get('/summary', requireAuth, async (c) => {
     }
     const isDown = (s: (typeof servers)[number]) =>
       !s.isMaintenance && s.health !== null && s.health.status === 'offline'
-    const serversDown = servers.filter((s) => isDown(s) && !hasPort(s)).length
-    const servicesDown = servers.filter((s) => isDown(s) && hasPort(s)).length
+    const ident = (s: (typeof servers)[number]) => ({ id: s.id, name: s.name })
+    const downServers = servers.filter((s) => isDown(s) && !hasPort(s)).map(ident)
+    const downServices = servers.filter((s) => isDown(s) && hasPort(s)).map(ident)
 
     const servicesInMaintenance = servers.filter((s) => s.isMaintenance).length
 
@@ -101,8 +105,8 @@ app.get('/summary', requireAuth, async (c) => {
 
     return {
       ts: Date.now(),
-      serversDown,
-      servicesDown,
+      downServers,
+      downServices,
       servicesInMaintenance,
       failedJobs5m,
       slowJobs5m,

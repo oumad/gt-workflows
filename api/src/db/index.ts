@@ -12,7 +12,9 @@ const client = postgres(config.DATABASE_URL, {
   idle_timeout: 120, // seconds — keep connections alive longer
   max_lifetime: 3600, // seconds — hard-recycle every hour
   connect_timeout: 30, // seconds — Docker Windows networking can be slow
-  ssl: false, // skip SSLRequest round-trip (Docker postgres has no SSL)
+  // TLS only when DATABASE_URL asks for it (?sslmode=require / verify-*) —
+  // the compose postgres speaks no TLS, while managed providers demand it.
+  ssl: /[?&]sslmode=(require|prefer|verify-ca|verify-full)/i.test(config.DATABASE_URL),
   prepare: false, // skip per-connection prepared statement round-trips
   onnotice: () => {}, // silence NOTICE messages in dev
 })

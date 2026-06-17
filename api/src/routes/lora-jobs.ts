@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm'
 import { db, trainingJobs, gtUsers } from '../db/index.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { requireAuth } from '../middleware/auth.js'
+import { notFound, httpErrorResponse } from '../lib/httpError.js'
+import { getTrainingLog, getTrainingProgress } from '../services/aiToolkit.js'
 import type { AppVariables } from '../types.js'
 
 const app = new Hono<{ Variables: AppVariables }>()
@@ -30,6 +32,48 @@ app.get('/:id', requireAuth, async (c) => {
   if (!row) return c.json({ error: 'Not found' }, 404)
 
   return c.json(row)
+})
+
+// ── Live training data from the AI-Toolkit box ─────────────────
+// Bridge: training_jobs.remote_job_name ↔ the toolkit's job_ref. Same
+// UUID-or-processId lookup as GET /:id.
+async function requireAitBridge(id: string): Promise<{ url: string; ref: string }> {
+  const row = await db.query.trainingJobs.findFirst({
+    where: UUID_RE.test(id)
+      ? (t, { eq: e, or }) => or(e(t.id, id), e(t.processId, id))
+      : (t, { eq: e }) => e(t.processId, id),
+    columns: { serverUrl: true, remoteJobName: true },
+  })
+  if (!row) throw notFound('Job not found')
+  if (!row.remoteJobName) {
+    throw notFound(
+      'This job has no AI-Toolkit reference (remoteJobName) — training details unavailable.',
+    )
+  }
+  if (!row.serverUrl) {
+    throw notFound('This job has no server URL — training details unavailable.')
+  }
+  return { url: row.serverUrl, ref: row.remoteJobName }
+}
+
+// ── GET /lora-jobs/:id/training-progress — status/step/speed ──
+app.get('/:id/training-progress', requireAuth, async (c) => {
+  try {
+    const { url, ref } = await requireAitBridge(c.req.param('id'))
+    return c.json(await getTrainingProgress(url, ref))
+  } catch (err) {
+    return httpErrorResponse(c, err)
+  }
+})
+
+// ── GET /lora-jobs/:id/training-log — tailed trainer log ──────
+app.get('/:id/training-log', requireAuth, async (c) => {
+  try {
+    const { url, ref } = await requireAitBridge(c.req.param('id'))
+    return c.json(await getTrainingLog(url, ref))
+  } catch (err) {
+    return httpErrorResponse(c, err)
+  }
 })
 
 // ── POST /lora-jobs — ingest a process JSON ────

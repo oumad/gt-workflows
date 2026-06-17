@@ -9,8 +9,9 @@
  *                        lists rarely cover bare GPU hostnames, which would
  *                        wrongly route through the proxy and fail.
  *                        MONITOR_USE_PROXY=true flips them onto the proxy.
- *   directFetch()        targets local by definition (the RDP sidecar).
- *                        Always direct, regardless of MONITOR_USE_PROXY.
+ *
+ * directFetch / directDispatcher below are the internal no-proxy primitives
+ * the two internal* helpers build on.
  *
  * VERSION PIN: keep the npm `undici` dependency on the SAME MAJOR as the
  * copy bundled in Node (`node -p process.versions.undici`). Native fetch()
@@ -80,7 +81,7 @@ export function setupGlobalProxy(): void {
 // ── Direct / internal traffic ───────────────────────────────────
 
 /** Shared no-proxy dispatcher. Singleton — cheap to share. */
-export const directDispatcher: Dispatcher = new Agent()
+const directDispatcher: Dispatcher = new Agent()
 
 /** RequestInit plus a convenience timeout (ignored when a signal is given). */
 export type FetchInit = RequestInit & { timeoutMs?: number }
@@ -91,10 +92,11 @@ function prepare(init: FetchInit): RequestInit {
   return rest
 }
 
-/** fetch() that ALWAYS bypasses the proxy — for targets local by definition
- *  (the RDP sidecar). The cast bridges undici-types (from @types/node) and
- *  the explicit undici package; `dispatcher` is honored by native fetch. */
-export function directFetch(url: string | URL, init: FetchInit = {}): Promise<Response> {
+/** fetch() that ALWAYS bypasses the proxy — the no-proxy primitive
+ *  internalFetch uses for its direct path. The cast bridges undici-types
+ *  (from @types/node) and the explicit undici package; `dispatcher` is
+ *  honored by native fetch. */
+function directFetch(url: string | URL, init: FetchInit = {}): Promise<Response> {
   return fetch(url, {
     ...prepare(init),
     dispatcher: directDispatcher,

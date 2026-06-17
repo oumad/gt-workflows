@@ -110,11 +110,15 @@ services:
       MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
       MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
       MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      MONITOR_RETRIES: "${MONITOR_RETRIES:-1}"
+      MONITOR_CONCURRENCY: "${MONITOR_CONCURRENCY:-8}"
+      MONITOR_DOWN_AFTER: "${MONITOR_DOWN_AFTER:-2}"
       MONITOR_USE_PROXY: "${MONITOR_USE_PROXY:-false}"
       MONITOR_VERBOSE: "${MONITOR_VERBOSE:-false}"
-      # RDP execution. Unset → api runs xfreerdp/Xvfb itself.
-      RDP_BRIDGE_URL: "${RDP_BRIDGE_URL:-}"
-      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
+      # Outbound proxy for INTERNET calls (Discord webhook). Empty = direct.
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     depends_on:

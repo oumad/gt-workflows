@@ -388,7 +388,10 @@ class SyncService {
           .onConflictDoUpdate({
             target: workflowJobs.id,
             set: {
-              status: sql`excluded.status`,
+              // A manual force-stop (status 'cancelled') must survive a full
+              // resync: Redis may still list the job as active, but a real
+              // terminal outcome from Redis (completed/failed) still wins.
+              status: sql`CASE WHEN workflow_jobs.status = 'cancelled' AND excluded.status IN ('waiting','active') THEN workflow_jobs.status ELSE excluded.status END`,
               // Heal rows whose created_at was once written as now() because
               // Redis had lost the original 'timestamp'. LEAST() keeps the
               // earliest known value, so a later sync with better data fixes
@@ -630,7 +633,8 @@ class SyncService {
           .onConflictDoUpdate({
             target: trainingJobs.processId,
             set: {
-              status: sql`excluded.status`,
+              // See workflow_jobs above — force-stops survive a full resync.
+              status: sql`CASE WHEN training_jobs.status = 'cancelled' AND excluded.status IN ('pending','running') THEN training_jobs.status ELSE excluded.status END`,
               // See pickCreatedAt + the matching guard on workflow_jobs.
               createdAt: sql`LEAST(training_jobs.created_at, excluded.created_at)`,
               startedAt: sql`excluded.started_at`,

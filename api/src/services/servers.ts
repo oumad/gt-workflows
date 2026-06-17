@@ -7,10 +7,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config/index.js'
-import { serverMatchKey } from '../lib/serverUrl.js'
+import { serverMatchKey, hostnameOf, portOf } from '../lib/serverUrl.js'
 import { sendServerReport } from '../lib/discord.js'
 import { probeOneServer, syncServerHealth } from './serverHealth.js'
-import { notFound, conflict, internalError } from '../lib/httpError.js'
+import { notFound, conflict, internalError, HttpError } from '../lib/httpError.js'
 import * as repo from '../repositories/servers.js'
 import type {
   ServerHealth,
@@ -68,13 +68,55 @@ function getWorkflowsDir(): string {
 
 /* ─── List / get ─────────────────────────────────────────────── */
 
+type Counts = { active: number; waiting: number }
+
+/** Active/waiting job counts for every row, rolling sibling-service counts up
+ *  onto each port-less HOST row. Jobs always attach to the ported SERVICE
+ *  record (serverMatchKey preserves the port), so a host's own counts are
+ *  always 0 — without this rollup a host can never show "busy" even when a
+ *  service running on it is busy. Mirrors the GPU host<->service inheritance in
+ *  serverHealth.ts. Keyed by server id. */
+async function rollupCounts(rows: Server[]): Promise<Map<string, Counts>> {
+  const wfIds = rows.filter((s) => s.type !== 'lora').map((s) => s.id)
+  const loraIds = rows.filter((s) => s.type === 'lora').map((s) => s.id)
+  const own = await repo.liveCountsByServer(wfIds, loraIds)
+
+  // Parse each URL once: classify host (port-less) vs service and capture its
+  // hostname + own counts.
+  const parsed = rows.map((s) => ({
+    s,
+    isHost: portOf(s.url) == null,
+    host: hostnameOf(s.url),
+    own: own.get(s.id) ?? { active: 0, waiting: 0 },
+  }))
+
+  // Sum each service's counts onto its hostname.
+  const svcByHost = new Map<string, Counts>()
+  for (const p of parsed) {
+    if (p.isHost || !p.host) continue
+    const agg = svcByHost.get(p.host) ?? { active: 0, waiting: 0 }
+    agg.active += p.own.active
+    agg.waiting += p.own.waiting
+    svcByHost.set(p.host, agg)
+  }
+
+  // Each row gets its own counts; a host additionally inherits its services'.
+  const out = new Map<string, Counts>()
+  for (const p of parsed) {
+    const agg = (p.isHost && p.host ? svcByHost.get(p.host) : undefined) ?? {
+      active: 0,
+      waiting: 0,
+    }
+    out.set(p.s.id, { active: p.own.active + agg.active, waiting: p.own.waiting + agg.waiting })
+  }
+  return out
+}
+
 export async function listServers(): Promise<ServerWithCounts[]> {
   const rows = await repo.findAll()
   if (rows.length === 0) return []
 
-  const wfIds = rows.filter((s) => s.type !== 'lora').map((s) => s.id)
-  const loraIds = rows.filter((s) => s.type === 'lora').map((s) => s.id)
-  const counts = await repo.liveCountsByServer(wfIds, loraIds)
+  const counts = await rollupCounts(rows)
 
   return rows.map((s) => {
     const c = counts.get(s.id) ?? { active: 0, waiting: 0 }
@@ -86,7 +128,20 @@ export async function getServer(id: string): Promise<ServerWithWorkflows> {
   const row = await repo.findById(id)
   if (!row) throw notFound('Server not found')
   const serverWorkflows = await repo.workflowsAssignedToServer(id)
-  return { ...row, health: deriveHealth(row), workflows: serverWorkflows }
+  // A service's counts are its own. A host (port-less URL) has no jobs of its
+  // own and must inherit from the services running on it — only that case needs
+  // the fleet-wide rollup; a service detail just reads its own counts.
+  const c =
+    portOf(row.url) == null
+      ? ((await rollupCounts(await repo.findAll())).get(id) ?? { active: 0, waiting: 0 })
+      : await repo.liveCountsFor(row)
+  return {
+    ...row,
+    health: deriveHealth(row),
+    workflows: serverWorkflows,
+    activeJobs: c.active,
+    waitingJobs: c.waiting,
+  }
 }
 
 export async function getServerJobs(id: string): Promise<ServerJobsResponse> {
@@ -672,9 +727,17 @@ export async function reportServer(
       serverUrl: row.url,
       reporter: reporterUsername,
       message: input.message,
+      findings: input.findings,
     })
   } catch (err) {
-    // Log but don't fail the request — the webhook is best-effort.
+    // Surface the failure — a green "report sent" for a timed-out webhook
+    // erodes trust in every later success. Timeouts here usually mean the
+    // proxy isn't configured (HTTPS_PROXY) or DISCORD_WEBHOOK_URL is stale.
     console.warn('[discord] webhook failed:', err instanceof Error ? err.message : err)
+    throw new HttpError(
+      502,
+      'discord_failed',
+      `Discord webhook failed (${err instanceof Error ? err.message : 'unknown error'}) — the report was NOT delivered. Check DISCORD_WEBHOOK_URL and proxy settings (HTTPS_PROXY) on the API.`,
+    )
   }
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { Plus, RefreshCw, ChevronRight, Download } from 'lucide-react'
 import { loadSession } from '../../lib/storage'
 import { loadPrefs } from '../preferences/PreferencesPage'
@@ -51,7 +52,7 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
   const { workflows, loading, error, reload } = useWorkflows()
   const { servers } = useServers()
 
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useTabWithUrl('all', ['all', 'insights', 'repartition'])
   const [range, setRange] = useState<Range>('7d')
   const [filter, setFilter] = useState('')
   const [layout, setLayout] = useState<'cards' | 'list'>(() => loadPrefs().workflowLayout)

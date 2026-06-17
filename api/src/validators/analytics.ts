@@ -30,7 +30,7 @@ export function parseDays(raw: string | undefined): number {
   return Math.min(n, 90)
 }
 
-export function parseTop(raw: string | undefined, fallback = 8, max = 20): number {
+export function parseTop(raw: string | undefined, fallback = 8, max = 500): number {
   return Math.min(Math.max(parseInt(raw ?? String(fallback), 10) || fallback, 1), max)
 }
 

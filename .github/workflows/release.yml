@@ -78,7 +78,6 @@ jobs:
           # so the default `docker compose up` command keeps working without
           # the operator having to learn the templates layout.
           cp -r docker-compose-templates    "$stage/"
-          cp -r rdp-sidecar                 "$stage/"
           cp docker-compose-templates/prod.yml "$stage/docker-compose.yml"
           cp .env.example                   "$stage/"
           cp frontend/nginx.conf            "$stage/nginx.conf.reference"

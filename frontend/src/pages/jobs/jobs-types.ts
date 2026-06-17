@@ -112,7 +112,10 @@ export interface Row {
   waitingSec: number | null
   startedLabel: string | null
   totalSec: number | null
-  genSec: number | null
+  /** Pure processing duration (duration_ms → seconds), excluding queue wait.
+   *  This is the metric the Doctor slow-jobs query compares against the
+   *  per-workflow average, so SlowChip uses it to stay consistent. */
+  durationSec: number | null
   waitTimeSec: number | null
   completedAt: Date | null
   createdAt: string

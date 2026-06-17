@@ -227,14 +227,19 @@ export async function findJobAnywhere(id: string): Promise<
       where: (j, { eq }) => eq(j.id, id),
       columns: { id: true, workflowName: true, status: true, serverUrl: true },
     }),
-    // Skip the training_jobs query entirely for non-UUID ids; otherwise the
-    // postgres-js driver attaches a text → uuid cast that errors at parse.
+    // LoRA: a uuid hits the primary key; anything else may be the BullMQ
+    // processId — which is what live-feed rows carry — so resolve by that.
+    // (Skipping the uuid clause for non-UUID ids also avoids the postgres-js
+    // text → uuid cast error.)
     looksLikeUuid
       ? db.query.trainingJobs.findFirst({
           where: (j, { eq }) => eq(j.id, id),
           columns: { id: true, baseModel: true, status: true, serverUrl: true },
         })
-      : Promise.resolve(undefined),
+      : db.query.trainingJobs.findFirst({
+          where: (j, { eq }) => eq(j.processId, id),
+          columns: { id: true, baseModel: true, status: true, serverUrl: true },
+        }),
   ])
   if (wf) return { type: 'wf', row: wf }
   if (lora) return { type: 'lora', row: lora }

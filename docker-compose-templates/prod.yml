@@ -18,11 +18,8 @@
 # Frontend is the only ingress point. If you need TLS, put Caddy / nginx /
 # Traefik in front of the frontend container and reverse-proxy to :80.
 #
-# RDP mode:
-#   Embedded (default) — the api image bundles freerdp + Xvfb; nothing extra.
-#   Sidecar           — set RDP_BRIDGE_URL on the api service to delegate RDP
-#                       tests to the rdp-sidecar container (see postgres-rdp.yml
-#                       or the rdp-sidecar/ folder). Slimmer api image.
+# RDP credential testing (the "RDP In" button) uses the freerdp + Xvfb the api
+# image bundles — nothing extra to run.
 
 services:
   # ── PostgreSQL ────────────────────────────────
@@ -78,7 +75,9 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/coffee_maker"
-      REDIS_URL: "redis://redis:6379"
+      # Defaults to the bundled container; real prod should point this at the
+      # gt-workflows Redis via .env (REDIS_URL=redis://host:6379).
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       REDIS_BULLMQ_PREFIX: "${REDIS_BULLMQ_PREFIX:-bull}"
       REDIS_BULLMQ_QUEUE: "${REDIS_BULLMQ_QUEUE:-workflow-studio-comfyui-process-queue}"
       REDIS_LORA_QUEUE: "${REDIS_LORA_QUEUE:-lora-trainer-training-queue}"
@@ -102,13 +101,16 @@ services:
       MONITOR_INTERVAL_MS: "${MONITOR_INTERVAL_MS:-30000}"
       MONITOR_TIMEOUT_MS: "${MONITOR_TIMEOUT_MS:-5000}"
       MONITOR_STAGGER_MS: "${MONITOR_STAGGER_MS:-1000}"
+      MONITOR_RETRIES: "${MONITOR_RETRIES:-1}"
+      MONITOR_CONCURRENCY: "${MONITOR_CONCURRENCY:-8}"
+      MONITOR_DOWN_AFTER: "${MONITOR_DOWN_AFTER:-2}"
       MONITOR_USE_PROXY: "${MONITOR_USE_PROXY:-false}"
       MONITOR_VERBOSE: "${MONITOR_VERBOSE:-false}"
-      # RDP execution. Unset → api runs xfreerdp/Xvfb itself (the image bundles
-      # them). Set to `http://rdp-sidecar:8080` and add the sidecar service
-      # below to delegate RDP tests to a dedicated container.
-      RDP_BRIDGE_URL: "${RDP_BRIDGE_URL:-}"
-      RDP_BRIDGE_TOKEN: "${RDP_BRIDGE_TOKEN:-}"
+      # Outbound proxy for INTERNET calls (Discord webhook). Internal GPU
+      # traffic bypasses it unless MONITOR_USE_PROXY=true. Empty = direct.
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-}"
     volumes:
       - ${WORKFLOWS_DIR:-./workflows}:/workflows:z
     # No `ports:` — the API is reached only through the frontend's /api

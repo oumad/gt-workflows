@@ -16,21 +16,34 @@ COPY . .
 # Compiles TypeScript to dist/. Type errors fail the build.
 RUN npm run build
 
-# ── Runtime image — slim, no devDependencies, no toolchain ────
-FROM node:24-alpine
+# ── Runtime image — slim, no devDependencies ─────────────────
+# Debian (glibc), NOT Alpine: the RDP probe needs FreeRDP **2**, and current
+# Alpine only ships FreeRDP 3 — whose reworked security negotiation fails our
+# domain hosts (ERRCONNECT_SECURITY_NEGO_CONNECT_FAILED) and whose NLA defaults
+# to Kerberos (stalls on "Cannot find KDC", and the NTLM fallback is broken in
+# that build too). Debian bookworm packages freerdp2-x11. The runtime re-installs
+# deps below (npm ci), so nothing musl-built leaks in from the Alpine
+# deps/builder stages — only the pure-JS dist/ is copied across.
+FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
-# freerdp + Xvfb power the admin "RDP In" button on Ask Seto. xfreerdp drives
-# the actual session; Xvfb provides a virtual X display so xfreerdp doesn't
-# refuse to start in this headless container. No scrot — we don't screenshot.
-# Alpine package name is plain `xvfb` in 3.19+; older `xorg-server-xvfb` is gone.
-# `--no-cache` keeps the image lean (~70MB total for these). procps gives us a
-# usable `kill` for clean teardown.
-# iputils provides `ping` for the tier-1 ICMP host check in serverHealth.ts.
-# ICMP needs the NET_RAW capability (granted by Docker's default cap set); if
-# it's dropped or ICMP is firewalled, the probe falls back to a TCP connect.
-RUN apk add --no-cache freerdp xvfb procps iputils
+# freerdp2-x11 + Xvfb power the admin "RDP In" button on Ask Seto. FreeRDP 2 is
+# deliberate (see above): it negotiates cleanly and authenticates NLA with NTLM
+# (just the password — no KDC), exactly like the operator's connect.sh. xfreerdp
+# drives the session; Xvfb gives it a virtual display so it starts headless. No
+# scrot — we don't screenshot. procps for a usable kill on teardown; iputils-ping
+# provides `ping` for the tier-1 ICMP host check in serverHealth.ts (NET_RAW is
+# in Docker's default cap set; if dropped or ICMP is firewalled, the probe falls
+# back to a TCP connect).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       freerdp2-x11 xvfb procps iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+# Fail the BUILD if the RDP toolchain didn't land (apt mirror drift, stale
+# cache) instead of a cryptic `spawn xfreerdp ENOENT` on the first "RDP In"
+# click. FreeRDP 2 installs the client as plain `xfreerdp`.
+RUN command -v xfreerdp && command -v Xvfb
 
 # Re-install only production deps. Skips drizzle-kit / tsc / eslint / tsx /
 # typescript-eslint etc., which the runtime never touches — the in-process

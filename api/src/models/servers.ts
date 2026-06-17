@@ -25,6 +25,8 @@ export interface ServerWithCounts extends Server {
 export interface ServerWithWorkflows extends Server {
   health: ServerHealth | null
   workflows: Workflow[]
+  activeJobs: number
+  waitingJobs: number
 }
 
 export interface ServerInsight {

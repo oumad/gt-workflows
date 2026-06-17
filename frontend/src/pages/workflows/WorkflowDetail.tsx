@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { createPortal } from 'react-dom'
 import {
   ChevronDown,
@@ -452,9 +453,12 @@ export function WorkflowDetail({
   onDelete,
   onSaved,
 }: Props) {
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useTabWithUrl('overview', ['overview', 'config', 'nodes', 'files', 'runs'])
   const [jobs, setJobs] = useState<UnifiedJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(true)
+  // Exact all-time run count from the API (uncapped) — drives the Runs pill
+  // so it always agrees with the table inside the tab. null = not loaded yet.
+  const [runsTotal, setRunsTotal] = useState<number | null>(null)
   const [testOpen, setTestOpen] = useState(false)
   const [auditOpen, setAuditOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -510,7 +514,10 @@ export function WorkflowDetail({
     else if (wf.name !== wf.id) params.set('workflowName', wf.name)
     api
       .get<UnifiedJobsPage>(`/api/jobs?${params}`)
-      .then((res) => setJobs(res.items ?? []))
+      .then((res) => {
+        setJobs(res.items ?? [])
+        setRunsTotal(res.total ?? null)
+      })
       .catch(() => {})
       .finally(() => setJobsLoading(false))
     // Deliberate: refetch only when the workflow identity changes — name and
@@ -520,13 +527,6 @@ export function WorkflowDetail({
 
   const isComfyUI = wf.parser?.toLowerCase() === 'comfyui'
 
-  const cutoff7d = Date.now() - 7 * 24 * 60 * 60 * 1000
-  const runs7d = jobs.filter(
-    (j) =>
-      new Date(j.createdAt).getTime() >= cutoff7d &&
-      (j.status === 'completed' || j.status === 'failed'),
-  ).length
-
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'config', label: 'Config' },
@@ -535,13 +535,24 @@ export function WorkflowDetail({
     // validation, plain text otherwise). Replaces the old "JSON files" tab,
     // which was limited to params.json + workflow.json.
     { id: 'files', label: 'Files' },
-    { id: 'runs', label: 'Runs', pill: runs7d || undefined },
+    // Pill hidden until the count is known — a wrong number is worse than none.
+    { id: 'runs', label: 'Runs', pill: runsTotal ?? undefined },
   ]
+
+  // A deep-linked ?tab= may name a conditionally-hidden tab (e.g. 'nodes' on a
+  // non-ComfyUI workflow); fall back to the first rendered tab so the body is
+  // never blank. (useTabWithUrl can't know the conditional set at mount.)
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
 
   return (
     <>
       <PageHead
-        crumbs={['Brews', { label: 'Workflows', onClick: onBack }, catName]}
+        crumbs={[
+          'Brews',
+          { label: 'Workflows', onClick: onBack },
+          { label: catName, onClick: onBack },
+          wf.name,
+        ]}
         title={wf.name}
         sub={wf.description ?? undefined}
         actions={null}
@@ -570,7 +581,7 @@ export function WorkflowDetail({
 
       <Tabs
         tabs={tabs}
-        active={tab}
+        active={activeTab}
         onChange={setTab}
         trailing={
           <ActionsMenu
@@ -586,7 +597,7 @@ export function WorkflowDetail({
       />
 
       <div className="body">
-        {tab === 'overview' && (
+        {activeTab === 'overview' && (
           <OverviewTab
             wf={wf}
             servers={servers}
@@ -598,7 +609,7 @@ export function WorkflowDetail({
           />
         )}
 
-        {tab === 'config' && (
+        {activeTab === 'config' && (
           <WorkflowConfig wf={wf} servers={servers} isAdmin={isAdmin} onSaved={onSaved} />
         )}
 
@@ -607,15 +618,15 @@ export function WorkflowDetail({
             key={nodeResetKey}
             wf={wf}
             isAdmin={isAdmin}
-            hidden={tab !== 'nodes'}
+            hidden={activeTab !== 'nodes'}
             onDirtyChange={setNodeDirty}
             saveRef={nodeSaveRef}
           />
         )}
 
-        {tab === 'files' && <WorkflowFiles wfId={wf.id} isAdmin={isAdmin} />}
+        {activeTab === 'files' && <WorkflowFiles wfId={wf.id} isAdmin={isAdmin} />}
 
-        {tab === 'runs' && <RunsTab wf={wf} />}
+        {activeTab === 'runs' && <RunsTab wf={wf} />}
       </div>
 
       {nodeDirty && (

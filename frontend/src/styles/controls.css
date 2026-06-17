@@ -215,6 +215,9 @@ textarea.input {
 /* ─── Toggle group ──────────────────────────── */
 .toggle-group {
   display: inline-flex;
+  /* Center the prefix (icon + label spans) with the option buttons — without
+     this they baseline-align and prefix text like "Auto" sits visibly low. */
+  align-items: center;
   background: var(--surface-2);
   border-radius: 8px;
   padding: 2px;

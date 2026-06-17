@@ -67,6 +67,25 @@ export const SETO_CODE_INFO: Record<string, SetoCodeInfo> = {
       'Warns when more than the configured number of services run on a single host — concentrates blast radius if the host fails.',
     threshold: 'maxServerServices',
   },
+  sv_down: {
+    label: 'Server unreachable',
+    description:
+      'The host failed its recent health probes (no ping response) — everything running on it is effectively offline.',
+  },
+  sv_ping_ok: {
+    label: 'Host ping OK',
+    description:
+      'Positive confirmation that the host answers ping; service health is evaluated separately.',
+  },
+  sv_services_down: {
+    label: 'Services on host unreachable',
+    description:
+      'One or more services on this host fail their health probes. When the host still pings, the service process crashed — not the box.',
+  },
+  sv_services_ok: {
+    label: 'Services on host responding',
+    description: 'Positive confirmation that every sibling service on this host probes green.',
+  },
   si_crowded: {
     label: 'Service is busy or crowded',
     description:

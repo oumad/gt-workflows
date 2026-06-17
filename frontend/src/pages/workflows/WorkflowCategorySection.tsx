@@ -3,9 +3,10 @@ import type { Workflow, Server, NavigateFn } from '../../types'
 import { WFCard } from './WFCard'
 import { serverLabel, type CatInfo, type DragState } from './workflowsHelpers'
 
-/** One category section in the All-workflows list: clickable header that
- *  toggles open/closed, plus the workflow grid (cards layout) or table
- *  (list layout) underneath. */
+/** One category section in the All-workflows list: a bare collapsible
+ *  header (chevron + color tag + name + count — no card container), with
+ *  the workflow grid (cards layout) or table (list layout) flowing
+ *  directly on the page underneath. */
 export function WorkflowCategorySection({
   cat,
   isOpen,
@@ -40,21 +41,13 @@ export function WorkflowCategorySection({
   navigate?: NavigateFn
 }) {
   return (
-    <section className="card">
-      <button
-        className="row"
-        onClick={onToggleOpen}
-        style={{
-          width: '100%',
-          padding: '14px var(--pad)',
-          background: 'transparent',
-          border: 0,
-          borderBottom: isOpen ? '1px solid var(--line)' : '0',
-          cursor: 'default',
-          textAlign: 'left',
-          gap: 10,
-        }}
-      >
+    <section>
+      {/* .section-head (layout.css): sticky, hover tint, full-width rule —
+       * the chevron rotates off aria-expanded. */}
+      <button className="section-head" onClick={onToggleOpen} aria-expanded={isOpen}>
+        <span className="section-head-chevron">
+          <ChevronRight size={15} />
+        </span>
         <span
           style={{
             width: 22,
@@ -71,21 +64,14 @@ export function WorkflowCategorySection({
         <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>
           {cat.name}
         </span>
-        <span className="chip">{cat.items.length}</span>
-        <span className="spacer" />
-        <span
-          style={{
-            transform: isOpen ? 'rotate(90deg)' : 'rotate(0)',
-            transition: 'transform .15s',
-            color: 'var(--ink-3)',
-          }}
-        >
-          <ChevronRight size={16} />
+        {/* Wordful count so a collapsed row still says what it holds. */}
+        <span className="chip">
+          {cat.items.length} workflow{cat.items.length === 1 ? '' : 's'}
         </span>
       </button>
 
       {isOpen && (
-        <div className="card-pad">
+        <div style={{ marginTop: 12 }}>
           {layout === 'cards' ? (
             <div className="grid-3">
               {cat.items.map((wf, i) => (

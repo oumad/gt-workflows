@@ -37,7 +37,7 @@ export function DistributionTab({ range }: { range: Range }) {
     setError(null)
     Promise.all([
       api.get<DistributionRow[]>(`/api/analytics/distribution?groupBy=${groupBy}&days=${days}`),
-      api.get<TimeseriesRow[]>(`/api/analytics/timeseries?groupBy=${groupBy}&days=${days}&top=8`),
+      api.get<TimeseriesRow[]>(`/api/analytics/timeseries?groupBy=${groupBy}&days=${days}&top=500`),
     ])
       .then(([r, t]) => {
         setRows(r)

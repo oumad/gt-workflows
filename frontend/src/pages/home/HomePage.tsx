@@ -19,13 +19,6 @@ import {
 } from '../jobs/shared'
 import type { UnifiedLiveResponse } from '../jobs/jobs-types'
 
-interface JobsStats {
-  wf: { total: number; active: number; waiting: number; completed: number; failed: number }
-  lora: { total: number; running: number; pending: number; completed: number; failed: number }
-  running: number
-  waiting: number
-}
-
 type Tile = {
   id: Page
   icon: React.ReactNode
@@ -82,30 +75,28 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
   }
 
   useEffect(() => {
-    // Counts come from the unified /jobs/stats endpoint (one call instead of
-    // four). Active-user count still needs the actual rows — we pull a slice
-    // of currently-in-flight jobs for that.
-    Promise.all([
-      api.get<JobsStats>('/api/jobs/stats').catch(() => null),
-      api
-        .get<UnifiedLiveResponse>('/api/jobs/live')
-        .catch(() => ({ running: [], waiting: [], ts: 0 })),
-    ]).then(([stats, live]) => {
-      if (stats) {
-        setRunWf(stats.wf.active)
-        setQueWf(stats.wf.waiting)
-        setRunLo(stats.lora.running)
-        setQueLo(stats.lora.pending)
-      }
-      setJobsLoaded(true)
+    // Running/waiting come straight from the Redis-backed /jobs/live feed so
+    // HomePage's counts match the sidebar badge exactly (both live-derived).
+    // The WF/LoRA split is derived from the same payload by job type — using
+    // the Postgres /jobs/stats breakdown here would disagree with the live
+    // sidebar count whenever a job's status hasn't synced yet.
+    api
+      .get<UnifiedLiveResponse>('/api/jobs/live')
+      .catch(() => ({ running: [], waiting: [], ts: 0 }) as UnifiedLiveResponse)
+      .then((live) => {
+        setRunWf(live.running.filter((j) => j.type === 'wf').length)
+        setQueWf(live.waiting.filter((j) => j.type === 'wf').length)
+        setRunLo(live.running.filter((j) => j.type === 'lora').length)
+        setQueLo(live.waiting.filter((j) => j.type === 'lora').length)
+        setJobsLoaded(true)
 
-      // Unique active users: anyone with a running or queued job right now
-      const userSet = new Set<string>()
-      for (const j of [...live.running, ...live.waiting]) {
-        if (j.userName) userSet.add(j.userName)
-      }
-      setActiveUsers(userSet.size)
-    })
+        // Unique active users: anyone with a running or queued job right now
+        const userSet = new Set<string>()
+        for (const j of [...live.running, ...live.waiting]) {
+          if (j.userName) userSet.add(j.userName)
+        }
+        setActiveUsers(userSet.size)
+      })
 
     // Recent activity feed — single unified call, latest 10 across both types.
     // Items are stored as raw UnifiedJob so each row can be opened in the
@@ -197,7 +188,7 @@ export function HomePage({ navigate }: { navigate: (p: Page) => void }) {
 
   return (
     <>
-      <PageHead title="Dashboard" sub="Overview of your GT Coffee Maker cluster" />
+      <PageHead title="Home" sub="Overview of your GT Coffee Maker cluster" />
       <div className="body">
         {/* Welcome banner */}
         <div className="welcome">

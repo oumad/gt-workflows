@@ -378,7 +378,11 @@ export function ServerOverview({
               </KVRow>
               <KVRow label="Last seen">
                 <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                  {fmtRelativeTime(server.health?.lastPingAt)}
+                  {server.isMaintenance
+                    ? // A stale timestamp reads like a bug — say what's actually
+                      // happening: probes are deliberately skipped in maintenance.
+                      'monitoring paused (maintenance)'
+                    : fmtRelativeTime(server.health?.lastPingAt)}
                 </span>
               </KVRow>
               {isWfSrv && (

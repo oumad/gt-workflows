@@ -8,7 +8,9 @@
 
 export interface Finding {
   code: string
-  severity: 'info' | 'warn' | 'bad'
+  /** ok = a positive confirmation ("checked and green"), distinct from info
+   *  (neutral FYI) so the UI can render verified-good in green. */
+  severity: 'ok' | 'info' | 'warn' | 'bad'
   title: string
   body: string
 }

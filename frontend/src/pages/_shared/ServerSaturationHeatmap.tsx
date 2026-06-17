@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import type { Server } from '../../types'
 import { serverStatus } from './serverHelpers'
 
@@ -18,6 +19,9 @@ type Props = {
   /** What these records are called in this view. Drives the "N services" /
    *  "N servers" pill label so the Services tab doesn't say "servers". */
   kindLabel?: 'server' | 'service'
+  /** Collapsed/expanded — owned by the page so it can persist the choice. */
+  open: boolean
+  onToggle: () => void
 }
 
 const TILE_W = 120
@@ -35,7 +39,13 @@ function saturationColor(ratio: number): string {
   return 'var(--bad)'
 }
 
-export function ServerSaturationHeatmap({ servers, onOpen, kindLabel = 'server' }: Props) {
+export function ServerSaturationHeatmap({
+  servers,
+  onOpen,
+  kindLabel = 'server',
+  open,
+  onToggle,
+}: Props) {
   if (servers.length === 0) return null
 
   return (
@@ -45,7 +55,33 @@ export function ServerSaturationHeatmap({ servers, onOpen, kindLabel = 'server' 
       // when the page scrolls — earlier sticky positioning was hiding content.
       style={{ marginBottom: 14 }}
     >
-      <div className="card-head">
+      {/* Whole header toggles the collapse — the grid is tall and not every
+       * operator wants it on screen permanently. */}
+      <button
+        type="button"
+        className="card-head row"
+        onClick={onToggle}
+        aria-expanded={open}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 0,
+          cursor: 'pointer',
+          textAlign: 'left',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            transform: open ? 'rotate(90deg)' : 'rotate(0)',
+            transition: 'transform .15s',
+            color: 'var(--ink-3)',
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <ChevronRight size={14} />
+        </span>
         <div className="card-title">Saturation</div>
         <span className="chip" style={{ fontSize: 10 }}>
           {servers.length} {kindLabel}
@@ -53,95 +89,97 @@ export function ServerSaturationHeatmap({ servers, onOpen, kindLabel = 'server' 
         </span>
         <span className="spacer" />
         <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-          active / max · click a tile to open
+          {open ? 'active / max · click a tile to open' : 'collapsed — click to expand'}
         </span>
-      </div>
-      <div
-        className="row"
-        style={{
-          flexWrap: 'wrap',
-          gap: 8,
-          padding: 12,
-        }}
-      >
-        {servers.map((s) => {
-          const status = serverStatus(s)
-          const active = s.activeJobs ?? 0
-          const cap = s.maxConcurrent
+      </button>
+      {open && (
+        <div
+          className="row"
+          style={{
+            flexWrap: 'wrap',
+            gap: 8,
+            padding: 12,
+          }}
+        >
+          {servers.map((s) => {
+            const status = serverStatus(s)
+            const active = s.activeJobs ?? 0
+            const cap = s.maxConcurrent
 
-          // Status takes precedence over saturation — a "down" server with
-          // activeJobs=0 isn't "idle", it's broken. Maintenance is amber.
-          let tone: string
-          let label: string
-          let title: string
-          if (status === 'down') {
-            tone = 'color-mix(in oklab, var(--bad) 40%, var(--surface))'
-            label = 'Down'
-            title = `${s.name} — ${status}. activeJobs=${active}.`
-          } else if (status === 'maintenance') {
-            tone = 'color-mix(in oklab, var(--warn) 40%, var(--surface))'
-            label = 'Maint.'
-            title = `${s.name} — in maintenance. activeJobs=${active}.`
-          } else if (cap == null) {
-            tone = 'color-mix(in oklab, var(--ink) 6%, var(--surface))'
-            label = `${active} / —`
-            title = `${s.name} — uncalibrated. Set maxConcurrent in Settings to enable saturation colouring.`
-          } else {
-            const ratio = cap > 0 ? active / cap : 0
-            tone = saturationColor(ratio)
-            label = `${active} / ${cap}`
-            title = `${s.name} — ${active} of ${cap} (${Math.round(ratio * 100)}%) used.`
-          }
+            // Status takes precedence over saturation — a "down" server with
+            // activeJobs=0 isn't "idle", it's broken. Maintenance is amber.
+            let tone: string
+            let label: string
+            let title: string
+            if (status === 'down') {
+              tone = 'color-mix(in oklab, var(--bad) 40%, var(--surface))'
+              label = 'Down'
+              title = `${s.name} — ${status}. activeJobs=${active}.`
+            } else if (status === 'maintenance') {
+              tone = 'color-mix(in oklab, var(--warn) 40%, var(--surface))'
+              label = 'Maint.'
+              title = `${s.name} — in maintenance. activeJobs=${active}.`
+            } else if (cap == null) {
+              tone = 'color-mix(in oklab, var(--ink) 6%, var(--surface))'
+              label = `${active} / —`
+              title = `${s.name} — uncalibrated. Set maxConcurrent in Settings to enable saturation colouring.`
+            } else {
+              const ratio = cap > 0 ? active / cap : 0
+              tone = saturationColor(ratio)
+              label = `${active} / ${cap}`
+              title = `${s.name} — ${active} of ${cap} (${Math.round(ratio * 100)}%) used.`
+            }
 
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onOpen(s.id)}
-              title={title}
-              style={{
-                width: TILE_W,
-                height: TILE_H,
-                borderRadius: 8,
-                border: '1px solid var(--line)',
-                background: tone,
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                padding: 8,
-                textAlign: 'left',
-                color: 'var(--ink)',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onOpen(s.id)}
+                title={title}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  display: 'block',
+                  width: TILE_W,
+                  height: TILE_H,
+                  borderRadius: 8,
+                  border: '1px solid var(--line)',
+                  background: tone,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  padding: 8,
+                  textAlign: 'left',
+                  color: 'var(--ink)',
+                  fontFamily: 'inherit',
                 }}
               >
-                {s.name}
-              </span>
-              <span
-                className="mono"
-                style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  alignSelf: 'flex-end',
-                  textShadow: '0 1px 2px rgba(0,0,0,.15)',
-                }}
-              >
-                {label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                  }}
+                >
+                  {s.name}
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    alignSelf: 'flex-end',
+                    textShadow: '0 1px 2px rgba(0,0,0,.15)',
+                  }}
+                >
+                  {label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

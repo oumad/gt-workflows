@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { StackedBars, type StackSeries } from '../../../components/charts/StackedBars'
 import { FilterChips } from '../../../components/charts/FilterChips'
 import { Kpi } from '../../../components/ui/Kpi'
+import { Pagination } from '../../../components/ui/Pagination'
 import {
   type Range,
   type TimeseriesRow,
@@ -41,7 +42,7 @@ export function UsageTab({ range }: { range: Range }) {
     setError(null)
     api
       .get<TimeseriesRow[]>(
-        `/api/analytics/timeseries?groupBy=${groupBy}&metric=${metric}&days=${days}&top=12`,
+        `/api/analytics/timeseries?groupBy=${groupBy}&metric=${metric}&days=${days}&top=500`,
       )
       .then(setSeries)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
@@ -58,17 +59,32 @@ export function UsageTab({ range }: { range: Range }) {
   )
   const dense = useMemo(() => densifyTimeseries(series, dates), [series, dates])
 
-  // For chart, only show currently-selected entities. Reset on group/metric change.
+  // For chart, only show currently-selected entities. Reset to "all" whenever
+  // the SET of entities changes — keyed on the entity names (not `dense`
+  // identity or a length), so a group/metric switch resets to the NEW entities
+  // (the previous code reset against stale `dense` and left the chart empty),
+  // while a timeframe change that keeps the same entities preserves selection.
   const [selected, setSelected] = useState<string[]>([])
+  const entityKey = dense.map((s) => s.entity).join('')
   useEffect(() => {
     setSelected(dense.map((s) => s.entity))
-    // Deliberate: reset the selection only on group/metric/SIZE change —
-    // `dense` is recomputed every data refresh with a fresh identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBy, metric, dense.length])
+  }, [entityKey])
+
+  const PAGE_SIZE = 20
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(dense.length / PAGE_SIZE))
+  const pagedItems = dense.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  useEffect(() => {
+    setPage(1)
+  }, [groupBy, metric, days])
 
   const visible = dense.filter((s) => selected.includes(s.entity))
   const total = visible.reduce((a, s) => a + s.total, 0)
+  // Denominator for the ranked-list "% share": every entity (not just the
+  // selected/visible ones), so the rendered rows' shares are consistent and
+  // sum to 100% regardless of which chips are toggled.
+  const grandTotal = dense.reduce((a, s) => a + s.total, 0)
   const grandMax = dense[0]?.total || 1
   const stackSeries: StackSeries[] = visible.map((s) => ({
     name: s.entity,
@@ -133,7 +149,7 @@ export function UsageTab({ range }: { range: Range }) {
                 className={groupBy === g ? 'active' : ''}
                 onClick={() => setGroupBy(g)}
               >
-                By {g}
+                By {USAGE_GROUPS[g].label.toLowerCase()}
               </button>
             ))}
           </div>
@@ -181,12 +197,13 @@ export function UsageTab({ range }: { range: Range }) {
           {dense.length === 0 && (
             <span style={{ color: 'var(--ink-3)', fontSize: 13 }}>No data.</span>
           )}
-          {dense.map((s, idx) => {
+          {pagedItems.map((s, idx) => {
+            const rank = (page - 1) * PAGE_SIZE + idx
             const c = colorForName(s.entity)
             return (
               <div key={s.entity} className="row" style={{ gap: 10 }}>
                 <span className="mono" style={{ width: 24, color: 'var(--ink-3)', fontSize: 11 }}>
-                  #{idx + 1}
+                  #{rank + 1}
                 </span>
                 <span
                   style={{ width: 10, height: 10, borderRadius: 2, background: c, flexShrink: 0 }}
@@ -210,12 +227,13 @@ export function UsageTab({ range }: { range: Range }) {
                   className="mono"
                   style={{ fontSize: 11, color: 'var(--ink-3)', width: 50, textAlign: 'right' }}
                 >
-                  {total > 0 ? ((s.total / total) * 100).toFixed(1) : '0'}%
+                  {grandTotal > 0 ? ((s.total / grandTotal) * 100).toFixed(1) : '0'}%
                 </span>
               </div>
             )
           })}
         </div>
+        {totalPages > 1 && <Pagination page={page} totalPages={totalPages} onChange={setPage} />}
       </div>
     </>
   )

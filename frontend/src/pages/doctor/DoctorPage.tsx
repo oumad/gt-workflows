@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Filter, Download } from 'lucide-react'
 import { RangeSelector } from '../../components/ui/RangeSelector'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { api } from '../../lib/api'
@@ -34,19 +35,8 @@ import { DoctorErrorsTab } from './tabs/DoctorErrorsTab'
  *
  * Per-tab components live under ./tabs/, helpers under ./doctorHelpers.tsx.
  */
-/** Allowed values for the `?tab=` URL param. Anything else falls back to
- *  'overview' so a stale link never lands on an empty page. */
-const URL_TAB_WHITELIST = new Set(['overview', 'failures', 'errors', 'slow'])
-
 export function DoctorPage() {
-  const [tab, setTab] = useState(() => {
-    try {
-      const t = new URLSearchParams(window.location.search).get('tab')
-      return t && URL_TAB_WHITELIST.has(t) ? t : 'overview'
-    } catch {
-      return 'overview'
-    }
-  })
+  const [tab, setTab] = useTabWithUrl('overview', ['overview', 'failures', 'errors', 'slow'])
   const [range, setRange] = useState<Range>('7d')
   const [excludeAborted, setExcludeAborted] = useState(true)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)

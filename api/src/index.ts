@@ -21,10 +21,21 @@ const app = new Hono()
 
 app.use('*', requestLog())
 app.use('*', secureHeaders())
+// CORS_ORIGIN may be a single origin, a comma-separated list, or '*'. Hono's
+// `cors` treats a bare non-'*' string as ONE exact origin, so a comma list
+// matched nothing — split it into an array. '*' stays a string (array form
+// can't express wildcard).
+const corsOrigin: string | string[] = config.isDev
+  ? '*'
+  : config.CORS_ORIGIN.includes(',')
+    ? config.CORS_ORIGIN.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean)
+    : config.CORS_ORIGIN
 app.use(
   '/api/*',
   cors({
-    origin: config.isDev ? '*' : config.CORS_ORIGIN,
+    origin: corsOrigin,
     credentials: !config.isDev,
   }),
 )
@@ -185,6 +196,11 @@ sync.start()
 const shutdown = async () => {
   console.log('[coffee-maker-api] shutting down…')
   sync.stop()
+  // server.close() waits for in-flight requests, but a long-lived SSE stream
+  // can hold it open indefinitely — force-exit before docker's 10s SIGKILL
+  // (and so a native Ctrl+C never hangs).
+  const force = setTimeout(() => process.exit(0), 8_000)
+  force.unref()
   await new Promise<void>((resolve) => {
     server.close(() => resolve())
   })

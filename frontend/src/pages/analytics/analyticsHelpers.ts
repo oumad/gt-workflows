@@ -220,7 +220,7 @@ export function densifyTimeseries(
         dates.map(() => 0),
       )
     const i = idxOf.get(r.date.slice(0, 10))
-    if (i != null) map.get(k)![i] = r.count
+    if (i != null) map.get(k)![i] = Number(r.count)
   }
   return Array.from(map.entries())
     .map(([entity, data]) => ({ entity, data, total: data.reduce((a, b) => a + b, 0) }))

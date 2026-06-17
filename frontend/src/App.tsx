@@ -8,7 +8,7 @@ import { useJobCompletionNotifications } from './hooks/useJobCompletionNotificat
 import { canSee, derivePrimaryRole, landingFor } from './lib/permissions'
 import { LoginPage } from './pages/login/LoginPage'
 import { Sidebar } from './components/shell/Sidebar'
-import { SystemStatusBanner } from './components/shell/SystemStatusBanner'
+import { SystemStatusBanner, OpsTransitionToasts } from './components/shell/SystemStatusBanner'
 import { WorkflowsPage } from './pages/workflows/WorkflowsPage'
 import { HomePage } from './pages/home/HomePage'
 import { JobsPage } from './pages/jobs/JobsPage'
@@ -140,6 +140,7 @@ function AppShell() {
   return (
     <NotificationsProvider>
       <JobCompletionToasts />
+      <OpsTransitionToasts />
       <DataProvider>
         <SystemStatusBanner />
         <div className="app">

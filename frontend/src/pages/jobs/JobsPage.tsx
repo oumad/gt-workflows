@@ -3,6 +3,7 @@ import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { type UnifiedJob } from './shared'
 import { LiveFeed } from './JobsLiveFeed'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { History } from './JobsHistory'
 import { JobsByError } from './JobsByError'
 import type { Page } from '../../types'
@@ -14,17 +15,8 @@ export type { UnifiedJob }
 type NavigateFn = (p: Page, path?: string) => void
 
 /* ─── Page ───────────────────────────────────────────────────────── */
-const VALID_TABS = new Set(['live', 'history', 'errors'])
-
 export function JobsPage({ navigate }: { navigate?: NavigateFn }) {
-  const [tab, setTab] = useState(() => {
-    try {
-      const t = new URLSearchParams(window.location.search).get('tab')
-      return t && VALID_TABS.has(t) ? t : 'live'
-    } catch {
-      return 'live'
-    }
-  })
+  const [tab, setTab] = useTabWithUrl('live', ['live', 'history', 'errors'])
   const [liveLen, setLiveLen] = useState<number | undefined>(undefined)
 
   return (

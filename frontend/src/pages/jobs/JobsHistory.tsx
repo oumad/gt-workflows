@@ -11,6 +11,7 @@ import {
   JobModal,
   StatusPill,
   SlowChip,
+  slowLevel,
   JobKindBadge,
 } from './shared'
 import { JobRowMenu } from './JobsTables'
@@ -55,6 +56,20 @@ export type HistoryLock =
   | { kind: 'workflow'; id: string; label?: string }
   | { kind: 'user'; id: string; label?: string }
   | { kind: 'server'; id: string; label?: string }
+
+/** Row background tint for the history table. Failed jobs get a subtle red
+ *  wash; slow / very-slow runs a subtle orange one (a touch stronger for
+ *  very-slow) so defective rows stand out at a glance. Otherwise the usual
+ *  per-kind tint (LoRA vs workflow). */
+function historyRowBg(r: Row, avgSec: number | undefined): string {
+  if (r.statusTone === 'bad') return 'color-mix(in oklab, var(--bad) 8%, transparent)'
+  const { level } = slowLevel(r, avgSec)
+  if (level === 'very') return 'color-mix(in oklab, var(--warn) 14%, transparent)'
+  if (level === 'slow') return 'color-mix(in oklab, var(--warn) 8%, transparent)'
+  return r.kind === 'lora'
+    ? 'color-mix(in oklab, var(--accent) 5%, transparent)'
+    : 'color-mix(in oklab, var(--pop-purple) 3%, transparent)'
+}
 
 export function History({
   navigate,
@@ -105,6 +120,10 @@ export function History({
   // each workflow's historical average. Empty {} until the request lands so
   // missing entries simply skip rendering the chip.
   const [avgDurations, setAvgDurations] = useState<Record<string, number>>({})
+  // avgDurations comes from /api/wf-jobs/avg-duration — keyed by WORKFLOW name.
+  // Only apply it to WF rows; a LoRA whose output name happens to match a
+  // workflow name must not be judged against that unrelated workflow average.
+  const wfAvg = (r: Row): number | undefined => (r.kind === 'wf' ? avgDurations[r.name] : undefined)
   // "Mine" toggle uses the linked GT user from Preferences. Skipped when a
   // user lock is already active — the lock takes precedence over Mine.
   const prefs = loadPrefs()
@@ -352,9 +371,11 @@ export function History({
 
   return (
     <>
-      {/* Toolbar */}
-      <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
-        <div className="search" style={{ minWidth: 240, position: 'relative' }}>
+      {/* Toolbar. nowrap + a shrinkable search field: when the Auto toggle
+       * expands on hover, the elastic spacer (then the search) absorbs the
+       * growth — nothing wraps or jumps to a second line. */}
+      <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'nowrap' }}>
+        <div className="search" style={{ minWidth: 140, flex: '0 1 240px', position: 'relative' }}>
           <span className="search-icon">
             <Search size={14} />
           </span>
@@ -430,10 +451,10 @@ export function History({
           }
         />
         <span className="spacer" />
-        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+        <span style={{ fontSize: 12, color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
           {total.toLocaleString()} total · page {page} of {totalPages}
         </span>
-        <button className="btn btn-sm" onClick={exportCsv}>
+        <button className="btn btn-sm" onClick={exportCsv} style={{ flexShrink: 0 }}>
           <Download size={14} /> Export CSV
         </button>
       </div>
@@ -541,13 +562,7 @@ export function History({
             {displayed.map((r) => (
               <tr
                 key={r.key}
-                style={{
-                  background:
-                    r.kind === 'lora'
-                      ? 'color-mix(in oklab, var(--accent) 5%, transparent)'
-                      : 'color-mix(in oklab, var(--pop-purple) 3%, transparent)',
-                  cursor: 'pointer',
-                }}
+                style={{ background: historyRowBg(r, wfAvg(r)), cursor: 'pointer' }}
                 onClick={() => setOpenRow(r)}
               >
                 <td>
@@ -558,10 +573,15 @@ export function History({
                     {r.id}
                   </span>
                 </td>
-                {/* Name — full td click opens modal; only the text itself filters */}
+                {/* Name — full td click opens modal; only the text itself
+                    filters. The slow / very-slow chip sits at the right edge of
+                    this wider column where it has room to render cleanly. */}
                 <td>
-                  {r.arch ? (
-                    <span className="row" style={{ gap: 6, alignItems: 'baseline' }}>
+                  <div
+                    className="row"
+                    style={{ gap: 6, justifyContent: 'space-between', alignItems: 'baseline' }}
+                  >
+                    <span className="row" style={{ gap: 6, alignItems: 'baseline', minWidth: 0 }}>
                       <strong
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => {
@@ -572,22 +592,14 @@ export function History({
                       >
                         {r.name}
                       </strong>
-                      <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
-                        · {r.arch}
-                      </span>
+                      {r.arch && (
+                        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
+                          · {r.arch}
+                        </span>
+                      )}
                     </span>
-                  ) : (
-                    <strong
-                      style={{ cursor: 'pointer' }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFocus('name', r.name, r)
-                      }}
-                      title="Filter by workflow"
-                    >
-                      {r.name}
-                    </strong>
-                  )}
+                    <SlowChip row={r} avgSec={wfAvg(r)} />
+                  </div>
                 </td>
                 {/* User */}
                 <td style={{ color: r.who === '—' ? 'var(--ink-3)' : undefined }}>
@@ -623,10 +635,7 @@ export function History({
                     '—'
                   )}
                 </td>
-                <td className="mono">
-                  {fmtSec(r.totalSec)}
-                  <SlowChip row={r} avgSec={avgDurations[r.name]} />
-                </td>
+                <td className="mono">{fmtSec(r.totalSec)}</td>
                 <td className="mono">{fmtSec(r.waitTimeSec)}</td>
                 <td style={{ color: 'var(--ink-2)', fontSize: 12 }}>
                   {fmtCompleted(r.completedAt)}

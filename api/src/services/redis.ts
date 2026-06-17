@@ -15,8 +15,9 @@ import {
 // ─────────────────────────────────────────────
 // Redis service — READ-ONLY access to production BullMQ
 // ─────────────────────────────────────────────
-// This stack never writes to Redis.  The queue is owned by gt-workflows.
-// We connect only to read live job state and logs for the detail view.
+// This stack never writes to Redis — the queue is owned by gt-workflows —
+// with ONE deliberate, operator-triggered exception: forceFailRedisJob (see
+// below), which terminates a job whose runner has lost it.
 // ─────────────────────────────────────────────
 
 const KEY = `${config.REDIS_BULLMQ_PREFIX}:${config.REDIS_BULLMQ_QUEUE}`
@@ -37,6 +38,70 @@ function getClient(): Redis {
     })
   }
   return _client
+}
+
+// ── Write exception ───────────────────────────
+// The ONE write this stack makes to the gt-workflows queue, and only on an
+// explicit operator action (Force stop): a job whose runner lost it — e.g.
+// the AI-Toolkit job was deleted on the trainer while BullMQ still lists it
+// active — keeps `processedOn` with no `finishedOn` forever, so every
+// consumer shows it "running" until eviction.
+//
+// ⚠ COUPLING CAVEAT: this hand-imitates BullMQ's moveToFailed against its
+// key layout (hash + lists + failed zset + lock). BullMQ's real transition
+// also touches the events stream, metrics and attempt bookkeeping we can't
+// faithfully reproduce from outside. It is intended ONLY for jobs whose
+// worker is GONE (no lock contention) — never to cancel a live, actively-
+// processed job. Pinned to BullMQ's current key scheme; re-verify on a
+// gt-workflows BullMQ major bump. Separate client so the read path keeps its
+// read-only guarantee.
+let _writeClient: Redis | null = null
+
+function getWriteClient(): Redis {
+  if (!_writeClient) {
+    _writeClient = new Redis(config.REDIS_URL, {
+      maxRetriesPerRequest: 2,
+      lazyConnect: true,
+      enableOfflineQueue: false,
+    })
+    _writeClient.on('error', (err) => {
+      console.error('[redis:write]', err.message)
+    })
+  }
+  return _writeClient
+}
+
+/** Force a BullMQ job into the failed state. Returns false when the hash no
+ *  longer exists (evicted) — nothing to update, not an error. */
+export async function forceFailRedisJob(
+  kind: 'wf' | 'lora',
+  id: string,
+  reason: string,
+): Promise<boolean> {
+  const base = kind === 'wf' ? KEY : LORA_KEY
+  const r = getWriteClient()
+  const hashKey = `${base}:${id}`
+  if ((await r.exists(hashKey)) === 0) return false
+
+  const now = Date.now()
+  await r
+    .multi()
+    // Stamp the hash so OUR sync (and BullMQ consumers) read it terminal.
+    .hset(hashKey, { failedReason: reason, finishedOn: String(now) })
+    // Remove from every pending list so it stops showing as live.
+    .lrem(`${base}:active`, 0, id)
+    .lrem(`${base}:wait`, 0, id)
+    .lrem(`${base}:paused`, 0, id)
+    // Drop the processing lock so BullMQ's stalled-checker can't reclaim it
+    // back into the active list (the key is absent for non-running jobs, so
+    // this is a harmless no-op then).
+    .del(`${base}:${id}:lock`)
+    // Record it in the failed zset (score = ts) so it surfaces in BullMQ's
+    // own failed view rather than silently vanishing.
+    .zadd(`${base}:failed`, now, id)
+    .exec()
+  console.log(`[redis] force-failed ${kind} job ${id} in BullMQ`)
+  return true
 }
 
 // ── Hash key helpers ──────────────────────────
@@ -78,28 +143,6 @@ export async function getRedisJobLogs(id: string, start = 0, end = -1): Promise<
     return await r.lrange(logsKey(id), start, end)
   } catch {
     return []
-  }
-}
-
-/**
- * Resolve the live status of a job by checking the BullMQ sorted sets.
- * Returns 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'unknown'
- */
-export async function getRedisJobStatus(id: string): Promise<string> {
-  try {
-    const r = getClient()
-    const sets: [string, string][] = [
-      [`${KEY}:active`, 'active'],
-      [`${KEY}:wait`, 'waiting'],
-      [`${KEY}:delayed`, 'delayed'],
-      [`${KEY}:failed`, 'failed'],
-      [`${KEY}:completed`, 'completed'],
-    ]
-    const checks = await Promise.all(sets.map(([key]) => r.zscore(key, id)))
-    const idx = checks.findIndex((s) => s !== null)
-    return idx >= 0 ? (sets[idx]![1] ?? 'unknown') : 'unknown'
-  } catch {
-    return 'unknown'
   }
 }
 

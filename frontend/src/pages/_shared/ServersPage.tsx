@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect } from 'react'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { RangeSelector } from '../../components/ui/RangeSelector'
@@ -17,18 +18,13 @@ import {
   Boxes,
   Server,
   Workflow as WorkflowIcon,
-  Eye,
-  EyeOff,
   MoreVertical,
   Activity,
   Zap,
   Wrench,
-  Flag,
   Bot,
-  ArrowUpDown,
   Trash2,
 } from 'lucide-react'
-import { ExpandingToggle } from '../../components/ui/ExpandingToggle'
 import { SetoModal } from '../../components/seto/SetoModal'
 import type { Server as ServerType } from '../../types'
 import { normServerUrl } from '../workflows/workflowsHelpers'
@@ -52,8 +48,13 @@ import {
   ServersIncidents,
   ServersRepartition,
 } from './ServersDashboard'
-import { AddServerModal, ReportIssueModal } from './ServerModals'
+import { AddServerModal } from './ServerModals'
 import { ServerSaturationHeatmap } from './ServerSaturationHeatmap'
+
+/** Status-chip filter values for the list. 'down' includes 'unknown' (no
+ *  recent ping — effectively unreachable for triage purposes) and 'busy'
+ *  includes 'warn'. */
+type StatusFilter = 'all' | 'down' | 'busy' | 'slow' | 'up' | 'maint'
 
 /**
  * Shared listing page used by both the services and servers tools.
@@ -138,7 +139,13 @@ export function ServersPage({
   const isAdmin = user?.isAdmin ?? false
   const { servers, loading, error, reload } = useServers()
   const { workflows } = useWorkflows()
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useTabWithUrl('all', [
+    'all',
+    'metrics',
+    'insights',
+    'incidents',
+    'repartition',
+  ])
   const [range, setRange] = useState<Range>('7d')
   // URL prefix differs between flavours: services live at /servers/:id (legacy
   // route, kept stable), servers live at /hosts/:id. Both pages still post to
@@ -153,28 +160,23 @@ export function ServersPage({
   // must run unconditionally, so we declare it for both flavours.
   const [expandedWF, setExpandedWF] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [showDown, setShowDown] = useState(() => {
+  // Status chips (All / Down / Busy / Up / Maint) — replaces the old
+  // show-down/show-maint toggles + sort select. The list is ALWAYS sorted
+  // worst-first so problems surface on top; the chips slice it by status.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     try {
-      return JSON.parse(localStorage.getItem(cfg.storageKey) ?? 'null')?.showDown ?? true
+      return JSON.parse(localStorage.getItem(cfg.storageKey) ?? 'null')?.statusFilter ?? 'all'
+    } catch {
+      return 'all'
+    }
+  })
+  // The saturation heatmap is tall — collapsible, and the preference sticks
+  // across sessions (same per-page storage blob as the filter).
+  const [heatmapOpen, setHeatmapOpen] = useState<boolean>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(cfg.storageKey) ?? 'null')?.heatmapOpen ?? true
     } catch {
       return true
-    }
-  })
-  const [showMaint, setShowMaint] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(cfg.storageKey) ?? 'null')?.showMaint ?? false
-    } catch {
-      return false
-    }
-  })
-  // 'name' preserves the natural directory order; 'status' surfaces problems
-  // (down → maintenance → warn → busy → ok) so ops can triage at
-  // a glance without scrolling.
-  const [sortBy, setSortBy] = useState<'name' | 'status'>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(cfg.storageKey) ?? 'null')?.sortBy ?? 'name'
-    } catch {
-      return 'name'
     }
   })
   const [scraping, setScraping] = useState(false)
@@ -189,7 +191,6 @@ export function ServersPage({
   )
   const [menuOpen, setMenuOpen] = useState<{ id: string; top: number; left: number } | null>(null)
   const [logsOpen, setLogsOpen] = useState<string | null>(null)
-  const [reportOpen, setReportOpen] = useState<string | null>(null)
   const [setoOpen, setSetoOpen] = useState<string | null>(null)
 
   useEffect(() => {
@@ -201,9 +202,9 @@ export function ServersPage({
 
   useEffect(() => {
     try {
-      localStorage.setItem(cfg.storageKey, JSON.stringify({ showDown, showMaint, sortBy }))
+      localStorage.setItem(cfg.storageKey, JSON.stringify({ statusFilter, heatmapOpen }))
     } catch {}
-  }, [showDown, showMaint, sortBy, cfg.storageKey])
+  }, [statusFilter, heatmapOpen, cfg.storageKey])
 
   const wfByServer = (serverUrl: string) =>
     workflows.filter((w) => w.serverUrls.some((u) => normServerUrl(u) === normServerUrl(serverUrl)))
@@ -223,13 +224,8 @@ export function ServersPage({
   )
 
   const activeSrvs = pageServers.filter((s) => !s.isMaintenance)
-  const onlineCount = activeSrvs.filter((s) => {
-    const st = serverStatus(s)
-    return st === 'ok' || st === 'warn' || st === 'busy'
-  }).length
-  const busyCount = activeSrvs.filter((s) => serverStatus(s) === 'busy').length
-  const downCount = activeSrvs.filter((s) => serverStatus(s) === 'down').length
-  const maintenanceCount = pageServers.filter((s) => s.isMaintenance).length
+  // KPI counts are derived from chipCounts (below) so each card's number
+  // matches the list you get when you click it — see the KPI strip.
 
   async function handleScrape() {
     setScraping(true)
@@ -340,23 +336,52 @@ export function ServersPage({
     ok: 5,
   }
 
+  const matchesFilter = (s: ServerType): boolean => {
+    const st = serverStatus(s)
+    switch (statusFilter) {
+      case 'down':
+        return st === 'down' || st === 'unknown'
+      case 'busy':
+        return st === 'busy'
+      case 'slow':
+        return st === 'warn'
+      case 'up':
+        return st === 'ok'
+      case 'maint':
+        return st === 'maintenance'
+      default:
+        return true
+    }
+  }
+
   const filtered = pageServers
     .filter((s) => {
-      if (!showMaint && s.isMaintenance) return false
-      if (!showDown && serverStatus(s) === 'down') return false
+      if (!matchesFilter(s)) return false
       if (search) {
         const q = search.toLowerCase()
         if (![s.name, s.url, ...s.tags].some((v) => v.toLowerCase().includes(q))) return false
       }
       return true
     })
+    // Always worst-first (down → unknown → maint → warn → busy → ok), name
+    // as the tiebreak — downs are visible without touching any control.
     .sort((a, b) => {
-      if (sortBy === 'status') {
-        const rankDiff = STATUS_RANK[serverStatus(a)] - STATUS_RANK[serverStatus(b)]
-        if (rankDiff !== 0) return rankDiff
-      }
+      const rankDiff = STATUS_RANK[serverStatus(a)] - STATUS_RANK[serverStatus(b)]
+      if (rankDiff !== 0) return rankDiff
       return a.name.localeCompare(b.name)
     })
+
+  // Chip counts. 'down' folds in 'unknown'; 'busy' (has jobs) and 'slow'
+  // (idle but high-latency) are kept separate so each chip's count matches the
+  // badge rendered on the cards it selects.
+  const chipCounts: Record<StatusFilter, number> = {
+    all: pageServers.length,
+    down: pageServers.filter((s) => ['down', 'unknown'].includes(serverStatus(s))).length,
+    busy: pageServers.filter((s) => serverStatus(s) === 'busy').length,
+    slow: pageServers.filter((s) => serverStatus(s) === 'warn').length,
+    up: pageServers.filter((s) => serverStatus(s) === 'ok').length,
+    maint: pageServers.filter((s) => serverStatus(s) === 'maintenance').length,
+  }
 
   const tabs = [
     { id: 'all', label: cfg.allTabLabel, pill: pageServers.length },
@@ -398,12 +423,40 @@ export function ServersPage({
       <div className="body">
         {tab === 'all' && (
           <>
-            {/* Stats */}
-            <div className="grid-4" style={{ marginBottom: 16 }}>
-              <Kpi label={cfg.totalLabel} value={pageServers.length} />
-              <Kpi label="Online" value={onlineCount} valueColor="var(--good)" />
-              <Kpi label="Down" value={downCount} valueColor="var(--bad)" />
-              <Kpi label="Busy" value={busyCount} valueColor="var(--info)" />
+            {/* Stats — maintenance is excluded from the headline numbers
+             * (planned downtime isn't an incident) and each card activates
+             * the matching status chip below. */}
+            <div className="grid-5" style={{ marginBottom: 16 }}>
+              <Kpi
+                label={cfg.totalLabel}
+                value={activeSrvs.length}
+                sub={chipCounts.maint > 0 ? `+${chipCounts.maint} in maintenance` : undefined}
+                onClick={() => setStatusFilter('all')}
+              />
+              <Kpi
+                label="Online"
+                value={chipCounts.up}
+                valueColor="var(--good)"
+                onClick={() => setStatusFilter('up')}
+              />
+              <Kpi
+                label="Down"
+                value={chipCounts.down}
+                valueColor="var(--bad)"
+                onClick={() => setStatusFilter('down')}
+              />
+              <Kpi
+                label="Busy"
+                value={chipCounts.busy}
+                valueColor="var(--info)"
+                onClick={() => setStatusFilter('busy')}
+              />
+              <Kpi
+                label="Slow"
+                value={chipCounts.slow}
+                valueColor="var(--warn)"
+                onClick={() => setStatusFilter('slow')}
+              />
             </div>
 
             {/* Saturation heatmap — 5-second triage view above the card list. */}
@@ -412,6 +465,8 @@ export function ServersPage({
                 servers={pageServers}
                 onOpen={openDetail}
                 kindLabel={kindLabel}
+                open={heatmapOpen}
+                onToggle={() => setHeatmapOpen((v: boolean) => !v)}
               />
             )}
 
@@ -451,62 +506,50 @@ export function ServersPage({
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <button className="btn btn-sm" onClick={() => setShowDown((v: boolean) => !v)}>
-                {showDown ? <EyeOff size={14} /> : <Eye size={14} />}
-                {showDown ? 'Hide down' : 'Show down'}
-                {downCount > 0 && (
+              {/* Status chips — one-click slice of the list. The list itself
+               * is always sorted worst-first, so "All" already has problems
+               * on top; the chips answer "show me JUST the downs". */}
+              {(
+                [
+                  { id: 'all', label: 'All', color: null },
+                  { id: 'down', label: 'Down', color: 'var(--bad)' },
+                  { id: 'busy', label: 'Busy', color: 'var(--info)' },
+                  { id: 'slow', label: 'Slow', color: 'var(--warn)' },
+                  { id: 'up', label: 'Up', color: 'var(--good)' },
+                  { id: 'maint', label: 'Maint.', color: 'var(--warn)' },
+                ] as { id: StatusFilter; label: string; color: string | null }[]
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  className="btn btn-sm"
+                  onClick={() => setStatusFilter(f.id)}
+                  style={
+                    statusFilter === f.id
+                      ? {
+                          borderColor: f.color ?? 'var(--ink-2)',
+                          boxShadow: `inset 0 0 0 1px ${f.color ?? 'var(--ink-2)'}`,
+                        }
+                      : undefined
+                  }
+                >
+                  {f.label}
                   <span
                     className="chip"
                     style={{
                       fontSize: 10,
                       padding: '1px 6px',
-                      color: 'var(--bad)',
-                      background: 'color-mix(in oklab, var(--bad) 12%, transparent)',
+                      ...(f.color
+                        ? {
+                            color: f.color,
+                            background: `color-mix(in oklab, ${f.color} 12%, transparent)`,
+                          }
+                        : {}),
                     }}
                   >
-                    {downCount}
+                    {chipCounts[f.id]}
                   </span>
-                )}
-              </button>
-              <button className="btn btn-sm" onClick={() => setShowMaint((v: boolean) => !v)}>
-                {showMaint ? <EyeOff size={14} /> : <Eye size={14} />}
-                {showMaint ? 'Hide maint.' : 'Show maint.'}
-                {maintenanceCount > 0 && (
-                  <span
-                    className="chip"
-                    style={{
-                      fontSize: 10,
-                      padding: '1px 6px',
-                      color: 'var(--warn)',
-                      background: 'color-mix(in oklab, var(--warn) 12%, transparent)',
-                    }}
-                  >
-                    {maintenanceCount}
-                  </span>
-                )}
-              </button>
-              <ExpandingToggle
-                prefix={
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      paddingLeft: 4,
-                      fontSize: 12,
-                      color: 'var(--ink-3)',
-                    }}
-                  >
-                    <ArrowUpDown size={12} /> Sort
-                  </span>
-                }
-                options={[
-                  { value: 'name', label: 'Name' },
-                  { value: 'status', label: 'Status' },
-                ]}
-                value={sortBy}
-                onChange={setSortBy}
-              />
+                </button>
+              ))}
             </div>
 
             {/* Cards */}
@@ -933,7 +976,7 @@ export function ServersPage({
           </>
         )}
         {tab === 'metrics' && (
-          <ServersMetrics servers={servers} onOpen={setDetail} kindLabel={kindLabel} />
+          <ServersMetrics servers={pageServers} onOpen={setDetail} kindLabel={kindLabel} />
         )}
         {tab === 'insights' && (
           <ServersInsights
@@ -1018,9 +1061,11 @@ export function ServersPage({
               },
               color: 'var(--info)',
             },
-            // Log proxying only works for ComfyUI workflow servers — LoRA
-            // backends don't expose /internal/logs nor /history. Hide for them.
-            ...(s.type === 'workflow'
+            // Log proxying only makes sense on SERVICE records (the process
+            // that owns a port) — hosts are physical boxes with no log
+            // endpoint of their own. LoRA backends don't expose /internal/logs
+            // nor /history either, so it's ComfyUI services only.
+            ...(kindLabel === 'service' && s.type === 'workflow'
               ? [
                   {
                     icon: <Activity size={14} />,
@@ -1050,6 +1095,9 @@ export function ServersPage({
                   },
                 ]
               : []),
+            // "Report issue" lives INSIDE the Seto modal now (the Discord
+            // report embeds the Seto findings), so Ask Seto is the single
+            // entry point for both diagnosis and reporting.
             {
               icon: <Bot size={14} />,
               label: 'Ask Seto',
@@ -1058,15 +1106,6 @@ export function ServersPage({
                 setMenuOpen(null)
               },
               color: 'var(--accent)',
-            },
-            {
-              icon: <Flag size={14} />,
-              label: 'Report issue',
-              action: () => {
-                setReportOpen(s.id)
-                setMenuOpen(null)
-              },
-              color: 'var(--bad)',
             },
             // Delete is the only destructive action in this menu — admin-only
             // (DELETE /api/servers/:id is admin-gated, hiding for non-admins
@@ -1165,18 +1204,6 @@ export function ServersPage({
           if (!s) return null
           return (
             <ServerLogsModal server={s} onClose={() => setLogsOpen(null)} kindLabel={kindLabel} />
-          )
-        })()}
-      {reportOpen &&
-        (() => {
-          const s = servers.find((x) => x.id === reportOpen)
-          if (!s) return null
-          return (
-            <ReportIssueModal
-              server={s}
-              onClose={() => setReportOpen(null)}
-              kindLabel={kindLabel}
-            />
           )
         })()}
       {setoOpen &&

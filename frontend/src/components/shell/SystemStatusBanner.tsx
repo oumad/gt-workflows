@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { WifiOff, RefreshCw, AlertTriangle, X } from 'lucide-react'
+import { WifiOff, RefreshCw } from 'lucide-react'
 import { loadSession } from '../../lib/storage'
+import { useNotifications } from '../../context/NotificationsContext'
 
 /* Shape of GET /api/health. `sync` is absent on very old deploys — treat a
  * missing `sync` as "done" so we don't show a stuck banner. */
@@ -20,12 +21,16 @@ type HealthResponse = {
 
 type Status = 'ok' | 'offline' | 'syncing'
 
-/** Operational summary aggregated server-side — counts that change fast enough
- *  to warrant a 5s poll, but slow enough that they shouldn't hammer the DB. */
+type Ident = { id: string; name: string }
+
+/** Operational summary aggregated server-side. Returns down IDENTITIES (not
+ *  just counts) so the client can set-diff between polls — catching a
+ *  simultaneous down+recover that a count delta would miss, and naming the
+ *  records. Maintenance is excluded from the down sets. */
 type StatusSummary = {
   ts: number
-  serversDown: number
-  servicesDown: number
+  downServers: Ident[]
+  downServices: Ident[]
   servicesInMaintenance: number
   failedJobs5m: number
   slowJobs5m: number
@@ -36,38 +41,36 @@ type StatusSummary = {
 const POLL_HEALTHY_MS = 20_000
 const POLL_BUSY_MS = 5_000
 const FETCH_TIMEOUT_MS = 6_000
-// Ops summary updates more often than /api/health so the banner reacts to
-// new failures and recovered servers without waiting for the next health tick.
 const SUMMARY_POLL_MS = 10_000
+const BASELINE_KEY = 'coffee-maker-ops-baseline'
+
+const isVisible = () => document.visibilityState === 'visible'
 
 /**
- * Fixed top strip. Surfaces three things, in priority order:
- *   1. offline   — /api/health unreachable. The app is loaded but the API isn't.
- *   2. syncing   — backend up but the initial Redis→Postgres sync isn't done,
- *                  so data-heavy pages may look empty.
- *   3. ops issues — when healthy, polls /api/status/summary and renders one
- *                   chip per facet (down servers, failed jobs, slow jobs,
- *                   services in maintenance). Each chip routes to its filtered
- *                   view. Hides when every facet is zero.
+ * Fixed top strip for CONNECTION state only:
+ *   - offline — /api/health unreachable. The app is loaded but the API isn't.
+ *   - syncing — backend up but the initial Redis→Postgres sync isn't done,
+ *               so data-heavy pages may look empty.
  *
- * The connection banners take precedence because the summary can't be fetched
- * while the API is unreachable anyway.
+ * Ops issues (servers/services down etc.) are deliberately NOT a banner any
+ * more — the standing state lives in the sidebar badges, and OpsTransitionToasts
+ * below announces the CHANGES.
  */
 export function SystemStatusBanner() {
   const [status, setStatus] = useState<Status>('ok')
-  const [summary, setSummary] = useState<StatusSummary | null>(null)
-  // Signature of the issue set the user dismissed. Auto-cleared once the issues
-  // resolve (see effect below), so a fresh/changed problem re-surfaces.
-  const [dismissedSig, setDismissedSig] = useState<string | null>(null)
   const healthTimer = useRef<number | null>(null)
-  const summaryTimer = useRef<number | null>(null)
-  const navigate = useNavigate()
 
-  // ── Health poll — gates the rest. Offline ⇒ stop polling summary. ─────
   useEffect(() => {
     let cancelled = false
 
     async function poll() {
+      // Skip while the tab is backgrounded — re-polled immediately on return
+      // (visibilitychange below). Saves a steady stream of requests nobody
+      // is looking at.
+      if (!isVisible()) {
+        healthTimer.current = window.setTimeout(poll, POLL_HEALTHY_MS)
+        return
+      }
       let next: Status
       try {
         const ctl = new AbortController()
@@ -92,167 +95,23 @@ export function SystemStatusBanner() {
       healthTimer.current = window.setTimeout(poll, next === 'ok' ? POLL_HEALTHY_MS : POLL_BUSY_MS)
     }
 
+    const onVisible = () => {
+      if (!isVisible()) return
+      if (healthTimer.current) window.clearTimeout(healthTimer.current)
+      void poll()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     poll()
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
       if (healthTimer.current) window.clearTimeout(healthTimer.current)
     }
   }, [])
 
-  // ── Summary poll — only when healthy. Clears summary on offline/syncing. ─
-  useEffect(() => {
-    if (status !== 'ok') {
-      setSummary(null)
-      if (summaryTimer.current) window.clearTimeout(summaryTimer.current)
-      return
-    }
+  if (status === 'ok') return null
 
-    let cancelled = false
-
-    async function poll() {
-      try {
-        const ctl = new AbortController()
-        const to = window.setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS)
-        // /api/status/summary is requireAuth-protected; auth in this app is a
-        // Bearer JWT from storage (no cookies), so a bare fetch 401s. Mirror
-        // the header the `api` client attaches on every other call.
-        const session = loadSession()
-        const res = await fetch('/api/status/summary', {
-          cache: 'no-store',
-          signal: ctl.signal,
-          headers: session ? { Authorization: `Bearer ${session.token}` } : {},
-        })
-        window.clearTimeout(to)
-        if (res.ok) {
-          const body = (await res.json().catch(() => null)) as StatusSummary | null
-          if (!cancelled && body) setSummary(body)
-        }
-      } catch {
-        // Network blip — keep the previous summary; the next /health tick will
-        // flip us to 'offline' if the API is really gone.
-      }
-      if (!cancelled) {
-        summaryTimer.current = window.setTimeout(poll, SUMMARY_POLL_MS)
-      }
-    }
-
-    poll()
-    return () => {
-      cancelled = true
-      if (summaryTimer.current) window.clearTimeout(summaryTimer.current)
-    }
-  }, [status])
-
-  // Signature of the current issues (which facets, and their counts). null when
-  // everything is clear — used both to decide whether to render and to remember
-  // what the user dismissed.
-  const issueSig =
-    summary &&
-    (summary.serversDown > 0 ||
-      summary.servicesDown > 0 ||
-      summary.failedJobs5m > 0 ||
-      summary.slowJobs5m > 0 ||
-      summary.servicesInMaintenance > 0)
-      ? `${summary.serversDown}|${summary.servicesDown}|${summary.failedJobs5m}|${summary.slowJobs5m}|${summary.servicesInMaintenance}`
-      : null
-
-  // Forget the dismissal once everything clears, so the banner comes back for
-  // the next problem instead of staying hidden after a one-time dismiss.
-  useEffect(() => {
-    if (issueSig === null && dismissedSig !== null) setDismissedSig(null)
-  }, [issueSig, dismissedSig])
-
-  // ── Connection-status banners take precedence ──────────────────────────
-  if (status !== 'ok') {
-    const offline = status === 'offline'
-    return (
-      <div
-        role="status"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10_000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          padding: '6px 14px',
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: '#fff',
-          background: offline ? 'var(--bad)' : 'var(--accent)',
-          boxShadow: '0 2px 10px rgba(0,0,0,.25)',
-        }}
-      >
-        {offline ? (
-          <>
-            <WifiOff size={14} />
-            Lost connection to the server — retrying…
-          </>
-        ) : (
-          <>
-            <RefreshCw size={14} className="spin" />
-            Initial data sync in progress — some pages may be incomplete.
-          </>
-        )}
-      </div>
-    )
-  }
-
-  // ── Ops summary banner (only when at least one facet is non-zero) ──────
-  // Hidden when everything is clear, or when the user dismissed this exact
-  // set of issues (re-shown automatically once the counts change or resolve).
-  if (!summary || issueSig === null || issueSig === dismissedSig) return null
-
-  // Red when something is hard-broken (servers offline or recent failures);
-  // amber when it's a softer signal (slow jobs or planned maintenance only).
-  const hard = summary.serversDown > 0 || summary.servicesDown > 0 || summary.failedJobs5m > 0
-  const tone = hard ? 'var(--bad)' : 'var(--warn)'
-
-  const chunks: { label: string; onClick: () => void; key: string }[] = []
-  if (summary.serversDown > 0) {
-    const n = summary.serversDown
-    chunks.push({
-      key: 'serversDown',
-      label: `${n} server${n === 1 ? '' : 's'} down`,
-      onClick: () => navigate('/servers'),
-    })
-  }
-  if (summary.servicesDown > 0) {
-    const n = summary.servicesDown
-    chunks.push({
-      key: 'servicesDown',
-      label: `${n} service${n === 1 ? '' : 's'} down`,
-      onClick: () => navigate('/services'),
-    })
-  }
-  if (summary.failedJobs5m > 0) {
-    const n = summary.failedJobs5m
-    chunks.push({
-      key: 'failedJobs5m',
-      label: `${n} failed job${n === 1 ? '' : 's'} in last 5m`,
-      onClick: () => navigate('/doctor?tab=failures'),
-    })
-  }
-  if (summary.slowJobs5m > 0) {
-    const n = summary.slowJobs5m
-    chunks.push({
-      key: 'slowJobs5m',
-      label: `${n} job${n === 1 ? '' : 's'} slow`,
-      onClick: () => navigate('/jobs?tab=live'),
-    })
-  }
-  if (summary.servicesInMaintenance > 0) {
-    const n = summary.servicesInMaintenance
-    chunks.push({
-      key: 'maintenance',
-      label: `${n} service${n === 1 ? '' : 's'} in maintenance`,
-      onClick: () => navigate('/services'),
-    })
-  }
-
+  const offline = status === 'offline'
   return (
     <div
       role="status"
@@ -270,53 +129,164 @@ export function SystemStatusBanner() {
         fontSize: 12.5,
         fontWeight: 600,
         color: '#fff',
-        background: tone,
+        background: offline ? 'var(--bad)' : 'var(--accent)',
         boxShadow: '0 2px 10px rgba(0,0,0,.25)',
-        flexWrap: 'wrap',
       }}
     >
-      <AlertTriangle size={14} />
-      {chunks.map((chunk, i) => (
-        <span key={chunk.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          {i > 0 && <span style={{ opacity: 0.55 }}>·</span>}
-          <button
-            type="button"
-            onClick={chunk.onClick}
-            title={`Open the filtered view for: ${chunk.label}`}
-            style={{
-              background: 'transparent',
-              border: 0,
-              color: 'inherit',
-              font: 'inherit',
-              padding: 0,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              textUnderlineOffset: 2,
-            }}
-          >
-            {chunk.label}
-          </button>
-        </span>
-      ))}
-      <button
-        type="button"
-        aria-label="Dismiss"
-        title="Dismiss"
-        onClick={() => setDismissedSig(issueSig)}
-        style={{
-          marginLeft: 4,
-          display: 'inline-flex',
-          alignItems: 'center',
-          background: 'transparent',
-          border: 0,
-          color: 'inherit',
-          opacity: 0.85,
-          cursor: 'pointer',
-          padding: 2,
-        }}
-      >
-        <X size={14} />
-      </button>
+      {offline ? (
+        <>
+          <WifiOff size={14} />
+          Lost connection to the server — retrying…
+        </>
+      ) : (
+        <>
+          <RefreshCw size={14} className="spin" />
+          Initial data sync in progress — some pages may be incomplete.
+        </>
+      )}
     </div>
   )
+}
+
+const namesOf = (arr: Ident[]): string => {
+  const shown = arr.slice(0, 5).map((x) => x.name)
+  return arr.length > 5 ? `${shown.join(', ')}, +${arr.length - 5} more` : shown.join(', ')
+}
+
+/**
+ * Renders nothing — polls /api/status/summary and toasts ops TRANSITIONS by
+ * set-diffing the down identities between polls: "worker-03 went down" /
+ * "2 services recovered". Plus edge-triggered toasts (0 → >0) for failed and
+ * slow jobs in the last 5 minutes.
+ *
+ * Baseline survives reloads via sessionStorage, so a transition that happened
+ * while the tab was reloading isn't lost. A brand-new session (no stored
+ * baseline) starts silent — standing problems are the sidebar badges' job,
+ * not a toast on every load. Mounted inside NotificationsProvider.
+ */
+export function OpsTransitionToasts() {
+  const { notify } = useNotifications()
+  const navigate = useNavigate()
+  const prevRef = useRef<StatusSummary | null>(null)
+  const timer = useRef<number | null>(null)
+
+  useEffect(() => {
+    // Seed from the last persisted summary so a reload diffs against the
+    // pre-reload state instead of re-baselining (and missing transitions).
+    try {
+      const stored = sessionStorage.getItem(BASELINE_KEY)
+      if (stored) prevRef.current = JSON.parse(stored) as StatusSummary
+    } catch {
+      /* corrupt/absent — start from a clean baseline */
+    }
+
+    let cancelled = false
+
+    async function poll() {
+      if (!isVisible()) {
+        timer.current = window.setTimeout(poll, SUMMARY_POLL_MS)
+        return
+      }
+      try {
+        const ctl = new AbortController()
+        const to = window.setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS)
+        // requireAuth-protected; auth is a Bearer JWT (no cookies), so mirror
+        // the header the `api` client attaches on every other call.
+        const session = loadSession()
+        const res = await fetch('/api/status/summary', {
+          cache: 'no-store',
+          signal: ctl.signal,
+          headers: session ? { Authorization: `Bearer ${session.token}` } : {},
+        })
+        window.clearTimeout(to)
+        if (res.ok) {
+          const body = (await res.json().catch(() => null)) as StatusSummary | null
+          if (!cancelled && body) handleSummary(body)
+        }
+      } catch {
+        /* network blip — the connection banner covers real outages */
+      }
+      if (!cancelled) timer.current = window.setTimeout(poll, SUMMARY_POLL_MS)
+    }
+
+    function handleSummary(summary: StatusSummary) {
+      const prev = prevRef.current
+      prevRef.current = summary
+      try {
+        sessionStorage.setItem(BASELINE_KEY, JSON.stringify(summary))
+      } catch {
+        /* storage full / disabled — diffing still works in-memory */
+      }
+      if (!prev) return // first-ever baseline this session
+
+      const announce = (
+        kind: 'server' | 'service',
+        before: Ident[],
+        after: Ident[],
+        path: string,
+      ) => {
+        const beforeIds = new Set(before.map((x) => x.id))
+        const afterIds = new Set(after.map((x) => x.id))
+        const newlyDown = after.filter((x) => !beforeIds.has(x.id))
+        const recovered = before.filter((x) => !afterIds.has(x.id))
+        const label = (n: number) => `${n} ${kind}${n === 1 ? '' : 's'}`
+        const action = { label: `View ${kind}s`, onClick: () => navigate(path) }
+        if (newlyDown.length > 0) {
+          notify({
+            variant: 'error',
+            title: `${label(newlyDown.length)} went down`,
+            body: namesOf(newlyDown),
+            action,
+          })
+        }
+        if (recovered.length > 0) {
+          notify({
+            variant: 'success',
+            title: `${label(recovered.length)} recovered`,
+            body: after.length === 0 ? `All ${kind}s are back up.` : namesOf(recovered),
+            action,
+          })
+        }
+      }
+
+      announce('server', prev.downServers, summary.downServers, '/servers')
+      announce('service', prev.downServices, summary.downServices, '/services')
+
+      // Edge-trigger (0 → >0) so the rolling 5-min window doesn't re-toast as
+      // the count drifts. Resets once the window empties back to 0.
+      if (prev.failedJobs5m === 0 && summary.failedJobs5m > 0) {
+        const n = summary.failedJobs5m
+        notify({
+          variant: 'error',
+          title: `${n} job${n === 1 ? '' : 's'} failed`,
+          body: 'In the last 5 minutes.',
+          action: { label: 'View failures', onClick: () => navigate('/doctor?tab=failures') },
+        })
+      }
+      if (prev.slowJobs5m === 0 && summary.slowJobs5m > 0) {
+        const n = summary.slowJobs5m
+        notify({
+          variant: 'warn',
+          title: `${n} job${n === 1 ? '' : 's'} running slow`,
+          body: 'Past 1.5× the usual duration.',
+          action: { label: 'View live', onClick: () => navigate('/jobs?tab=live') },
+        })
+      }
+    }
+
+    const onVisible = () => {
+      if (!isVisible()) return
+      if (timer.current) window.clearTimeout(timer.current)
+      void poll()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    poll()
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      if (timer.current) window.clearTimeout(timer.current)
+    }
+  }, [notify, navigate])
+
+  return null
 }

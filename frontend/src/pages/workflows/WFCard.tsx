@@ -106,6 +106,7 @@ export function WFCard({
   const [dupOpen, setDupOpen] = useState(false)
   const [setoOpen, setSetoOpen] = useState(false)
   const [editingField, setEditingField] = useState<'servers' | 'timeout' | null>(null)
+  const isComfy = wf.parser?.toLowerCase() === 'comfyui'
   const [dragOver, setDragOver] = useState(false)
   const [serverDraft, setServerDraft] = useState<string[]>([])
   const fileDrop = useFileDrop((file) => onImport?.(file), { disabled: !isAdmin })
@@ -405,7 +406,7 @@ export function WFCard({
           </div>
           {wf.iconBadge && (
             <span
-              title={wf.iconBadge.label}
+              title={`${wf.iconBadge.label} — badge set by this workflow's params.json`}
               style={{
                 flexShrink: 0,
                 padding: '5px 11px',
@@ -478,111 +479,118 @@ export function WFCard({
           )}
 
           <div className="col" style={{ gap: 4, marginTop: 2 }}>
-            <KVRow label="Services">
-              {/* Inline edit calls PATCH /api/workflows/:id (admin-only). */}
-              {editingField === 'servers' && isAdmin ? (
-                <div
-                  className="col"
-                  style={{ gap: 5, flex: 1, minWidth: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ServerUrlPicker
-                    value={serverDraft}
-                    onChange={setServerDraft}
-                    servers={servers}
-                    autoFocus
-                  />
-                  <div className="row" style={{ gap: 4 }}>
-                    <button
-                      className="btn btn-sm btn-primary"
-                      style={{ fontSize: 10, height: 22, padding: '0 8px' }}
-                      onClick={() => {
-                        onPatch({ serverUrls: serverDraft })
-                        setEditingField(null)
-                      }}
-                    >
-                      Save
-                    </button>
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      style={{ fontSize: 10, height: 22, padding: '0 8px' }}
-                      onClick={() => setEditingField(null)}
-                    >
-                      Cancel
-                    </button>
+            {/* Script workflows run nowhere near a ComfyUI service and have
+             * no timeout — hide the rows instead of printing dashes. */}
+            {isComfy && (
+              <KVRow label="Services">
+                {/* Inline edit calls PATCH /api/workflows/:id (admin-only). */}
+                {editingField === 'servers' && isAdmin ? (
+                  <div
+                    className="col"
+                    style={{ gap: 5, flex: 1, minWidth: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ServerUrlPicker
+                      value={serverDraft}
+                      onChange={setServerDraft}
+                      servers={servers}
+                      autoFocus
+                    />
+                    <div className="row" style={{ gap: 4 }}>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        style={{ fontSize: 10, height: 22, padding: '0 8px' }}
+                        onClick={() => {
+                          onPatch({ serverUrls: serverDraft })
+                          setEditingField(null)
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        style={{ fontSize: 10, height: 22, padding: '0 8px' }}
+                        onClick={() => setEditingField(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : isAdmin ? (
-                <button
-                  className="editable row mono"
-                  style={{ fontSize: 11 }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setServerDraft(wf.serverUrls)
-                    setEditingField('servers')
-                  }}
-                >
-                  {serverSummary}
-                  <Settings size={10} />
-                </button>
-              ) : (
-                <span className="mono" style={{ fontSize: 11 }}>
-                  {serverSummary}
-                </span>
-              )}
-            </KVRow>
+                ) : isAdmin ? (
+                  <button
+                    className="editable row mono"
+                    style={{ fontSize: 11 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setServerDraft(wf.serverUrls)
+                      setEditingField('servers')
+                    }}
+                  >
+                    {serverSummary}
+                    <Settings size={10} />
+                  </button>
+                ) : (
+                  <span className="mono" style={{ fontSize: 11 }}>
+                    {serverSummary}
+                  </span>
+                )}
+              </KVRow>
+            )}
 
-            <KVRow label="Timeout">
-              {editingField === 'timeout' && isAdmin ? (
-                <input
-                  autoFocus
-                  type="number"
-                  defaultValue={wf.timeout ?? ''}
-                  className="input mono"
-                  style={{ height: 24, fontSize: 11, padding: '0 6px', width: 80 }}
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => {
-                    const val = parseInt(e.currentTarget.value)
-                    onPatch({ timeout: isNaN(val) ? null : val })
-                    setEditingField(null)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+            {isComfy && (
+              <KVRow label="Timeout">
+                {editingField === 'timeout' && isAdmin ? (
+                  <input
+                    autoFocus
+                    type="number"
+                    defaultValue={wf.timeout ?? ''}
+                    className="input mono"
+                    style={{ height: 24, fontSize: 11, padding: '0 6px', width: 80 }}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
                       const val = parseInt(e.currentTarget.value)
                       onPatch({ timeout: isNaN(val) ? null : val })
                       setEditingField(null)
-                    }
-                    if (e.key === 'Escape') setEditingField(null)
-                  }}
-                />
-              ) : isAdmin ? (
-                <button
-                  className="editable row mono"
-                  style={{ fontSize: 11 }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setEditingField('timeout')
-                  }}
-                >
-                  {wf.timeout != null ? fmtDur(wf.timeout) : '—'}
-                  <Settings size={10} />
-                </button>
-              ) : (
-                <span className="mono" style={{ fontSize: 11 }}>
-                  {wf.timeout != null ? fmtDur(wf.timeout) : '—'}
-                </span>
-              )}
-            </KVRow>
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(e.currentTarget.value)
+                        onPatch({ timeout: isNaN(val) ? null : val })
+                        setEditingField(null)
+                      }
+                      if (e.key === 'Escape') setEditingField(null)
+                    }}
+                  />
+                ) : isAdmin ? (
+                  <button
+                    className="editable row mono"
+                    style={{ fontSize: 11 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditingField('timeout')
+                    }}
+                  >
+                    {wf.timeout != null ? fmtDur(wf.timeout) : '—'}
+                    <Settings size={10} />
+                  </button>
+                ) : (
+                  <span className="mono" style={{ fontSize: 11 }}>
+                    {wf.timeout != null ? fmtDur(wf.timeout) : '—'}
+                  </span>
+                )}
+              </KVRow>
+            )}
 
             <KVRow label="Parser">
               <span className="mono" style={{ fontSize: 11 }}>
-                {wf.parser?.toLowerCase() === 'comfyui' ? 'comfyUI' : 'script'}
+                {isComfy ? 'comfyUI' : 'script'}
               </span>
             </KVRow>
             {wf.workflowFile && (
               <KVRow label="Workflow">
                 <span
                   className="mono"
+                  title={wf.workflowFile}
                   style={{
                     fontSize: 11,
                     maxWidth: 160,
@@ -598,6 +606,7 @@ export function WFCard({
             <KVRow label="Path">
               <span
                 className="mono"
+                title={wf.path}
                 style={{
                   fontSize: 11,
                   maxWidth: 160,

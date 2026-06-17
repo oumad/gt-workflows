@@ -119,8 +119,19 @@ export async function getGpuInfo(id: string): Promise<unknown> {
     )
   }
   if (!res.ok) throw new HttpError(502, 'comfy_bad_response', `AI Toolkit returned ${res.status}`)
-  const body = (await res.json()) as { name?: string }[] | { name?: string }
-  const first = Array.isArray(body) ? body[0] : body
+  const body = (await res.json()) as
+    | { gpus?: { name?: string }[] }
+    | { name?: string }[]
+    | { name?: string }
+    | null
+  // Current AI-Toolkit returns { gpus: [{ name, ... }] }; older builds a
+  // bare array or a single object. Guard the object check — a service that
+  // answers with JSON `null` or a primitive would make `'gpus' in body` throw.
+  const first = Array.isArray(body)
+    ? body[0]
+    : body && typeof body === 'object' && 'gpus' in body && Array.isArray(body.gpus)
+      ? body.gpus[0]
+      : (body as { name?: string } | null)
   const rawName = first?.name
   if (typeof rawName === 'string') {
     const gpu = rawName.trim()

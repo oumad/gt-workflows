@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Modal } from '../../components/ui/Modal'
-import { useNotifications } from '../../context/NotificationsContext'
 import { api } from '../../lib/api'
 import type { Server as ServerType, ServerKind } from '../../types'
 import { validateHostOnlyUrl, normalizeHostOnlyUrl } from './serverHelpers'
@@ -278,78 +277,5 @@ export function AddServerModal(props: AddServerModalProps) {
    Identical between services and servers — only the field label differs
    ("Service" vs "Server"). Parameterized via `kindLabel`. */
 
-const RIM_LABEL_FOR: Record<KindLabel, string> = {
-  service: 'Service',
-  server: 'Server',
-}
-
-export function ReportIssueModal({
-  server,
-  onClose,
-  kindLabel,
-}: {
-  server: ServerType
-  onClose: () => void
-  kindLabel: KindLabel
-}) {
-  const { notify } = useNotifications()
-  const [issue, setIssue] = useState('')
-  const [sending, setSending] = useState(false)
-
-  async function send() {
-    setSending(true)
-    try {
-      await api.post(`/api/servers/${server.id}/report`, { message: issue.trim() })
-      notify({ variant: 'success', title: `Issue for ${server.name} sent`, autoDismiss: 4000 })
-      onClose()
-    } catch (e) {
-      notify({
-        variant: 'error',
-        title: 'Failed to send report',
-        body: e instanceof Error ? e.message : 'Unknown error',
-      })
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <Modal title="Report issue" onClose={onClose}>
-      <div className="col" style={{ gap: 14 }}>
-        <div className="form-row">
-          <label>{RIM_LABEL_FOR[kindLabel]}</label>
-          <input className="input" value={server.name} readOnly style={{ color: 'var(--ink-3)' }} />
-        </div>
-        <div className="form-row">
-          <label>Issue</label>
-          <textarea
-            className="input"
-            value={issue}
-            onChange={(e) => setIssue(e.target.value)}
-            placeholder="Describe the issue…"
-            style={{
-              minHeight: 100,
-              fontFamily: 'inherit',
-              fontSize: 13.5,
-              lineHeight: 1.6,
-              resize: 'vertical',
-            }}
-            autoFocus
-          />
-        </div>
-        <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
-          <button className="btn btn-sm" onClick={onClose} disabled={sending}>
-            Cancel
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={send}
-            disabled={!issue.trim() || sending}
-          >
-            {sending ? 'Sending…' : 'Send'}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
+// The standalone ReportIssueModal was removed: reporting now lives inside
+// the Seto modal (SetoModal), where the Discord report embeds the findings.

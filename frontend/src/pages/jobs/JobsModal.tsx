@@ -13,6 +13,19 @@ import {
   errorCodeTone,
 } from '../analytics/analyticsHelpers'
 
+/** Live trainer state for a LoRA job, as returned by
+ *  /api/lora-jobs/:id/training-log (bridged to the AI-Toolkit box). */
+type TrainingProgress = {
+  aitJobId: string
+  name: string | null
+  status: string | null
+  step: number | null
+  info: string | null
+  speedString: string | null
+  queuePosition: number | null
+  updatedAt: string | null
+}
+
 /* ─── Shared display components ─────────────────────────────────── */
 export function JobKindBadge({ kind, size = 22 }: { kind: 'wf' | 'lora'; size?: number }) {
   const color = kind === 'wf' ? 'var(--pop-purple)' : 'var(--accent)'
@@ -52,38 +65,52 @@ export function JobName({ row }: { row: Row }) {
   return <strong>{row.name}</strong>
 }
 
-/** Slow-job indicator. Renders nothing unless the job's actual duration is
- *  ≥ SLOW_THRESHOLD × the workflow's historical avg. ≥ VERY_SLOW_THRESHOLD
- *  flips it to red. Tooltip surfaces the numbers behind the chip.
- *
- *  Skips failed/aborted jobs — "took 5× the avg" isn't meaningful for a job
- *  that errored 10s in. Compares against elapsed time for running jobs and
- *  totalSec/genSec for completed ones. */
 const SLOW_THRESHOLD = 1.5
 const VERY_SLOW_THRESHOLD = 2
 
-export function SlowChip({ row, avgSec }: { row: Row; avgSec: number | undefined }) {
-  if (!avgSec || avgSec <= 0) return null
-  // Don't pass judgment on a run that didn't complete cleanly.
-  if (row.status === 'failed' || row.status === 'cancelled') return null
+/** Classify a job's slowness vs its workflow's historical average.
+ *
+ *  Compares PROCESSING duration (`durationSec`, from duration_ms) — the SAME
+ *  metric and SAME per-workflow average the Doctor slow-jobs query uses for its
+ *  duration rule — so any job flagged "slow"/"very slow" here satisfies Doctor's
+ *  `duration_ms ≥ 1.5×avg` arm and appears under Doctor → Slow jobs.
+ *  (Previously this used genSec/totalSec, where totalSec includes queue wait —
+ *  that flagged jobs as slow that Doctor never considered slow.)
+ *
+ *  NOT full parity: Doctor's slow set is a SUPERSET — it also flags long queue
+ *  wait, long ComfyUI-queue, and slow failures. Those won't get a chip here.
+ *  A server-provided slow flag would be the way to mirror Doctor exactly.
+ *
+ *  Running jobs use elapsed processing time. Failed/aborted runs are never
+ *  judged — "took 5× the avg" is meaningless for a job that errored 10s in.
+ *  Returns 'none' when there's no avg or no comparable duration. */
+export type SlowInfo = { level: 'none' | 'slow' | 'very'; actual: number; ratio: number }
 
+export function slowLevel(row: Row, avgSec: number | undefined): SlowInfo {
+  const none: SlowInfo = { level: 'none', actual: 0, ratio: 0 }
+  if (!avgSec || avgSec <= 0) return none
+  if (row.status === 'failed' || row.status === 'cancelled') return none
   const running = row.status === 'active' || row.status === 'running'
-  const actual = running ? row.elapsedSec : (row.genSec ?? row.totalSec)
-  if (actual == null || actual <= 0) return null
-
+  const actual = running ? row.elapsedSec : row.durationSec
+  if (actual == null || actual <= 0) return none
   const ratio = actual / avgSec
-  if (ratio < SLOW_THRESHOLD) return null
+  if (ratio >= VERY_SLOW_THRESHOLD) return { level: 'very', actual, ratio }
+  if (ratio >= SLOW_THRESHOLD) return { level: 'slow', actual, ratio }
+  return none
+}
 
-  const veryStrong = ratio >= VERY_SLOW_THRESHOLD
-  const tone = veryStrong ? 'bad' : 'warn'
-  const label = veryStrong ? 'very slow' : 'slow'
+/** Slow-job indicator chip. Renders nothing unless slowLevel flags the row. */
+export function SlowChip({ row, avgSec }: { row: Row; avgSec: number | undefined }) {
+  const { level, actual, ratio } = slowLevel(row, avgSec)
+  if (level === 'none') return null
+  const tone = level === 'very' ? 'bad' : 'warn'
   return (
     <span
       className={`chip chip-${tone}`}
       style={{ fontSize: 10, marginLeft: 6 }}
       title={`actual: ${fmtSec(actual)} · avg: ${fmtSec(avgSec)} (${ratio.toFixed(1)}× avg)`}
     >
-      {label}
+      {level === 'very' ? 'very slow' : 'slow'}
     </span>
   )
 }
@@ -239,9 +266,13 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
   const [search, setSearch] = useState('')
   const [logs, setLogs] = useState<string[]>([])
   const [detail, setDetail] = useState<unknown>(null)
+  // Live AI-Toolkit training state for LoRA jobs (bridged via remoteJobName).
+  const [training, setTraining] = useState<TrainingProgress | null>(null)
+  const [trainingErr, setTrainingErr] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [relTime, setRelTime] = useState(false)
   const [stopping, setStopping] = useState(false)
+  const [forcing, setForcing] = useState(false)
   const [setoOpen, setSetoOpen] = useState(false)
   const { notify } = useNotifications()
 
@@ -256,6 +287,8 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
   const fetchData = useCallback(() => {
     setLogs([])
     setDetail(null)
+    setTraining(null)
+    setTrainingErr(null)
     if (row.kind === 'wf') {
       api
         .get<{ logs: string[] }>(`/api/wf-jobs/${row.rawId}/logs`)
@@ -270,6 +303,20 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
         .get<unknown>(`/api/lora-jobs/${row.rawId}`)
         .then(setDetail)
         .catch(() => {})
+      // Training log + live progress straight from the AI-Toolkit box. A 404
+      // (no remoteJobName / job purged / old toolkit) is shown as the logs
+      // tab's empty-state text rather than an error toast.
+      api
+        .get<{ progress: TrainingProgress; log: string; truncated: boolean }>(
+          `/api/lora-jobs/${row.rawId}/training-log`,
+        )
+        .then((r) => {
+          setTraining(r.progress)
+          setLogs(r.log ? r.log.split('\n') : [])
+        })
+        .catch((e) => {
+          setTrainingErr(e instanceof Error ? e.message : 'Training details unavailable')
+        })
     }
   }, [row])
 
@@ -320,6 +367,48 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
       setStopping(false)
     }
   }, [isStoppable, stopping, row.rawId, row.name, notify, fetchData])
+
+  // LoRA jobs have no graceful stop path from here (the trainer owns them),
+  // but a job whose AI-Toolkit reference is gone can never finish. Force stop
+  // terminates it in BOTH stores — the BullMQ hash and the Postgres row —
+  // without contacting any runner.
+  const isForceStoppable =
+    row.kind === 'lora' &&
+    row.status !== 'completed' &&
+    row.status !== 'failed' &&
+    row.status !== 'cancelled'
+
+  const onForceStop = useCallback(async () => {
+    if (!isForceStoppable || forcing) return
+    if (
+      !window.confirm(
+        `Force-stop this training job?\n\n${row.name}\n\nThe job is marked failed in the queue (Redis) and the database. The trainer is NOT contacted — use this when AI-Toolkit has lost the job and it can never finish.`,
+      )
+    )
+      return
+    setForcing(true)
+    try {
+      const res = await api.post<{ redisUpdated: boolean }>(`/api/jobs/${row.rawId}/force-stop`, {
+        kind: 'lora',
+      })
+      notify({
+        variant: 'success',
+        title: 'Job force-stopped',
+        body: res.redisUpdated
+          ? 'Marked failed in the queue and the database.'
+          : 'Marked terminal in the database (the queue entry was already gone).',
+      })
+      fetchData()
+    } catch (e) {
+      notify({
+        variant: 'error',
+        title: 'Force stop failed',
+        body: e instanceof Error ? e.message : 'Unknown error',
+      })
+    } finally {
+      setForcing(false)
+    }
+  }, [isForceStoppable, forcing, row.rawId, row.name, notify, fetchData])
 
   const filteredLogs = useMemo(
     () => (!search ? logs : logs.filter((l) => l.toLowerCase().includes(search.toLowerCase()))),
@@ -485,6 +574,20 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
               <Square size={12} /> {stopping ? 'Pulling…' : 'Pull the plug'}
             </button>
           )}
+          {isForceStoppable && (
+            <button
+              className="btn btn-sm"
+              onClick={onForceStop}
+              disabled={forcing}
+              title="Mark this training failed in the queue and database — the trainer is not contacted"
+              style={{
+                color: 'var(--bad)',
+                borderColor: 'color-mix(in oklab, var(--bad) 40%, transparent)',
+              }}
+            >
+              <Square size={12} /> {forcing ? 'Stopping…' : 'Force stop'}
+            </button>
+          )}
           {/* Ask Seto from the modal — gives every job, regardless of entry
               point (Live, History, Slow, By error), a path to Seto without
               needing a separate row menu on each table. */}
@@ -535,9 +638,27 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
           <Field label="Started at" mono onClick={processedAt ? toggle : undefined}>
             {relTime ? relLabel(createdAt, processedAt, 'creation') : fmtTime(processedAt)}
           </Field>
-          <Field label="Exec at" mono onClick={row.kind !== 'lora' && execAt ? toggle : undefined}>
+          {/* For LoRA jobs this slot shows live trainer progress instead of
+           * the (always-N/A) exec timestamp: toolkit status · step · speed. */}
+          <Field
+            label={row.kind === 'lora' ? 'Training' : 'Exec at'}
+            mono
+            onClick={row.kind !== 'lora' && execAt ? toggle : undefined}
+          >
             {row.kind === 'lora' ? (
-              <span style={{ color: 'var(--ink-3)' }}>N/A</span>
+              training ? (
+                <span title={training.updatedAt ?? undefined}>
+                  {[
+                    training.status,
+                    training.step != null ? `step ${training.step}` : null,
+                    training.speedString,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--ink-3)' }}>{trainingErr ? '—' : '…'}</span>
+              )
             ) : relTime ? (
               relLabel(processedAt ?? createdAt, execAt, processedAt ? 'started' : 'creation')
             ) : (
@@ -632,11 +753,11 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, padding: 14 }}>
                     {filteredLogs.length === 0 ? (
                       <div style={{ color: 'var(--ink-3)', textAlign: 'center', padding: 24 }}>
-                        {row.kind === 'lora'
-                          ? 'No log endpoint for LoRA jobs.'
-                          : logs.length === 0
-                            ? 'No logs available.'
-                            : 'No entries match.'}
+                        {logs.length > 0
+                          ? 'No entries match.'
+                          : row.kind === 'lora'
+                            ? (trainingErr ?? 'No training log yet.')
+                            : 'No logs available.'}
                       </div>
                     ) : (
                       filteredLogs.map((l, i) => (

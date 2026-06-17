@@ -81,7 +81,21 @@ const envSchema = z.object({
   // ── Server health monitor ─────────────────────
   MONITOR_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   MONITOR_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
-  MONITOR_STAGGER_MS: z.coerce.number().int().nonnegative().default(1_000),
+  MONITOR_STAGGER_MS: z.coerce.number().int().nonnegative().default(600_000),
+  // Extra probe attempts before a record is recorded as down. A transient
+  // timeout (probe storm, brief blip) shouldn't flip a healthy record to
+  // "down" and back — retries happen within the same round, so the cost is
+  // paid only for records that fail at least once. 0 disables.
+  MONITOR_RETRIES: z.coerce.number().int().nonnegative().default(1),
+  // Max probes in flight at once. The monitor used to fire every record
+  // simultaneously — dozens of ping spawns + fetches at once is itself a load
+  // spike that makes probes time out (the flicker). Cap keeps the round calm.
+  MONITOR_CONCURRENCY: z.coerce.number().int().positive().default(8),
+  // Round-level hysteresis: an UP record must fail this many CONSECUTIVE
+  // rounds before it shows (and alerts) as down — so one bad round can't flip
+  // the UI to "down" and back. Recovery is immediate on the first success.
+  // Pairs with MONITOR_RETRIES (within-round). Raise toward 3 on a flaky box.
+  MONITOR_DOWN_AFTER: z.coerce.number().int().positive().default(2),
   // When true, ALL ComfyUI / AI-Toolkit traffic (health probes, log fetching,
   // ComfyUI actions, workflow tests — everything going through internalFetch)
   // uses the global HTTP_PROXY (if configured). When false (default) it goes
@@ -95,20 +109,14 @@ const envSchema = z.object({
   // debugging "server shows down but I can reach it" mysteries.
   MONITOR_VERBOSE: bool.default(false),
 
-  // ── RDP execution ─────────────────────────────
-  // When RDP_BRIDGE_URL is set (e.g. http://rdp-sidecar:8080), the API forwards
-  // every RDP test there via HTTP instead of spawning xfreerdp/Xvfb locally.
-  // Lets the API image stay slim or run natively on Windows while a sidecar
-  // owns the Linux-only RDP toolchain. Unset = current "embedded" behavior.
-  RDP_BRIDGE_URL: z
-    .string()
-    .url()
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
-  // Shared secret for the bridge — sent as "Authorization: Bearer <token>".
-  // Optional but strongly recommended whenever the bridge isn't on a private
-  // network (the bridge will RDP anywhere with any creds it accepts).
-  RDP_BRIDGE_TOKEN: z.string().optional(),
+  // ── RDP credential probe (services/rdp.ts) ────
+  // Extra xfreerdp args appended to the probe — an operator escape hatch for
+  // unusual hosts, applied WITHOUT rebuilding the image (change the env,
+  // restart). Space-separated, passed as separate argv tokens (no shell — no
+  // injection). Empty by default: the FreeRDP 2 image negotiates and
+  // authenticates (NTLM) out of the box, so no flags are needed. Use FreeRDP-2
+  // arg syntax if you add any (e.g. "/tls-seclevel:0", not the v3 "/tls:...").
+  RDP_EXTRA_ARGS: z.string().default(''),
 })
 
 const parsed = envSchema.safeParse(process.env)
@@ -131,6 +139,20 @@ if (env.NODE_ENV === 'production') {
   }
   if (env.AUTH_BYPASS) {
     console.error('[config] AUTH_BYPASS is enabled in production. Refusing to start.')
+    process.exit(1)
+  }
+  // The .env.example placeholders are long enough to pass the length check —
+  // refuse them so a copy-paste deploy can't run with publicly-known secrets.
+  if (env.JWT_SECRET.startsWith('replace-with')) {
+    console.error(
+      '[config] JWT_SECRET is still the .env.example placeholder in production. Refusing to start.',
+    )
+    process.exit(1)
+  }
+  if (env.CREDENTIALS_MASTER_KEY?.startsWith('replace-with')) {
+    console.error(
+      '[config] CREDENTIALS_MASTER_KEY is still the .env.example placeholder in production. Refusing to start.',
+    )
     process.exit(1)
   }
 }

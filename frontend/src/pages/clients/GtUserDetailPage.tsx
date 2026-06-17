@@ -3,6 +3,7 @@ import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { api } from '../../lib/api'
 import type { GtUser, UserStats } from './gtUserDetailTypes'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { avatarColor, initials, relTime } from './gtUserDetailHelpers'
 import { OverviewTab } from './GtUserOverviewTab'
 import { WorkflowsTab } from './GtUserWorkflowsTab'
@@ -17,11 +18,12 @@ export function GtUserDetailPage({ userId, onBack, navigate }: Props) {
   const [user, setUser] = useState<GtUser | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useTabWithUrl('overview', ['overview', 'workflows', 'loras', 'servers'])
 
   useEffect(() => {
     setLoading(true)
-    setTab('overview')
+    // Don't reset the tab here — useTabWithUrl already restores it from ?tab=
+    // on mount; forcing 'overview' would clobber a deep-linked/bookmarked tab.
     Promise.all([
       api.get<GtUser>(`/api/gt-users/${userId}`),
       api.get<UserStats>(`/api/gt-users/${userId}/stats`),

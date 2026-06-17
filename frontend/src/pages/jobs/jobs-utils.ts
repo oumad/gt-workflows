@@ -109,22 +109,10 @@ function liveWaitSec(active: boolean, startMs: number | null, creMs: number, now
   return active && startMs ? diffSec(startMs, creMs, true) : diffSec(now, creMs)
 }
 
-// WF gen seconds: prefer comfyRunMs, else durationMs.
-function wfGenSec(comfyRunMs: number | null, durationMs: number | null): number | null {
-  if (comfyRunMs != null) return Math.floor(comfyRunMs / 1000)
-  if (durationMs != null) return Math.floor(durationMs / 1000)
-  return null
-}
-
-// LoRA gen seconds: prefer durationMs, else derive from started→finished.
-function loraGenSec(
-  durationMs: number | null,
-  staMs: number | null,
-  finMs: number | null,
-): number | null {
-  if (durationMs != null) return Math.floor(durationMs / 1000)
-  if (staMs != null && finMs != null) return Math.floor((finMs - staMs) / 1000)
-  return null
+// Whole seconds from a millisecond duration; null passes through. Used for the
+// per-row processing duration (duration_ms → durationSec).
+function msToSec(ms: number | null): number | null {
+  return ms != null ? Math.floor(ms / 1000) : null
 }
 
 // Elapsed for running jobs: now − start, or null when start is missing.
@@ -158,7 +146,7 @@ export function wfToRow(j: WfJob, now: number): Row {
     waitingSec: st === 'waiting' || st === 'delayed' ? diffSec(now, cre.getTime()) : null,
     startedLabel: j.processedAt ? fmtTime(j.processedAt) : null,
     totalSec: safeTotalSec(cre, fin),
-    genSec: wfGenSec(j.comfyRunMs, j.durationMs),
+    durationSec: msToSec(j.durationMs),
     waitTimeSec: wfWaitSec(j.waitMs, j.comfyQueueMs, staMs, cre.getTime(), st, now),
     completedAt: fin,
     createdAt: j.createdAt,
@@ -197,7 +185,7 @@ export function loraToRow(j: LoraJob, now: number): Row {
     waitingSec: st === 'pending' ? diffSec(now, cre.getTime()) : null,
     startedLabel: j.startedAt ? fmtTime(j.startedAt) : null,
     totalSec: safeTotalSec(cre, fin),
-    genSec: loraGenSec(j.durationMs, staMs, fin ? fin.getTime() : null),
+    durationSec: msToSec(j.durationMs),
     waitTimeSec: loraWaitSec(staMs, cre.getTime(), now),
     completedAt: fin,
     createdAt: j.createdAt,
@@ -227,10 +215,6 @@ export function unifiedToRow(j: UnifiedJob, now: number): Row {
   const waitTimeSec = isWf
     ? wfWaitSec(j.waitMs, j.comfyQueueMs, staMs, creMs, st, now)
     : loraWaitSec(staMs, creMs, now)
-
-  const genSec = isWf
-    ? wfGenSec(j.comfyRunMs, j.durationMs)
-    : loraGenSec(j.durationMs, staMs, fin ? fin.getTime() : null)
 
   // The detail modal (and the History focus-by-cell click) still wants the
   // original split shape so it can read fields like clientId / processId /
@@ -289,7 +273,7 @@ export function unifiedToRow(j: UnifiedJob, now: number): Row {
       st === 'waiting' || st === 'pending' || st === 'delayed' ? diffSec(now, creMs) : null,
     startedLabel: j.startedAt ? fmtTime(j.startedAt) : null,
     totalSec: safeTotalSec(cre, fin),
-    genSec,
+    durationSec: msToSec(j.durationMs),
     waitTimeSec,
     completedAt: fin,
     createdAt: j.createdAt,
@@ -335,7 +319,7 @@ export function liveToRow(j: UnifiedLiveJob, status: 'active' | 'waiting', now: 
     waitingSec: !isActive ? waitTimeSec : null,
     startedLabel: j.processedOn ? fmtTime(new Date(j.processedOn).toISOString()) : null,
     totalSec: null,
-    genSec: null,
+    durationSec: null,
     waitTimeSec,
     completedAt: null,
     createdAt: new Date(j.createdAt).toISOString(),

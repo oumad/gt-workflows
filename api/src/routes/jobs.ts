@@ -9,9 +9,9 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { streamSSE } from 'hono/streaming'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, requireCapability } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
-import { listJobsQuery, jobReportSchema } from '../validators/jobs.js'
+import { listJobsQuery, jobReportSchema, forceStopSchema } from '../validators/jobs.js'
 import * as jobsService from '../services/jobs.js'
 import type { AppVariables } from '../types.js'
 
@@ -65,8 +65,30 @@ app.get('/stream', async (c) => {
   })
 })
 
-// ── GET /jobs/stats — per-status counts (60s cache) ──
+// ── GET /jobs/stats — per-status counts (5s cache) ──
 app.get('/stats', requireAuth, async (c) => c.json(await jobsService.stats()))
+
+// ── POST /jobs/:id/force-stop — terminal mark in DB + Redis ──
+// Operator escape hatch for jobs no runner will ever finish (trainer lost
+// the job, stale rows): force-fails the BullMQ hash and closes the Postgres
+// row. No runner is contacted. Optional body.kind disambiguates wf/lora ids.
+// Gated on 'stop-job' — same capability as the ComfyUI stop; this writes the
+// shared gt-workflows queue so it must not be weaker than the gentler stop.
+app.post(
+  '/:id/force-stop',
+  requireAuth,
+  requireCapability('stop-job'),
+  zValidator('json', forceStopSchema),
+  async (c) => {
+    try {
+      const { kind } = c.req.valid('json')
+      const result = await jobsService.forceStop(c.req.param('id'), c.var.user.username, kind)
+      return c.json({ ok: true, ...result })
+    } catch (err) {
+      return httpErrorResponse(c, err)
+    }
+  },
+)
 
 // ── POST /jobs/:id/report — Discord webhook bug report ─
 app.post('/:id/report', requireAuth, zValidator('json', jobReportSchema), async (c) => {

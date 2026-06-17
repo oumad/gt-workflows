@@ -122,8 +122,7 @@ export async function mainStats(days: number) {
       .from(workflowJobs)
       .where(dateGate(days))
       .groupBy(workflowJobs.workflowName)
-      .orderBy(desc(sql`count(*)`))
-      .limit(20),
+      .orderBy(desc(sql`count(*)`)),
 
     db
       .select({
@@ -136,8 +135,7 @@ export async function mainStats(days: number) {
       .from(trainingJobs)
       .where(dateGate(days))
       .groupBy(trainingJobs.baseModel)
-      .orderBy(desc(sql`count(*)`))
-      .limit(20),
+      .orderBy(desc(sql`count(*)`)),
 
     db.execute(sql`
       SELECT
@@ -177,7 +175,6 @@ export async function mainStats(days: number) {
       LEFT JOIN servers s ON s.id = j.server_id
       GROUP BY s.name, j.server_id, j.server_url, s.type, s.gpu
       ORDER BY total DESC
-      LIMIT 20
     `),
 
     db.execute(sql`
@@ -310,7 +307,6 @@ export async function byUser(days: number) {
     LEFT JOIN gt_users u ON u.id = j.client_id
     GROUP BY u.id, u.name, u.email
     ORDER BY total DESC
-    LIMIT 20
   `)
 }
 

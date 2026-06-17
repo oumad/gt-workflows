@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ComponentType } from 'react'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { Boxes, Server, RefreshCw, ExternalLink, Wrench } from 'lucide-react'
@@ -78,7 +79,14 @@ export function ServerDetail({
   kindLabel: KindLabel
   components: DetailComponents
 }) {
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useTabWithUrl('overview', [
+    'overview',
+    'jobs',
+    'workflows',
+    'logs',
+    'settings',
+    'actions',
+  ])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 })
   const [rechecking, setRechecking] = useState(false)
@@ -155,6 +163,11 @@ export function ServerDetail({
     ...(canEdit ? [{ id: 'settings', label: 'Settings' }] : []),
     ...(isAdmin ? [{ id: 'actions', label: 'Actions' }] : []),
   ]
+
+  // A deep-linked ?tab= may name a conditionally-hidden tab (e.g. 'settings'
+  // without edit rights); fall back to the first rendered tab so the body is
+  // never blank. (useTabWithUrl can't know the conditional set at mount.)
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
 
   useEffect(() => {
     if (!pickerOpen) return
@@ -343,9 +356,9 @@ export function ServerDetail({
           )}
         </div>
       )}
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={setTab} />
       <div className="body">
-        {tab === 'overview' && (
+        {activeTab === 'overview' && (
           <Overview
             server={server}
             servers={servers}
@@ -355,13 +368,13 @@ export function ServerDetail({
             navigate={navigate}
           />
         )}
-        {tab === 'jobs' && <ServerJobs server={server} />}
-        {tab === 'workflows' && (
+        {activeTab === 'jobs' && <ServerJobs server={server} />}
+        {activeTab === 'workflows' && (
           <ServerWorkflows wfs={wfs} navigate={navigate} kindLabel={kindLabel} />
         )}
-        {tab === 'logs' && <ServerLogs server={server} kindLabel={kindLabel} />}
-        {tab === 'settings' && <Settings server={server} onSave={onPatch} />}
-        {tab === 'actions' && <Actions server={server} onDelete={onDelete} />}
+        {activeTab === 'logs' && <ServerLogs server={server} kindLabel={kindLabel} />}
+        {activeTab === 'settings' && <Settings server={server} onSave={onPatch} />}
+        {activeTab === 'actions' && <Actions server={server} onDelete={onDelete} />}
       </div>
     </>
   )

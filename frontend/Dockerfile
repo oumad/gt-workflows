@@ -36,7 +36,7 @@ CMD ["npx", "vite", "--host", "0.0.0.0"]
 
 # ─── Prod target ────────────────────────────────────────────────
 # Default target. nginx serves the built /app/dist and proxies /api/*.
-FROM nginx:alpine AS prod
+FROM docker.io/nginx:alpine AS prod
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80

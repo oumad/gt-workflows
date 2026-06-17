@@ -563,7 +563,7 @@ function recentToRow(r: RecentRow): Row {
     waitingSec: null,
     startedLabel: null,
     totalSec: r.duration_ms != null ? Math.floor(r.duration_ms / 1000) : null,
-    genSec: null,
+    durationSec: r.duration_ms != null ? Math.floor(r.duration_ms / 1000) : null,
     waitTimeSec: null,
     completedAt: r.finished_at ? new Date(r.finished_at) : null,
     createdAt: r.created_at,

@@ -131,13 +131,15 @@
   flex: 1;
 }
 .nav-badge {
+  /* Neutral count (e.g. running jobs) — red is reserved for -warn so the
+     sidebar bubbles read as alarms only when something is actually wrong. */
   margin-left: auto;
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: color-mix(in oklab, var(--ink) 8%, transparent);
+  color: var(--ink-2);
 }
 .nav-badge-warn {
   background: color-mix(in oklab, var(--bad) 15%, transparent);
@@ -260,6 +262,43 @@
   /* Last segment / non-navigable label — same color as the rest, no hover
      state so it doesn't masquerade as a button. */
   color: inherit;
+}
+
+/* ─── Collapsible section header ────────────
+   Bare disclosure header for grouped lists (e.g. workflow categories): no
+   card chrome, a full-width hairline for structure, sticky so the active
+   group stays identifiable while scrolling, hover tint as the click
+   affordance. Chevron rotation is driven by aria-expanded so the state is
+   accessible for free. */
+.section-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px;
+  background: var(--bg);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background 0.12s;
+}
+.section-head:hover {
+  background: var(--surface-2);
+}
+.section-head-chevron {
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+}
+.section-head[aria-expanded='true'] .section-head-chevron {
+  transform: rotate(90deg);
 }
 
 /* ─── Tabs ──────────────────────────────────── */

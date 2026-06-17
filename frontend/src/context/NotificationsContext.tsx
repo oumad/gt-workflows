@@ -26,6 +26,8 @@ const Ctx = createContext<NotificationsCtx | null>(null)
 const DEFAULT_DISMISS: Partial<Record<NotifVariant, number>> = {
   success: 4000,
   info: 5000,
+  warn: 7000,
+  error: 8000,
 }
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, or } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { Socket } from 'node:net'
 import { db, servers } from '../db/index.js'
@@ -37,6 +37,36 @@ const ICMP_TIMEOUT_MS = Math.min(PROBE_TIMEOUT_MS, 2_000)
 const TCP_TIMEOUT_MS = Math.min(PROBE_TIMEOUT_MS, 3_000)
 const SERVICE_TIMEOUT_MS = PROBE_TIMEOUT_MS
 
+// Anti-flicker: retry a failed probe a few times within the same round before
+// recording it as down, and cap how many probes run at once so the fan-out
+// doesn't become its own load spike. Both are tunable (MONITOR_RETRIES /
+// MONITOR_CONCURRENCY).
+const PROBE_RETRIES = config.MONITOR_RETRIES
+const PROBE_CONCURRENCY = config.MONITOR_CONCURRENCY
+const RETRY_GAP_MS = 400
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Run `fn` over items with at most `limit` in flight. Order-preserving.
+ *  Keeps the monitor from spawning dozens of ping processes / fetches at once
+ *  — that simultaneity was itself causing probe timeouts. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < items.length) {
+      const i = cursor++
+      out[i] = await fn(items[i]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 // Once we learn ICMP can't be used here (binary missing, or no permission to
 // open a raw socket), stop spawning `ping` on every probe and go straight to
 // the TCP fallback. A firewall that merely drops echo requests still leaves
@@ -59,25 +89,27 @@ function nextAlertDelayMs(alertCount: number): number {
   return ALERT_GAPS_MS[alertCount - 1] ?? ALERT_REPEAT_MS
 }
 
-// Flap damping: an UP record needs this many CONSECUTIVE failed probes before
-// the alert state machine treats it as down. A single blip (probe starved
-// while the API is busy, transient network hiccup) used to fire dozens of
-// down+recovered Discord pairs in adjacent rounds. The counter is in-memory —
-// a restart just costs one extra confirming probe. The raw probe result still
-// lands in the ping columns every round, so the UI stays honest; only
-// ALERTING is damped. Force checks (probeOneServer) bypass this on purpose.
-const DOWN_AFTER_CONSECUTIVE = 2
+// Round-level hysteresis: an UP record must fail this many CONSECUTIVE rounds
+// before it's treated as down — for BOTH the displayed lastPingOk (so the UI
+// doesn't flip down-then-up on one blip) AND the alert state machine (so a
+// genuinely-down server doesn't flap "down → recovered → down" in Discord).
+// Recovery is immediate on the first success. The counter is in-memory — a
+// restart just costs one extra confirming round. Force checks (probeOneServer)
+// bypass this on purpose: they report the raw, immediate result.
+const DOWN_AFTER_CONSECUTIVE = config.MONITOR_DOWN_AFTER
 const consecutiveFails = new Map<string, number>()
 
 type HostReach = { reachable: boolean; rttMs: number | null; via: 'icmp' | 'tcp' | null }
 
 // Unified probe outcome. `kind` records which check ran (a server's ping vs a
-// service's HTTP reachability) so messaging/logging can be specific.
+// service's HTTP reachability) so messaging/logging can be specific. `gpu` is
+// only populated when the caller asked for it (record has no GPU cached yet).
 type ProbeResult = {
   ok: boolean
   ms: number | null
   via: 'icmp' | 'tcp' | 'http' | null
   kind: 'ping' | 'service'
+  gpu: string | null
 }
 
 // Service health endpoint per server type — the cheap, always-present path that
@@ -85,6 +117,29 @@ type ProbeResult = {
 const SERVICE_PATH: Record<string, string> = {
   workflow: '/system_stats', // ComfyUI
   lora: '/api/gpu', // AI-Toolkit
+}
+
+/** Pull the GPU name out of a service health response — ComfyUI's
+ *  /system_stats (`devices[0].name`, prefixed "cuda:0 ") or AI-Toolkit's
+ *  /api/gpu (`[{ name }]` or `{ name }`). Best-effort: null on any shape
+ *  mismatch. Same parsing as serverComfy's stats panel side-effect. */
+function extractGpuName(type: string, body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  if (type === 'workflow') {
+    const devices = (body as { devices?: { name?: unknown }[] }).devices
+    const raw = devices?.[0]?.name
+    return typeof raw === 'string' ? raw.replace(/^cuda:\d+\s+/, '').trim() || null : null
+  }
+  // AI-Toolkit /api/gpu: current UI returns { gpus: [{ name, ... }] };
+  // older builds returned a bare array or a single object.
+  const gpus = (body as { gpus?: { name?: unknown }[] }).gpus
+  const first = Array.isArray(gpus)
+    ? gpus[0]
+    : Array.isArray(body)
+      ? (body as { name?: unknown }[])[0]
+      : (body as { name?: unknown })
+  const raw = first?.name
+  return typeof raw === 'string' ? raw.trim() || null : null
 }
 
 /** ICMP echo via the system `ping` binary. Cross-platform arg shapes.
@@ -193,7 +248,8 @@ async function checkHostReachable(hostname: string): Promise<HostReach> {
 async function checkServiceReachable(
   base: string,
   type: string,
-): Promise<{ ok: boolean; ms: number | null }> {
+  wantGpu: boolean,
+): Promise<{ ok: boolean; ms: number | null; gpu: string | null }> {
   const path = SERVICE_PATH[type] ?? ''
   const url = `${base}${path}`
   const start = Date.now()
@@ -202,7 +258,16 @@ async function checkServiceReachable(
     // the routing policy lives in lib/proxy.ts so every ComfyUI/AI-Toolkit
     // call (probes, logs, actions, workflow tests) behaves identically.
     const res = await internalFetch(url, { timeoutMs: SERVICE_TIMEOUT_MS })
-    await res.body?.cancel().catch(() => {})
+    // The body is normally cancelled unread. When the record has no GPU
+    // cached yet (wantGpu), parse this one response to fill it — set-once,
+    // so steady-state probes stay body-free.
+    let gpu: string | null = null
+    if (res.ok && wantGpu) {
+      const body: unknown = await res.json().catch(() => null)
+      gpu = extractGpuName(type, body)
+    } else {
+      await res.body?.cancel().catch(() => {})
+    }
     const ms = Date.now() - start
     if (config.MONITOR_VERBOSE) {
       console.log(
@@ -211,7 +276,7 @@ async function checkServiceReachable(
     }
     // Require a 2xx/3xx — a 4xx/5xx means the port answers but the service
     // isn't actually serving (wrong process, crashed handler, auth wall).
-    return { ok: res.ok, ms: res.ok ? ms : null }
+    return { ok: res.ok, ms: res.ok ? ms : null, gpu }
   } catch (err) {
     if (config.MONITOR_VERBOSE) {
       const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
@@ -219,13 +284,13 @@ async function checkServiceReachable(
         `[health.probe] service ${url} FAILED in ${Date.now() - start}ms (proxy=${config.MONITOR_USE_PROXY}): ${reason}`,
       )
     }
-    return { ok: false, ms: null }
+    return { ok: false, ms: null, gpu: null }
   }
 }
 
 /** Probe one record by its kind: port-less → server ping; ported → service
  *  HTTP reachability. The two are fully independent. */
-async function probeRecord(url: string, type: string): Promise<ProbeResult> {
+async function probeRecord(url: string, type: string, wantGpu = false): Promise<ProbeResult> {
   const base = url.replace(/\/+$/, '')
   let hostname: string
   let port: number | null
@@ -234,15 +299,28 @@ async function probeRecord(url: string, type: string): Promise<ProbeResult> {
     hostname = u.hostname
     port = u.port ? Number(u.port) : null
   } catch {
-    return { ok: false, ms: null, via: null, kind: 'ping' }
+    return { ok: false, ms: null, via: null, kind: 'ping', gpu: null }
   }
 
   if (port === null) {
     const r = await checkHostReachable(hostname)
-    return { ok: r.reachable, ms: r.rttMs, via: r.via, kind: 'ping' }
+    return { ok: r.reachable, ms: r.rttMs, via: r.via, kind: 'ping', gpu: null }
   }
-  const r = await checkServiceReachable(base, type)
-  return { ok: r.ok, ms: r.ms, via: r.ok ? 'http' : null, kind: 'service' }
+  const r = await checkServiceReachable(base, type, wantGpu)
+  return { ok: r.ok, ms: r.ms, via: r.ok ? 'http' : null, kind: 'service', gpu: r.gpu }
+}
+
+/** probeRecord with retry-before-fail: a probe that fails is retried up to
+ *  PROBE_RETRIES times after a short gap; the first success wins. A genuinely
+ *  down record still resolves down (every attempt fails) — only transient
+ *  blips are absorbed, killing the up/down flicker. */
+async function probeResilient(url: string, type: string, wantGpu: boolean): Promise<ProbeResult> {
+  let result = await probeRecord(url, type, wantGpu)
+  for (let attempt = 0; !result.ok && attempt < PROBE_RETRIES; attempt++) {
+    await delay(RETRY_GAP_MS)
+    result = await probeRecord(url, type, wantGpu)
+  }
+  return result
 }
 
 function isHealthy(r: ProbeResult): boolean {
@@ -278,6 +356,7 @@ export async function probeOneServer(
         name: true,
         url: true,
         type: true,
+        gpu: true,
         isMaintenance: true,
         downSince: true,
         lastAlertAt: true,
@@ -350,6 +429,7 @@ type HealthRow = {
   name: string
   url: string
   type: string
+  gpu: string | null
   isMaintenance: boolean
   downSince: Date | null
   lastAlertAt: Date | null
@@ -434,8 +514,6 @@ function classifyTransition(
 
 type WriteRow = {
   id: string
-  name: string
-  url: string
   lastPingAt: Date
   lastPingOk: boolean
   lastPingMs: number | null
@@ -450,14 +528,16 @@ function buildWrite(
   update: AlertUpdate | null,
   now: Date,
 ): WriteRow {
+  const downSince = update ? update.downSince : row.downSince
   return {
     id: row.id,
-    name: row.name,
-    url: row.url,
     lastPingAt: now,
-    lastPingOk: result.ok,
+    // Displayed up/down follows the damped state (downSince), NOT the raw
+    // probe — so a single failed round can't flip the UI to "down" and back.
+    // Online unless the record is confirmed down.
+    lastPingOk: downSince === null,
     lastPingMs: result.ms,
-    downSince: update ? update.downSince : row.downSince,
+    downSince,
     lastAlertAt: update ? update.lastAlertAt : row.lastAlertAt,
     alertCount: update ? update.alertCount : row.alertCount,
   }
@@ -474,6 +554,7 @@ export async function syncServerHealth(): Promise<void> {
         name: true,
         url: true,
         type: true,
+        gpu: true,
         isMaintenance: true,
         downSince: true,
         lastAlertAt: true,
@@ -499,30 +580,53 @@ export async function syncServerHealth(): Promise<void> {
 
   // Every monitored record is probed independently, in parallel — servers by
   // ping, services by their own HTTP reachability. No host→service coupling.
-  await Promise.all(
-    rows.map(async (row) => {
-      if (row.isMaintenance) {
-        skippedMaintenance++
-        return
+  // GPU set-once: service probes ask their endpoint for the GPU name only
+  // while the record has none cached — afterwards probes stay body-free.
+  // The port-less HOST record of the same machine inherits it too (the GPU
+  // belongs to the box; hosts have no endpoint of their own to report one).
+  const gpuUpdates = new Map<string, string>()
+  const urlParts = (u: string): { host: string; hasPort: boolean } | null => {
+    try {
+      const parsed = new URL(u.replace(/\/+$/, ''))
+      return { host: parsed.hostname, hasPort: parsed.port !== '' }
+    } catch {
+      return null
+    }
+  }
+
+  await mapLimit(rows, PROBE_CONCURRENCY, async (row) => {
+    if (row.isMaintenance) {
+      skippedMaintenance++
+      return
+    }
+    const result = await probeResilient(row.url, row.type, !row.gpu)
+    probesPerformed++
+    const failCount = result.ok ? 0 : (consecutiveFails.get(row.id) ?? 0) + 1
+    if (result.ok) consecutiveFails.delete(row.id)
+    else consecutiveFails.set(row.id, failCount)
+    if (result.gpu && !row.gpu) {
+      gpuUpdates.set(row.id, result.gpu)
+      const me = urlParts(row.url)
+      if (me) {
+        for (const other of rows) {
+          if (other.id === row.id || other.gpu) continue
+          const op = urlParts(other.url)
+          if (op && !op.hasPort && op.host === me.host) gpuUpdates.set(other.id, result.gpu)
+        }
       }
-      const result = await probeRecord(row.url, row.type)
-      probesPerformed++
-      if (result.ok) {
-        upCount++
-        consecutiveFails.delete(row.id)
-      } else {
-        consecutiveFails.set(row.id, (consecutiveFails.get(row.id) ?? 0) + 1)
-      }
-      // Damped view for the alert machine only — see DOWN_AFTER_CONSECUTIVE.
-      const damped =
-        result.ok ||
-        row.downSince !== null ||
-        (consecutiveFails.get(row.id) ?? 0) >= DOWN_AFTER_CONSECUTIVE
-      const { update, event } = classifyTransition(row, result, now, damped)
-      writes.push(buildWrite(row, result, update, now))
-      if (event) events.push(event)
-    }),
-  )
+    }
+    // Hysteresis — see DOWN_AFTER_CONSECUTIVE. An UP record stays effectively
+    // healthy through a few failed rounds; only once it's failed enough in a
+    // row does it flip to down. Recovery (a success) is always immediate. The
+    // displayed lastPingOk is derived from the resulting downSince in
+    // buildWrite, so UI and alerts move together — no flicker either side.
+    const wasDown = row.downSince !== null
+    const effectiveHealthy = result.ok || (!wasDown && failCount < DOWN_AFTER_CONSECUTIVE)
+    if (effectiveHealthy) upCount++
+    const { update, event } = classifyTransition(row, result, now, effectiveHealthy)
+    writes.push(buildWrite(row, result, update, now))
+    if (event) events.push(event)
+  })
 
   if (writes.length === 0) {
     console.log(
@@ -531,46 +635,91 @@ export async function syncServerHealth(): Promise<void> {
     return
   }
 
-  // One batched write instead of an UPDATE per record — far gentler on the
-  // connection pool. INSERT…ON CONFLICT updates the existing rows.
-  let writeOk = true
-  try {
-    await db
-      .insert(servers)
-      .values(writes)
-      .onConflictDoUpdate({
-        target: servers.id,
-        set: {
-          lastPingAt: sql`excluded.last_ping_at`,
-          lastPingOk: sql`excluded.last_ping_ok`,
-          lastPingMs: sql`excluded.last_ping_ms`,
-          downSince: sql`excluded.down_since`,
-          lastAlertAt: sql`excluded.last_alert_at`,
-          alertCount: sql`excluded.alert_count`,
-        },
-      })
-  } catch (err) {
-    writeOk = false
-    console.error('[health] batched DB write failed:', err instanceof Error ? err.message : err)
+  // Plain UPDATEs in small parallel chunks. This used to be one big
+  // INSERT…ON CONFLICT, which RESURRECTED servers deleted mid-tick (the
+  // insert recreates the row); an UPDATE can't. The incremental job sync
+  // freed the pool, so ~50 tiny updates per tick cost nothing.
+  // Track per-row success (allSettled, not all) so alerting can key off
+  // exactly which rows persisted. A failed write must NOT alert — its new
+  // down/recovered state didn't land, so Discord would diverge from the DB and
+  // re-fire next tick — while a row that DID persist in the same chunk still
+  // alerts. (All-or-nothing suppression used to drop a real 'down' alert just
+  // because some unrelated row's write failed in the same tick.)
+  const writtenIds = new Set<string>()
+  const WRITE_CHUNK = 10
+  for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
+    const chunk = writes.slice(i, i + WRITE_CHUNK)
+    const results = await Promise.allSettled(
+      chunk.map((w) =>
+        db
+          .update(servers)
+          .set({
+            lastPingAt: w.lastPingAt,
+            lastPingOk: w.lastPingOk,
+            lastPingMs: w.lastPingMs,
+            downSince: w.downSince,
+            lastAlertAt: w.lastAlertAt,
+            alertCount: w.alertCount,
+          })
+          .where(eq(servers.id, w.id)),
+      ),
+    )
+    results.forEach((r, j) => {
+      if (r.status === 'fulfilled') writtenIds.add(chunk[j]!.id)
+      else
+        console.error(
+          `[health] DB write failed for ${chunk[j]!.id}:`,
+          r.reason instanceof Error ? r.reason.message : r.reason,
+        )
+    })
   }
 
-  if (events.length > 0) {
-    const downN = events.filter((e) => e.kind === 'down').length
-    const upN = events.filter((e) => e.kind === 'recovered').length
-    const remN = events.filter((e) => e.kind === 'still_down').length
-    // Persist first (calendar timeline), then notify (Discord).
-    await recordServerAlerts(events)
+  // Apply GPU names collected this round. Guarded on still-empty so a
+  // concurrent stats-panel cache (serverComfy) wins ties — set-once either
+  // way. Runs a handful of times per record lifetime, then never again.
+  if (gpuUpdates.size > 0) {
     try {
-      await sendServerStatusAlert(events)
+      for (const [id, gpu] of gpuUpdates) {
+        await db
+          .update(servers)
+          .set({ gpu })
+          .where(and(eq(servers.id, id), or(isNull(servers.gpu), eq(servers.gpu, ''))))
+      }
+      console.log(
+        `[health] cached GPU for ${gpuUpdates.size} record(s): ${[...new Set(gpuUpdates.values())].join(', ')}`,
+      )
+    } catch (err) {
+      console.error('[health] gpu cache write failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  // Alert only for records whose new state actually persisted (see the write
+  // loop). A record whose write failed is left untouched: its DB state is
+  // unchanged, so the next tick re-evaluates and re-fires it correctly —
+  // alerting now would diverge from the DB.
+  const deliverable = events.filter((e) => writtenIds.has(e.serverId))
+  const suppressed = events.length - deliverable.length
+  if (suppressed > 0) {
+    console.warn(`[health] suppressed ${suppressed} alert(s) — DB write failed for those records`)
+  }
+  if (deliverable.length > 0) {
+    const downN = deliverable.filter((e) => e.kind === 'down').length
+    const upN = deliverable.filter((e) => e.kind === 'recovered').length
+    const remN = deliverable.filter((e) => e.kind === 'still_down').length
+    // Persist first (calendar timeline), then notify (Discord).
+    await recordServerAlerts(deliverable)
+    try {
+      await sendServerStatusAlert(deliverable)
       console.log(`[health] discord alert sent: ${downN} down, ${upN} recovered, ${remN} reminders`)
     } catch (err) {
       console.error('[health] discord alert failed:', err instanceof Error ? err.message : err)
     }
   }
 
+  const failedWrites = writes.length - writtenIds.size
   const elapsed = Date.now() - start
   const skipStr = skippedMaintenance > 0 ? `, ${skippedMaintenance} skipped (maintenance)` : ''
   console.log(
-    `[health] probed ${probesPerformed} records in ${elapsed}ms — ${upCount}/${probesPerformed} up${skipStr}${writeOk ? '' : ' — DB WRITE FAILED'}`,
+    `[health] probed ${probesPerformed} records in ${elapsed}ms — ${upCount}/${probesPerformed} up${skipStr}${failedWrites > 0 ? ` — ${failedWrites} DB WRITE(S) FAILED` : ''}`,
   )
 }

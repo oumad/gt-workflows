@@ -30,7 +30,7 @@ export const jobReportSchema = z
       .array(
         z.object({
           code: z.string(),
-          severity: z.enum(['info', 'warn', 'bad']),
+          severity: z.enum(['ok', 'info', 'warn', 'bad']),
           title: z.string(),
           body: z.string(),
         }),
@@ -39,5 +39,15 @@ export const jobReportSchema = z
   })
   .strict()
 
+// Optional kind hint for force-stop: wf and lora ids are both numeric BullMQ
+// sequences, so an ambiguous id could otherwise resolve to the wrong table.
+// Callers that know the kind (the job modal) always send it.
+export const forceStopSchema = z
+  .object({
+    kind: z.enum(['wf', 'lora']).optional(),
+  })
+  .strict()
+
 export type ListJobsQuery = z.infer<typeof listJobsQuery>
 export type JobReportInput = z.infer<typeof jobReportSchema>
+export type ForceStopInput = z.infer<typeof forceStopSchema>

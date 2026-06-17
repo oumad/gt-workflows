@@ -3,6 +3,7 @@ import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { Kpi } from '../../components/ui/Kpi'
 import { api } from '../../lib/api'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { useAuth } from '../../context/AuthContext'
 import type { User } from '../../types'
 import { Search, X, Check, Shield, Plus, KeyRound, Trash2, AlertCircle } from 'lucide-react'
@@ -699,7 +700,7 @@ function PermissionsTab() {
 
 /* ─── Page ──────────────────────────── */
 export function UsersPage() {
-  const [tab, setTab] = useState('users')
+  const [tab, setTab] = useTabWithUrl('users', ['users', 'roles', 'permissions'])
 
   return (
     <>

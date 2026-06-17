@@ -9,6 +9,7 @@ import {
   Send,
   Monitor,
   KeyRound,
+  Square,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
@@ -26,7 +27,7 @@ export type SetoKind = 'live-job' | 'history-job' | 'service' | 'server' | 'erro
 
 type Finding = {
   code: string
-  severity: 'info' | 'warn' | 'bad'
+  severity: 'ok' | 'info' | 'warn' | 'bad'
   title: string
   body: string
 }
@@ -40,6 +41,11 @@ const SEVERITY_STYLE: Record<
   Finding['severity'],
   { color: string; bg: string; icon: typeof Info }
 > = {
+  ok: {
+    color: 'var(--good)',
+    bg: 'color-mix(in oklab, var(--good) 10%, transparent)',
+    icon: Check,
+  },
   info: {
     color: 'var(--info)',
     bg: 'color-mix(in oklab, var(--info) 10%, transparent)',
@@ -56,6 +62,9 @@ const SEVERITY_STYLE: Record<
     icon: AlertCircle,
   },
 }
+
+// Worst news first; positive confirmations close the list.
+const SEVERITY_RANK: Record<Finding['severity'], number> = { bad: 0, warn: 1, info: 2, ok: 3 }
 
 const SUBJECT: Record<SetoKind, string> = {
   'live-job': 'this running job',
@@ -90,9 +99,13 @@ export function SetoModal({
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [reported, setReported] = useState(false)
+  const [forcing, setForcing] = useState(false)
 
   const isJobKind = kind === 'live-job' || kind === 'history-job'
   const isServerKind = kind === 'server' || kind === 'service'
+  // The "job not found / pruned" finding (code 'unknown'). Only then do we
+  // offer Force stop — a stale row the checks can't see has no other way out.
+  const jobNotFound = isJobKind && (data?.findings ?? []).some((f) => f.code === 'unknown')
 
   useEffect(() => {
     setLoading(true)
@@ -115,11 +128,23 @@ export function SetoModal({
   async function sendReport() {
     setSending(true)
     try {
-      await api.post(`/api/jobs/${id}/report`, {
-        message: message.trim(),
-        server: server ?? null,
-        findings: data?.findings ?? [],
-      })
+      // Jobs and servers/services have separate report endpoints; both embed
+      // the current Seto findings so Discord sees the same diagnosis.
+      if (isJobKind) {
+        await api.post(`/api/jobs/${id}/report`, {
+          message: message.trim(),
+          server: server ?? null,
+          findings: data?.findings ?? [],
+        })
+      } else {
+        await api.post(`/api/servers/${id}/report`, {
+          message: message.trim(),
+          findings: (data?.findings ?? []).map((f) => ({
+            severity: f.severity,
+            title: f.title,
+          })),
+        })
+      }
       notify({ variant: 'success', title: 'Issue reported', autoDismiss: 4000 })
       setReported(true)
     } catch (e) {
@@ -130,6 +155,36 @@ export function SetoModal({
       })
     } finally {
       setSending(false)
+    }
+  }
+
+  async function forceStop() {
+    if (
+      !window.confirm(
+        'Force-stop this job?\n\nThe job is marked failed in the queue (Redis) and the database — no runner is contacted. Use it to clear a stale job the checks cannot see.',
+      )
+    )
+      return
+    setForcing(true)
+    try {
+      const res = await api.post<{ redisUpdated: boolean }>(`/api/jobs/${id}/force-stop`, {})
+      notify({
+        variant: 'success',
+        title: 'Job force-stopped',
+        body: res.redisUpdated
+          ? 'Marked failed in the queue and the database.'
+          : 'Marked terminal in the database (the queue entry was already gone).',
+        autoDismiss: 4000,
+      })
+      onClose()
+    } catch (e) {
+      notify({
+        variant: 'error',
+        title: 'Force stop failed',
+        body: e instanceof Error ? e.message : 'Unknown error',
+      })
+    } finally {
+      setForcing(false)
     }
   }
 
@@ -258,68 +313,75 @@ export function SetoModal({
                 </div>
               ) : (
                 <div className="col" style={{ gap: 10 }}>
-                  {data.findings.map((f, i) => {
-                    const st = SEVERITY_STYLE[f.severity]
-                    const Icon = st.icon
-                    return (
-                      <div
-                        key={`${f.code}-${i}`}
-                        style={{
-                          display: 'flex',
-                          gap: 10,
-                          alignItems: 'flex-start',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          background: st.bg,
-                          border: `1px solid color-mix(in oklab, ${st.color} 30%, transparent)`,
-                        }}
-                      >
-                        <Icon size={16} style={{ color: st.color, flexShrink: 0, marginTop: 1 }} />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: st.color,
-                              marginBottom: 3,
-                            }}
-                          >
-                            {f.title}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-                            {f.body}
-                          </div>
-                          <div
-                            title={setoCodeInfo(f.code).description}
-                            style={{
-                              fontSize: 10,
-                              color: 'var(--ink-3)',
-                              marginTop: 4,
-                              fontFamily: 'var(--font-mono)',
-                              cursor: 'help',
-                              display: 'inline-block',
-                              borderBottom: '1px dotted var(--ink-3)',
-                            }}
-                          >
-                            {f.code}
+                  {[...data.findings]
+                    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+                    .map((f, i) => {
+                      const st = SEVERITY_STYLE[f.severity]
+                      const Icon = st.icon
+                      return (
+                        <div
+                          key={`${f.code}-${i}`}
+                          style={{
+                            display: 'flex',
+                            gap: 10,
+                            alignItems: 'flex-start',
+                            padding: '12px 14px',
+                            borderRadius: 10,
+                            background: st.bg,
+                            border: `1px solid color-mix(in oklab, ${st.color} 30%, transparent)`,
+                          }}
+                        >
+                          <Icon
+                            size={16}
+                            style={{ color: st.color, flexShrink: 0, marginTop: 1 }}
+                          />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: st.color,
+                                marginBottom: 3,
+                              }}
+                            >
+                              {f.title}
+                            </div>
+                            <div
+                              style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.55 }}
+                            >
+                              {f.body}
+                            </div>
+                            <div
+                              title={setoCodeInfo(f.code).description}
+                              style={{
+                                fontSize: 10,
+                                color: 'var(--ink-3)',
+                                marginTop: 4,
+                                fontFamily: 'var(--font-mono)',
+                                cursor: 'help',
+                                display: 'inline-block',
+                                borderBottom: '1px dotted var(--ink-3)',
+                              }}
+                            >
+                              {f.code}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
                 </div>
               )}
 
-              {/* RDP section — admin only, server/service kinds. Surfaces
-               *  ping + services status as a one-line health badge and
-               *  exposes an "RDP In" button when ping is OK and credentials
-               *  are linked. The button drives a synchronous server-side
-               *  xfreerdp probe (~15s hold); we keep the user posted with a
-               *  busy state and an inline result panel. */}
-              {isServerKind && isAdmin && <RdpSection serverId={id} />}
+              {/* RDP section — admin only, SERVER kind only: RDP targets the
+               *  physical host, never a ComfyUI/AI-Toolkit service. Surfaces
+               *  ping + services status and an "RDP In" button when ping is
+               *  OK and credentials are linked (synchronous ~15s probe). */}
+              {kind === 'server' && isAdmin && <RdpSection serverId={id} />}
 
-              {/* Report section — job kinds only */}
-              {isJobKind && (
+              {/* Report section — jobs AND servers/services. This replaces
+               *  the old standalone "Report issue" modal: the Discord report
+               *  embeds the Seto findings above plus the user's message. */}
+              {(isJobKind || isServerKind) && (
                 <div
                   style={{
                     borderTop: '1px solid var(--line)',
@@ -399,6 +461,22 @@ export function SetoModal({
             Thresholds adjustable in <strong>Admin → Seto</strong>.
           </span>
           <span className="spacer" />
+          {/* Escape hatch for the "job not found / pruned" case only: marks
+           * the row cancelled in the DB (no runner contact). */}
+          {jobNotFound && (
+            <button
+              className="btn btn-sm"
+              onClick={forceStop}
+              disabled={forcing}
+              title="Mark this job as cancelled in the database — no runner is contacted"
+              style={{
+                color: 'var(--bad)',
+                borderColor: 'color-mix(in oklab, var(--bad) 40%, transparent)',
+              }}
+            >
+              <Square size={12} /> {forcing ? 'Stopping…' : 'Force stop'}
+            </button>
+          )}
           <button className="btn btn-sm" onClick={onClose}>
             Close
           </button>
@@ -433,6 +511,9 @@ type RdpConnectResult = {
   rdpHost: string
   durationMs: number
   stderrTail: string
+  /** Server-side interpretation of the outcome (optional for older APIs). */
+  verdict?: 'credentials_ok' | 'auth_failed' | 'inconclusive' | 'failed'
+  summary?: string
 }
 
 function RdpSection({ serverId }: { serverId: string }) {
@@ -609,8 +690,25 @@ function StatusPip({ ok, label }: { ok: boolean; label: string }) {
 }
 
 function RdpResultPanel({ result }: { result: RdpConnectResult }) {
-  const color = result.ok ? 'var(--good)' : 'var(--bad)'
-  const Icon = result.ok ? Check : AlertCircle
+  // Verdict-driven rendering; ok/fail fallback covers an older API without
+  // the verdict fields.
+  const verdict = result.verdict ?? (result.ok ? 'credentials_ok' : 'failed')
+  const color =
+    verdict === 'credentials_ok'
+      ? 'var(--good)'
+      : verdict === 'inconclusive'
+        ? 'var(--warn)'
+        : 'var(--bad)'
+  const Icon = verdict === 'credentials_ok' ? Check : AlertCircle
+  const heldSec = Math.round(result.durationMs / 1000)
+  const headline =
+    verdict === 'credentials_ok'
+      ? `Credentials verified on ${result.rdpHost}`
+      : verdict === 'auth_failed'
+        ? `${result.rdpHost} rejected the credentials`
+        : verdict === 'inconclusive'
+          ? `Inconclusive (${heldSec}s) on ${result.rdpHost}`
+          : `RDP probe failed (exit ${result.exitCode ?? 'null'} / signal ${result.signal ?? 'none'})`
   return (
     <div
       style={{
@@ -626,12 +724,13 @@ function RdpResultPanel({ result }: { result: RdpConnectResult }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color, fontSize: 13 }}>
         <Icon size={14} />
-        <strong>
-          {result.ok
-            ? `Connected — session held ${Math.round(result.durationMs / 1000)}s on ${result.rdpHost}`
-            : `RDP probe failed (exit ${result.exitCode ?? 'null'} / signal ${result.signal ?? 'none'})`}
-        </strong>
+        <strong>{headline}</strong>
       </div>
+      {result.summary && (
+        <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.45 }}>
+          {result.summary}
+        </div>
+      )}
       {result.stderrTail && (
         <pre
           style={{

@@ -133,7 +133,7 @@ export function PerformanceTab({ range }: { range: Range }) {
     setError(null)
     Promise.all([
       api.get<AnalyticsData>(`/api/analytics?days=${days}`),
-      api.get<PerfDailyRow[]>(`/api/analytics/perf-daily?days=${days}&metric=${metric}&top=10`),
+      api.get<PerfDailyRow[]>(`/api/analytics/perf-daily?days=${days}&metric=${metric}&top=500`),
     ])
       .then(([d, s]) => {
         setData(d)

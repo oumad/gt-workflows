@@ -31,6 +31,17 @@ export const patchServerSchema = z
 export const reportServerSchema = z
   .object({
     message: z.string().min(1).max(2000),
+    // Optional Seto findings snapshot, embedded in the Discord report when
+    // the report is sent from the (merged) Seto modal.
+    findings: z
+      .array(
+        z.object({
+          severity: z.enum(['ok', 'info', 'warn', 'bad']),
+          title: z.string().min(1).max(300),
+        }),
+      )
+      .max(20)
+      .optional(),
   })
   .strict()
 

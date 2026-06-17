@@ -45,12 +45,34 @@ const COLORS = {
   blue: 0x5865f2,
 }
 
+const FINDING_EMOJI: Record<string, string> = { bad: '🔴', warn: '🟡', info: 'ℹ️', ok: '🟢' }
+
 export async function sendServerReport(opts: {
   serverName: string
   serverUrl: string
   reporter: string
   message: string
+  /** Seto findings snapshot — included so the Discord report carries the
+   *  same diagnosis the reporter was looking at. */
+  findings?: { severity: string; title: string }[]
 }): Promise<void> {
+  const fields = [
+    { name: 'Server', value: opts.serverName, inline: true },
+    { name: 'Reporter', value: opts.reporter, inline: true },
+    { name: 'URL', value: opts.serverUrl, inline: false },
+  ]
+  if (opts.findings && opts.findings.length > 0) {
+    fields.push({
+      name: 'Seto checks',
+      // Discord caps embed field values at 1024 chars — trim defensively.
+      value: opts.findings
+        .slice(0, 12)
+        .map((f) => `${FINDING_EMOJI[f.severity] ?? '•'} ${f.title}`)
+        .join('\n')
+        .slice(0, 1024),
+      inline: false,
+    })
+  }
   await sendWebhook({
     username: 'coffee-maker',
     embeds: [
@@ -58,19 +80,13 @@ export async function sendServerReport(opts: {
         title: '🔧 Server Issue Report',
         color: COLORS.yellow,
         description: opts.message,
-        fields: [
-          { name: 'Server', value: opts.serverName, inline: true },
-          { name: 'Reporter', value: opts.reporter, inline: true },
-          { name: 'URL', value: opts.serverUrl, inline: false },
-        ],
+        fields,
         timestamp: new Date().toISOString(),
         footer: { text: 'coffee-maker · server report' },
       },
     ],
   })
 }
-
-const FINDING_EMOJI: Record<string, string> = { bad: '🔴', warn: '🟡', info: 'ℹ️' }
 
 export async function sendJobReport(opts: {
   jobId: string
@@ -80,7 +96,12 @@ export async function sendJobReport(opts: {
   server: string | null
   reporter: string
   message: string
-  findings?: Array<{ code: string; severity: 'info' | 'warn' | 'bad'; title: string; body: string }>
+  findings?: Array<{
+    code: string
+    severity: 'ok' | 'info' | 'warn' | 'bad'
+    title: string
+    body: string
+  }>
 }): Promise<void> {
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Job', value: opts.jobName ?? opts.jobId, inline: true },
@@ -165,6 +186,23 @@ function fmtDuration(ms: number): string {
   return `${h}h ${m % 60}m`
 }
 
+// Server (physical host) vs Service (a ported process on it) — the same URL-
+// shape rule the rest of the app uses: a port means service, port-less means
+// host. Lets the alert say which kind is down instead of a generic "Server".
+function recordKind(url: string): 'Server' | 'Service' {
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).port ? 'Service' : 'Server'
+  } catch {
+    return 'Server'
+  }
+}
+
+/** Title noun for a batch: the shared kind when uniform, else generic. */
+function titleNoun(events: ServerAlertEvent[]): string {
+  const kinds = new Set(events.map((e) => recordKind(e.url)))
+  return kinds.size === 1 ? [...kinds][0]! : 'Record'
+}
+
 export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise<void> {
   if (events.length === 0) return
 
@@ -175,24 +213,31 @@ export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise
   const embeds: DiscordEmbed[] = []
 
   if (down.length > 0) {
+    const noun = titleNoun(down)
     embeds.push({
-      title: down.length === 1 ? '🚨 Server Down' : `🚨 Servers Down (${down.length})`,
+      title: down.length === 1 ? `🚨 ${noun} Down` : `🚨 ${noun}s Down (${down.length})`,
       color: COLORS.red,
-      description: down.map((e) => `**${e.name}** — ${e.reason}\n\`${e.url}\``).join('\n\n'),
+      description: down
+        .map((e) => `**${e.name}** · ${recordKind(e.url)} — ${e.reason}\n\`${e.url}\``)
+        .join('\n\n'),
       timestamp: new Date().toISOString(),
       footer: { text: 'coffee-maker · health monitor' },
     })
   }
 
   if (recovered.length > 0) {
+    const noun = titleNoun(recovered)
     embeds.push({
       title:
         recovered.length === 1
-          ? '✅ Server Recovered'
-          : `✅ Servers Recovered (${recovered.length})`,
+          ? `✅ ${noun} Recovered`
+          : `✅ ${noun}s Recovered (${recovered.length})`,
       color: COLORS.green,
       description: recovered
-        .map((e) => `**${e.name}** — was down for ${fmtDuration(e.downForMs)}\n\`${e.url}\``)
+        .map(
+          (e) =>
+            `**${e.name}** · ${recordKind(e.url)} — was down for ${fmtDuration(e.downForMs)}\n\`${e.url}\``,
+        )
         .join('\n\n'),
       timestamp: new Date().toISOString(),
       footer: { text: 'coffee-maker · health monitor' },
@@ -200,13 +245,17 @@ export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise
   }
 
   if (reminders.length > 0) {
+    const noun = titleNoun(reminders)
     embeds.push({
-      title: reminders.length === 1 ? '⏰ Still Down' : `⏰ Still Down (${reminders.length})`,
+      title:
+        reminders.length === 1
+          ? `⏰ ${noun} Still Down`
+          : `⏰ ${noun}s Still Down (${reminders.length})`,
       color: COLORS.yellow,
       description: reminders
         .map(
           (e) =>
-            `**${e.name}** — down for ${fmtDuration(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
+            `**${e.name}** · ${recordKind(e.url)} — down for ${fmtDuration(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
         )
         .join('\n\n'),
       timestamp: new Date().toISOString(),

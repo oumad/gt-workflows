@@ -3,6 +3,7 @@ import { Clock } from 'lucide-react'
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { type Range } from './analyticsHelpers'
+import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { RangeSelector } from '../../components/ui/RangeSelector'
 import { OverviewTab } from './tabs/OverviewTab'
 import { PerformanceTab } from './tabs/PerformanceTab'
@@ -62,7 +63,13 @@ function FreshnessLabel({ refreshedAt }: { refreshedAt: number }) {
 }
 
 export function AnalyticsPage() {
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useTabWithUrl('overview', [
+    'overview',
+    'performance',
+    'usage',
+    'distribution',
+    'comparison',
+  ])
   const [range, setRange] = useState<Range>('7d')
   // Bumped on every tab or range change. Each tab refetches on those, so
   // this approximates "when the visible data was last loaded" without
