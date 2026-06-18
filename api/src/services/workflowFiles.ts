@@ -15,7 +15,6 @@ import {
   readdirSync,
   existsSync,
   readFileSync,
-  writeFileSync,
   statSync,
   mkdirSync,
   rmSync,
@@ -23,7 +22,12 @@ import {
 } from 'node:fs'
 import { join, resolve, dirname, basename } from 'node:path'
 import { resolveFolder } from './workflows.js'
-import { isInsideDir, snapshotWorkflow } from '../lib/workflowFs.js'
+import {
+  isInsideDir,
+  snapshotWorkflow,
+  snapshotWorkflowAsync,
+  writeFileAtomic,
+} from '../lib/workflowFs.js'
 import { badRequest, forbidden, notFound, conflict } from '../lib/httpError.js'
 
 /* ─── Path sanitation ─────────────────────────────────────────────
@@ -246,8 +250,8 @@ export function writeFile(id: string, path: string, text: string): FileRead {
   if (!existsSync(parent)) throw notFound('Parent folder does not exist')
   if (existsSync(abs) && !statSync(abs).isFile()) throw badRequest('Path is a directory')
 
-  writeFileSync(abs, text, 'utf-8')
-  snapshotWorkflow(id, folderAbs, 'meta')
+  writeFileAtomic(abs, text)
+  snapshotWorkflowAsync(id, folderAbs, 'meta')
   return readFile(id, rel)
 }
 
@@ -278,7 +282,7 @@ export function renamePath(id: string, from: string, to: string): RenameResult {
   if (!existsSync(parent)) mkdirSync(parent, { recursive: true })
 
   renameSync(src.abs, dst.abs)
-  snapshotWorkflow(id, folderAbs, 'meta')
+  snapshotWorkflowAsync(id, folderAbs, 'meta')
   return { from: src.rel, to: dst.rel }
 }
 
@@ -313,7 +317,7 @@ export async function uploadFile(id: string, destFolder: string, file: File): Pr
   if (existsSync(targetAbs)) throw conflict('File already exists at destination')
 
   const buf = Buffer.from(await file.arrayBuffer())
-  writeFileSync(targetAbs, buf)
-  snapshotWorkflow(id, folderAbs, 'meta')
+  writeFileAtomic(targetAbs, buf)
+  snapshotWorkflowAsync(id, folderAbs, 'meta')
   return readFile(id, targetRel)
 }

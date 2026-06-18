@@ -6,6 +6,7 @@
  * Created as part of the F10 dedup pass — see the audit report.
  */
 import type { Server as ServerType, ServerKind, Page } from '../../types'
+import { hostnameOf, isHostRecord } from '../../lib/serverLinks'
 
 export type ServerPatch = Partial<{
   name: string
@@ -76,6 +77,26 @@ export function serverStatus(
   if ((s.activeJobs ?? 0) + (s.waitingJobs ?? 0) > 0) return 'busy'
   if (s.health.latencyMs && s.health.latencyMs > 200) return 'warn'
   return 'ok'
+}
+
+/** Ids of servers a running job can't make progress on: the server's own probe
+ *  is offline, OR its host (the port-less record sharing its hostname) is down —
+ *  a down host downs every service on it. Used to mark live jobs whose service
+ *  or host is unreachable. */
+export function downServerIdSet(servers: ServerType[]): Set<string> {
+  const downHostnames = new Set<string>()
+  for (const s of servers) {
+    if (isHostRecord(s) && serverStatus(s) === 'down') {
+      const h = hostnameOf(s)
+      if (h) downHostnames.add(h)
+    }
+  }
+  const out = new Set<string>()
+  for (const s of servers) {
+    const h = hostnameOf(s)
+    if (serverStatus(s) === 'down' || (h != null && downHostnames.has(h))) out.add(s.id)
+  }
+  return out
 }
 
 export const STATUS_TONE: Record<string, string> = {

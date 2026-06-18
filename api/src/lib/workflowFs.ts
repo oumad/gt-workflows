@@ -5,7 +5,23 @@
  *
  * Extracted from routes/workflows.ts to keep that router focused on HTTP.
  */
-import { readdirSync, existsSync, mkdirSync, rmSync, cpSync, writeFileSync } from 'node:fs'
+import {
+  readdirSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  cpSync,
+  writeFileSync,
+  renameSync,
+} from 'node:fs'
+import {
+  cp as cpAsync,
+  mkdir as mkdirAsync,
+  readdir as readdirAsync,
+  rename as renameAsync,
+  rm as rmAsync,
+  stat as statAsync,
+} from 'node:fs/promises'
 import { join, resolve, sep, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from '../config/index.js'
@@ -47,6 +63,11 @@ export function isInsideDir(child: string, parent: string): boolean {
    are pruned on each save. */
 export const SNAPSHOT_DIR = '.history'
 export const SNAPSHOT_CAP = 50
+/** Upper bound on the total bytes a single workflow's `.history` may occupy.
+ *  Snapshots are full-folder copies, so an image-heavy workflow saved often
+ *  could otherwise grow `.history` without bound and fill the WORKFLOWS_DIR
+ *  volume. Pruned oldest-first after the count cap. */
+export const SNAPSHOT_HISTORY_MAX_BYTES = 512 * 1024 * 1024
 export type SnapshotKind = 'params' | 'workflow' | 'meta' | 'import'
 
 export function historyRoot(id: string): string {
@@ -75,27 +96,19 @@ function parseSnapshotId(snapId: string): { savedAt: string; kind: SnapshotKind 
   return { savedAt: t.toISOString(), kind: m[2] as SnapshotKind }
 }
 
-/** Copy the current workflow folder into `.history/<id>/<snapId>`. Trims
- *  older snapshots beyond SNAPSHOT_CAP. Best-effort: any FS error is logged
- *  but does not fail the calling save. */
+/** Copy the current workflow folder into `.history/<id>/<snapId>`. Synchronous
+ *  variant for the destructive callers (delete, restore) that must capture the
+ *  PRE-mutation state before they touch the folder. Retention is enforced by
+ *  the shared `pruneHistoryAsync` (count + byte budget) — fired non-blocking so
+ *  both snapshot paths share one policy. Best-effort: FS errors are logged but
+ *  never fail the calling op. */
 export function snapshotWorkflow(id: string, folderAbs: string, kind: SnapshotKind): void {
   try {
     const root = historyRoot(id)
     mkdirSync(root, { recursive: true })
     const snapId = buildSnapshotId(kind)
     cpSync(folderAbs, join(root, snapId), { recursive: true })
-
-    // Prune oldest beyond cap. Snapshot ids start with the iso timestamp so
-    // lexical sort is also chronological sort.
-    const existing = readdirSync(root).sort()
-    while (existing.length > SNAPSHOT_CAP) {
-      const oldest = existing.shift()!
-      try {
-        rmSync(join(root, oldest), { recursive: true, force: true })
-      } catch {
-        /* ignore */
-      }
-    }
+    void pruneHistoryAsync(root)
   } catch (err) {
     console.warn(
       '[workflows] snapshot failed for',
@@ -103,6 +116,128 @@ export function snapshotWorkflow(id: string, folderAbs: string, kind: SnapshotKi
       ':',
       err instanceof Error ? err.message : err,
     )
+  }
+}
+
+/** Non-blocking, fire-and-forget snapshot. Kicks the recursive copy onto the
+ *  libuv threadpool (async fs) so a large workflow folder no longer freezes
+ *  Node's event loop while the response is produced — the prior synchronous
+ *  `cpSync` blocked every other in-flight request for the copy's duration,
+ *  which (run twice concurrently on save) tripped the keep-alive reset race
+ *  and surfaced as a burst of ECONNRESET in the browser.
+ *
+ *  Safe ONLY for callers that snapshot AFTER their mutation has landed (file
+ *  writes, rename, upload, metadata patches). Destructive ops that must
+ *  capture the PRE-mutation state (delete, restore) keep the synchronous
+ *  `snapshotWorkflow`, where blocking is correct and those ops are rare. */
+export function snapshotWorkflowAsync(id: string, folderAbs: string, kind: SnapshotKind): void {
+  const root = historyRoot(id)
+  // Stamp the snapshot id now (capture the save time accurately) even though
+  // the copy completes a moment later on the threadpool.
+  const snapId = buildSnapshotId(kind)
+  void (async () => {
+    // Copy into a `.partial` staging dir, then rename it into place. The rename
+    // is atomic, so listSnapshots / restore never observe a half-copied
+    // snapshot (a mid-copy restore would otherwise wipe the live folder and
+    // copy back an incomplete tree). `.partial` names don't match
+    // parseSnapshotId, so an orphaned staging dir stays invisible to history.
+    const stagingDir = join(root, `${snapId}.partial`)
+    try {
+      await mkdirAsync(root, { recursive: true })
+      await cpAsync(folderAbs, stagingDir, { recursive: true })
+      await renameAsync(stagingDir, join(root, snapId))
+      await pruneHistoryAsync(root)
+    } catch (err) {
+      try {
+        await rmAsync(stagingDir, { recursive: true, force: true })
+      } catch {
+        /* ignore cleanup failure */
+      }
+      console.warn(
+        '[workflows] async snapshot failed for',
+        id,
+        ':',
+        err instanceof Error ? err.message : err,
+      )
+    }
+  })()
+}
+
+/** Recursively sum a path's byte size (files + dirs). Best-effort: anything
+ *  unreadable counts as 0 so a transient FS error never aborts a prune. */
+async function dirSizeBytes(p: string): Promise<number> {
+  let st
+  try {
+    st = await statAsync(p)
+  } catch {
+    return 0
+  }
+  if (st.isFile()) return st.size
+  if (!st.isDirectory()) return 0
+  let total = 0
+  let children: string[] = []
+  try {
+    children = await readdirAsync(p)
+  } catch {
+    return total
+  }
+  for (const c of children) total += await dirSizeBytes(join(p, c))
+  return total
+}
+
+/** Prune `.history/<id>` first by count (SNAPSHOT_CAP) then by total bytes
+ *  (SNAPSHOT_HISTORY_MAX_BYTES), oldest-first. Snapshot ids are timestamp-
+ *  prefixed so a lexical sort is chronological. Fully async / non-blocking. */
+async function pruneHistoryAsync(root: string): Promise<void> {
+  let entries: string[]
+  try {
+    entries = (await readdirAsync(root)).sort()
+  } catch {
+    return
+  }
+  // 1. Count cap.
+  while (entries.length > SNAPSHOT_CAP) {
+    const oldest = entries.shift()!
+    try {
+      await rmAsync(join(root, oldest), { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+  // 2. Byte budget — drop oldest until under the cap.
+  const sized = await Promise.all(
+    entries.map(async (name) => ({ name, bytes: await dirSizeBytes(join(root, name)) })),
+  )
+  let total = sized.reduce((sum, e) => sum + e.bytes, 0)
+  for (const e of sized) {
+    if (total <= SNAPSHOT_HISTORY_MAX_BYTES) break
+    try {
+      await rmAsync(join(root, e.name), { recursive: true, force: true })
+      total -= e.bytes
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Write a file atomically: stage to a sibling temp file, then rename over the
+ *  target. rename is atomic within a filesystem, so a crash / ENOSPC mid-write
+ *  can never leave a truncated or zero-byte destination — the original file
+ *  survives intact. Used for params.json / workflow.json, where a partial
+ *  write would corrupt the workflow. */
+let atomicWriteCounter = 0
+export function writeFileAtomic(absPath: string, data: string | Buffer): void {
+  const tmp = `${absPath}.${process.pid}.${atomicWriteCounter++}.tmp`
+  try {
+    writeFileSync(tmp, data)
+    renameSync(tmp, absPath)
+  } catch (err) {
+    try {
+      rmSync(tmp, { force: true })
+    } catch {
+      /* ignore cleanup failure */
+    }
+    throw err
   }
 }
 

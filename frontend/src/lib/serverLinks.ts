@@ -11,12 +11,17 @@
 
 import type { Server as ServerType } from '../types'
 
+/** Prefix a bare `host[:port]` with `http://` so it parses as — and opens as —
+ *  a URL. Leaves an existing `http(s)://` scheme untouched. */
+export function withScheme(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `http://${url}`
+}
+
 /** Extract the hostname portion of a server URL — e.g. "http://worker-03:8188"
  *  → "worker-03". Returns `null` for inputs that won't parse as a URL. */
 export function hostnameOf(s: ServerType): string | null {
   try {
-    const u = new URL(/^https?:\/\//i.test(s.url) ? s.url : `http://${s.url}`)
-    return u.hostname
+    return new URL(withScheme(s.url)).hostname
   } catch {
     return null
   }
@@ -25,8 +30,7 @@ export function hostnameOf(s: ServerType): string | null {
 /** Extract the port portion of a server URL, or `null` when there isn't one. */
 export function portOf(s: ServerType): string | null {
   try {
-    const u = new URL(/^https?:\/\//i.test(s.url) ? s.url : `http://${s.url}`)
-    return u.port || null
+    return new URL(withScheme(s.url)).port || null
   } catch {
     return null
   }

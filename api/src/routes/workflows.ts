@@ -32,14 +32,21 @@ app.get('/', requireAuth, (c) => {
   return c.json(wf.listWorkflows(c.req.query('category')))
 })
 
-// ── GET /workflows/export — download all metadata as JSON ─
-app.get('/export', requireAuth, () => {
-  return new Response(JSON.stringify(wf.listWorkflows(), null, 2), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Disposition': 'attachment; filename="workflows.json"',
-    },
-  })
+// ── GET /workflows/export — download ALL workflows as one ZIP ─
+// Every workflow folder under its own prefix, plus a workflows.json manifest.
+app.get('/export', requireAuth, (c) => {
+  try {
+    const { buffer } = wf.buildExportAllZip()
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="workflows.zip"',
+        'Content-Length': String(buffer.length),
+      },
+    })
+  } catch (err) {
+    return httpErrorResponse(c, err)
+  }
 })
 
 // ── GET /workflows/:id/icon — public, no auth ─────────────

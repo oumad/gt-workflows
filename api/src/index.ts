@@ -213,4 +213,19 @@ process.on('SIGINT', () => {
   void shutdown()
 })
 
+// Last-resort crash guards. Without these, a throw or rejection that escapes
+// Hono's request scope (a stray timer callback, a background fetch in the
+// health monitor, a fire-and-forget snapshot) takes the whole process down
+// with NO log — and because the api is reached over keep-alive sockets, every
+// open connection is RST at once (the cross-endpoint ECONNRESET burst). We log
+// with a full stack and keep serving rather than exit: a single background
+// rejection should not bounce the container and drop every client. If a fault
+// proves genuinely unrecoverable, prefer fixing the source over exiting here.
+process.on('uncaughtException', (err) => {
+  console.error('[fatal:uncaughtException]', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal:unhandledRejection]', reason)
+})
+
 export default app

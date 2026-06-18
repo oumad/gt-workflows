@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { api } from '../../lib/api'
 import { RefreshCw } from 'lucide-react'
 import { loadPrefs } from '../preferences/PreferencesPage'
@@ -14,6 +14,8 @@ import {
 } from './shared'
 import { ExpandingToggle } from '../../components/ui/ExpandingToggle'
 import { Kpi } from '../../components/ui/Kpi'
+import { useServers } from '../../hooks/useServers'
+import { downServerIdSet } from '../_shared/serverHelpers'
 import type { Page } from '../../types'
 
 type NavigateFn = (p: Page, path?: string) => void
@@ -52,6 +54,11 @@ export function LiveFeed({
   const prefs = loadPrefs()
   const myId = prefs.myGtUserId
   const [mineOnly, setMineOnly] = useState(false)
+
+  // Server health (polled ~15s by DataContext) so a running/waiting job whose
+  // service — or the host it runs on — is down gets a "Down" marker.
+  const { servers } = useServers()
+  const downServerIds = useMemo(() => downServerIdSet(servers), [servers])
 
   // Convert a single payload to the row arrays + invoke onCount.
   const applyPayload = useCallback(
@@ -260,6 +267,7 @@ export function LiveFeed({
         loading={loading}
         avgDurations={avgDurations}
         navigate={navigate}
+        downServerIds={downServerIds}
       />
 
       {openRow && <JobModal row={openRow} onClose={() => setOpenRow(null)} />}

@@ -10,22 +10,15 @@
  * Import flows live in services/workflowImport.ts.
  * Test + audit (ComfyUI proxy) live in services/workflowTest.ts.
  */
-import {
-  readdirSync,
-  existsSync,
-  readFileSync,
-  statSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-  cpSync,
-} from 'node:fs'
+import { readdirSync, existsSync, readFileSync, statSync, mkdirSync, rmSync, cpSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { zipDirectory } from '../lib/zip.js'
+import { zipDirectory, zipSources, type ZipSource } from '../lib/zip.js'
 import {
   getWorkflowsDir,
   isInsideDir,
   snapshotWorkflow,
+  snapshotWorkflowAsync,
+  writeFileAtomic,
   listSnapshots,
   historyRoot,
 } from '../lib/workflowFs.js'
@@ -82,7 +75,7 @@ export function readParams(folderPath: string): ParamsJson {
 }
 
 export function writeParams(folderPath: string, params: ParamsJson): void {
-  writeFileSync(join(folderPath, 'params.json'), JSON.stringify(params, null, 2), 'utf-8')
+  writeFileAtomic(join(folderPath, 'params.json'), JSON.stringify(params, null, 2))
 }
 
 /** Normalize a `params.iconBadge` blob into the trimmed shape the UI uses.
@@ -238,12 +231,12 @@ export function readWorkflowFile(id: string, kind: WorkflowFileKind): Buffer {
 }
 
 export function writeParamsFile(id: string, body: unknown): void {
-  if (body === null || typeof body !== 'object') {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     throw badRequest('params.json must be a JSON object')
   }
   const { folderAbs } = resolveFolder(id)
-  writeFileSync(join(folderAbs, 'params.json'), JSON.stringify(body, null, 2), 'utf-8')
-  snapshotWorkflow(id, folderAbs, 'params')
+  writeFileAtomic(join(folderAbs, 'params.json'), JSON.stringify(body, null, 2))
+  snapshotWorkflowAsync(id, folderAbs, 'params')
 }
 
 export function writeWorkflowFile(id: string, body: unknown): void {
@@ -255,8 +248,8 @@ export function writeWorkflowFile(id: string, body: unknown): void {
   const wfFile = params.workflowFile ?? params.comfyui_config?.workflow ?? 'workflow.json'
   const wfAbs = resolve(join(folderAbs, wfFile))
   if (!isInsideDir(wfAbs, folderAbs)) throw forbidden()
-  writeFileSync(wfAbs, JSON.stringify(body, null, 2), 'utf-8')
-  snapshotWorkflow(id, folderAbs, 'workflow')
+  writeFileAtomic(wfAbs, JSON.stringify(body, null, 2))
+  snapshotWorkflowAsync(id, folderAbs, 'workflow')
 }
 
 /* ─── ZIP export ────────────────────────────────────────────── */
@@ -270,6 +263,35 @@ export function buildExportZip(id: string): ExportZip {
   const { folderAbs, folderName } = resolveFolder(id)
   try {
     return { buffer: zipDirectory(folderAbs, folderName), filename: folderName }
+  } catch (err) {
+    throw internalError(err instanceof Error ? err.message : 'Failed to build archive')
+  }
+}
+
+/** Bundle EVERY workflow into one ZIP: each workflow folder under its own
+ *  top-level prefix, plus a `workflows.json` manifest (the metadata catalog).
+ *  Snapshot history (the dot-prefixed `.history` dir) and transient atomic-write
+ *  temp files are excluded. */
+export function buildExportAllZip(): ExportZip {
+  // Drive the archive off the same listing as the manifest, so the bundled
+  // folders and workflows.json can't disagree (and the `.history` /
+  // `script` / dotfile exclusions stay defined in one place — readWorkflows).
+  const dir = getWorkflowsDir()
+  const items = listWorkflows()
+  if (items.length === 0) throw notFound('No workflows to export')
+  try {
+    const sources: ZipSource[] = items.map((w) => ({
+      kind: 'dir',
+      dir: resolve(join(dir, w.path)),
+      archiveRoot: w.path,
+      exclude: (rel) => rel.endsWith('.tmp'),
+    }))
+    sources.push({
+      kind: 'file',
+      name: 'workflows.json',
+      data: Buffer.from(JSON.stringify(items, null, 2), 'utf-8'),
+    })
+    return { buffer: zipSources(sources), filename: 'workflows' }
   } catch (err) {
     throw internalError(err instanceof Error ? err.message : 'Failed to build archive')
   }
@@ -358,7 +380,7 @@ export function patchWorkflow(id: string, body: PatchWorkflowInput): WorkflowSum
   // and/or `category`; we don't want those to bury actual saves in history.
   const meaningfulKeys = Object.keys(body).filter((k) => k !== 'order' && k !== 'category')
   if (meaningfulKeys.length > 0) {
-    snapshotWorkflow(id, folderAbs, 'meta')
+    snapshotWorkflowAsync(id, folderAbs, 'meta')
   }
 
   const item = readWorkflows().find((w) => w.id === id)

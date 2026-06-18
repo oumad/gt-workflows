@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Search, X, Download, Square, Bot } from 'lucide-react'
+import { RefreshCw, Search, X, Download, Square, Bot, ExternalLink } from 'lucide-react'
 import { api } from '../../lib/api'
+import { withScheme } from '../../lib/serverLinks'
 import { copyToClipboard } from '../../lib/clipboard'
 import { useNotifications } from '../../context/NotificationsContext'
 import { SetoModal } from '../../components/seto/SetoModal'
@@ -530,6 +531,11 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
 
   const toggle = () => setRelTime((r) => !r)
 
+  // Service URLs are stored as host[:port], sometimes without a scheme — add
+  // one so the link is openable. Opens the ComfyUI / AI-Toolkit UI in a new tab.
+  const serviceUrl = row.server ?? null
+  const serviceHref = serviceUrl ? withScheme(serviceUrl) : null
+
   return (
     <div className="modal-stage" onClick={onClose}>
       <div
@@ -623,7 +629,31 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
           <Field label="Type">{row.kind === 'wf' ? 'Workflow' : 'LoRA training'}</Field>
           <Field label="User">{row.who}</Field>
           <Field label="Service" mono>
-            {row.server ?? '—'}
+            {serviceHref ? (
+              <a
+                href={serviceHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open ${serviceUrl} in a new tab`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  maxWidth: '100%',
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                }}
+              >
+                <span
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {serviceUrl}
+                </span>
+                <ExternalLink size={11} style={{ flexShrink: 0 }} />
+              </a>
+            ) : (
+              '—'
+            )}
           </Field>
           <Field label="Status">
             <span style={{ color: statusColor }}>{row.statusLabel}</span>

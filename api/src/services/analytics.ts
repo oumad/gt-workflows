@@ -5,7 +5,13 @@
  */
 import { TtlCache } from '../lib/ttlCache.js'
 import * as repo from '../repositories/analytics.js'
-import type { PerfMetric, TimeseriesGroup, DistGroup, EntityKind } from '../validators/analytics.js'
+import type {
+  PerfMetric,
+  TimeseriesGroup,
+  TimeseriesMetric,
+  DistGroup,
+  EntityKind,
+} from '../validators/analytics.js'
 import type {
   AnalyticsMain,
   DurationBucket,
@@ -108,7 +114,7 @@ export function byError(days: number): Promise<unknown[]> {
 
 export function timeseries(
   groupBy: TimeseriesGroup,
-  metric: 'runs' | 'gpu',
+  metric: TimeseriesMetric,
   days: number,
   top: number,
 ): Promise<unknown[]> {

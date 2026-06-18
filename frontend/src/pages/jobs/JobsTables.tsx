@@ -6,11 +6,13 @@ import {
   Boxes as ServerIcon,
   Workflow as WorkflowIcon,
   Bot,
+  ServerOff,
 } from 'lucide-react'
 import type { Row } from './jobs-types'
 import { fmtSec, fmtCompleted } from './jobs-utils'
 import { JobKindBadge, JobName, StatusPill, SlowChip } from './JobsModal'
 import { SetoModal } from '../../components/seto/SetoModal'
+import { STATUS_TONE, STATUS_LABEL } from '../_shared/serverHelpers'
 import type { Page } from '../../types'
 import { classifyError, errorCodeTone, ERROR_CODE_LABEL } from '../analytics/analyticsHelpers'
 
@@ -310,6 +312,36 @@ export function JobHistoryTable({
 const progressColor = (pct: number) =>
   pct > 100 ? 'var(--bad)' : pct > 85 ? 'var(--warn)' : 'var(--accent)'
 
+/** Compact marker shown on a live job whose service (or its host) is currently
+ *  down — a heads-up that the job likely won't finish. Informational only; it
+ *  never stops or alters the job. */
+function ServerDownBadge() {
+  return (
+    <span
+      className={`chip chip-${STATUS_TONE.down}`}
+      title="This job's service or host is down — it may not finish."
+      style={{ flexShrink: 0, gap: 3 }}
+    >
+      <ServerOff size={11} /> {STATUS_LABEL.down}
+    </span>
+  )
+}
+
+/** Service cell content: the server URL, plus a "Down" badge when this job's
+ *  server is in `downServerIds`. The URL truncates so the badge stays visible. */
+function ServiceCell({ row, down }: { row: Row; down: boolean }) {
+  const label = row.server ?? '—'
+  if (!down) return label
+  return (
+    <span className="row" style={{ gap: 6, alignItems: 'center', minWidth: 0 }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      <ServerDownBadge />
+    </span>
+  )
+}
+
 const rowStyle = (r: Row, hovered: boolean): React.CSSProperties => {
   if (hovered) return { background: 'color-mix(in oklab, var(--ink) 6%, transparent)' }
   return r.kind === 'lora'
@@ -325,6 +357,7 @@ export function LiveJobsTables({
   hideServer = false,
   avgDurations,
   navigate,
+  downServerIds,
 }: {
   running: Row[]
   waiting: Row[]
@@ -333,7 +366,11 @@ export function LiveJobsTables({
   hideServer?: boolean
   avgDurations?: Record<string, number>
   navigate?: NavigateFn
+  /** Server ids whose service or host is currently down. Rows on these servers
+   *  get a "Down" marker. Omitted by callers that don't track health. */
+  downServerIds?: Set<string>
 }) {
+  const isServerDown = (r: Row) => !!(r.serverId && downServerIds?.has(r.serverId))
   const [hover, setHover] = useState<{ kind: string; value: string } | null>(null)
 
   const rowHovered = (r: Row) =>
@@ -477,7 +514,7 @@ export function LiveJobsTables({
                   </Cell>
                   {!hideServer && (
                     <Cell kind="server" value={r.server ?? '—'} className="mono">
-                      {r.server ?? '—'}
+                      <ServiceCell row={r} down={isServerDown(r)} />
                     </Cell>
                   )}
                   <td>{r.startedLabel ?? '—'}</td>
@@ -597,7 +634,7 @@ export function LiveJobsTables({
                   </Cell>
                   {!hideServer && (
                     <Cell kind="server" value={r.server ?? '—'} className="mono">
-                      {r.server ?? '—'}
+                      <ServiceCell row={r} down={isServerDown(r)} />
                     </Cell>
                   )}
                   <td>

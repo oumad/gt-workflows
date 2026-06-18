@@ -11,6 +11,7 @@ import {
   removeInputNode,
   applyModelToWorkflow,
   applyFieldConnectToToParams,
+  applyFieldConfigToParams,
   type FieldValue,
   type ParsedModel,
   type AvailableNode,
@@ -122,12 +123,26 @@ export function NodeManager({ wf, isAdmin: _isAdmin, hidden, onDirtyChange, save
     if (!model || !rawWorkflow || !rawParams) return
     const updatedWorkflow = applyModelToWorkflow(model, rawWorkflow as never)
     // Re-stitch field-level connectTo onto params from the model so any
-    // future restructuring of the parser config can't silently drop it.
-    const updatedParams = applyFieldConnectToToParams(model, rawParams as RawParams)
-    await Promise.all([
-      api.put(`/api/workflows/${wf.id}/files/workflow`, updatedWorkflow),
-      api.put(`/api/workflows/${wf.id}/files/params`, updatedParams),
-    ])
+    // future restructuring of the parser config can't silently drop it, then
+    // persist edited field schema (slider/number min/max/step, label,
+    // required) — applyModelToWorkflow only writes field default *values*, so
+    // these schema edits would otherwise be dropped on save.
+    const baseline = initialModelRef.current
+      ? (JSON.parse(initialModelRef.current) as ParsedModel)
+      : null
+    let updatedParams = applyFieldConnectToToParams(model, rawParams as RawParams)
+    updatedParams = applyFieldConfigToParams(
+      model,
+      updatedParams,
+      baseline,
+      rawWorkflow as RawWorkflow,
+    )
+    // Sequence the two writes rather than firing them concurrently: each PUT
+    // triggers a folder snapshot server-side, so one-at-a-time keeps the writes
+    // ordered and avoids a split save where one file lands and the other is
+    // dropped if the request is interrupted.
+    await api.put(`/api/workflows/${wf.id}/files/workflow`, updatedWorkflow)
+    await api.put(`/api/workflows/${wf.id}/files/params`, updatedParams)
     initialModelRef.current = JSON.stringify(model)
     initialParamsRef.current = JSON.stringify(updatedParams)
     setRawParams(updatedParams as Record<string, unknown>)

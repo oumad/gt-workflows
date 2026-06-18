@@ -12,6 +12,7 @@ import type {
   AvailableNode,
   RawWorkflow,
   RawParams,
+  FieldConfig,
 } from './parser-types'
 import { DEFAULT_NODE_PARSERS, buildNodeFields, mergeParser } from './parser-build'
 
@@ -365,6 +366,114 @@ export function applyFieldConnectToToParams(model: ParsedModel, rawParams: RawPa
     }
   }
   return next
+}
+
+/**
+ * Persist edited field SCHEMA — a slider/number's min/max/step plus label and
+ * required — from the model back onto params.json's parser config.
+ *
+ * Why this exists: applyModelToWorkflow writes only field *values* (defaults)
+ * into workflow.json and never touches min/max/step, and params is otherwise
+ * saved verbatim. So editing a slider's Max in the node editor updated only the
+ * in-memory model + the preview clamp, and the change was silently dropped on
+ * save. This closes that gap.
+ *
+ * Only properties the user actually changed (diffed against `baseline`, the
+ * last-saved model) are written, into
+ * `comfyui_config.node_parsers.input_nodes[nodeId].inputs[fieldName]`,
+ * materialising the entry when the original range came from a built-in default
+ * parser. An explicitly-hidden slot (`false`) is left untouched. min/max/step
+ * the user did NOT change keep whatever the config held (including a string ref
+ * to a sibling input); a changed value is written as a literal, deliberately
+ * overriding any ref.
+ */
+export function applyFieldConfigToParams(
+  model: ParsedModel,
+  rawParams: RawParams,
+  baseline: ParsedModel | null,
+  rawWorkflow: RawWorkflow,
+): RawParams {
+  const prevById = new Map<string, ParsedField>()
+  if (baseline) {
+    for (const sec of baseline.sections) {
+      const fields =
+        sec.kind === 'field' ? [sec.field] : sec.kind === 'category' ? sec.children : []
+      for (const f of fields) prevById.set(f.id, f)
+    }
+  }
+
+  const setNum = (entry: FieldConfig, key: 'min' | 'max' | 'step', val: number | undefined) => {
+    if (typeof val === 'number') entry[key] = val
+    else delete entry[key]
+  }
+
+  // Clone lazily — the first actually-changed field allocates the copy; an
+  // edit-free save returns rawParams untouched (and skips the clone entirely).
+  let next: RawParams | null = null
+  for (const sec of model.sections) {
+    const fields = sec.kind === 'field' ? [sec.field] : sec.kind === 'category' ? sec.children : []
+    for (const field of fields) {
+      const [nodeId, fieldName] = field.id.split('#')
+      if (!nodeId || !fieldName) continue
+      const prev = prevById.get(field.id)
+      // Each comparison is computed once and reused for both the skip-gate and
+      // the write below, so "what counts as changed" and "what gets written"
+      // can't drift.
+      const minCh = field.min !== prev?.min
+      const maxCh = field.max !== prev?.max
+      const stepCh = field.step !== prev?.step
+      const titleCh = field.title !== prev?.title
+      const reqCh = !!field.required !== !!prev?.required
+      if (!minCh && !maxCh && !stepCh && !titleCh && !reqCh) continue
+
+      // Read the existing slot from the ORIGINAL params (pre-clone) so an
+      // explicitly-hidden (`false`) field is skipped without cloning or
+      // materialising empty parser-config scaffolding.
+      const origEntry =
+        rawParams.comfyui_config?.node_parsers?.input_nodes?.[nodeId]?.inputs?.[fieldName]
+      if (origEntry === false) continue
+
+      next ??= structuredClone(rawParams) as RawParams
+      const cfg = (next.comfyui_config ??= {})
+      const parsers = (cfg.node_parsers ??= {})
+      const inputNodes = (parsers.input_nodes ??= {})
+      const nodeCfg = (inputNodes[nodeId] ??= {})
+      const inputs = (nodeCfg.inputs ??= {})
+      const existing = inputs[fieldName]
+
+      let entry: FieldConfig
+      if (existing && typeof existing === 'object') {
+        // Patch the user's existing config in place — preserves every other
+        // property it holds (e.g. sibling-input string refs for min/max/step).
+        entry = existing
+      } else {
+        // Materialising a fresh entry. Seed it from the built-in default parser
+        // config for this field, because mergeParser() replaces a field's
+        // config WHOLESALE per key on reload — a bare { type, max } would drop
+        // the default's other props (e.g. IntNumber/FloatSlider's min/step
+        // sibling-input refs), silently stripping the slider's bounds. Cloning
+        // the default first preserves the props the user didn't touch.
+        const def = DEFAULT_NODE_PARSERS[rawWorkflow[nodeId]?.class_type ?? '']?.[fieldName]
+        entry =
+          def && typeof def === 'object'
+            ? (structuredClone(def) as FieldConfig)
+            : { type: field.type }
+        inputs[fieldName] = entry
+      }
+      if (minCh) setNum(entry, 'min', field.min)
+      if (maxCh) setNum(entry, 'max', field.max)
+      if (stepCh) setNum(entry, 'step', field.step)
+      if (titleCh) {
+        if (field.title) entry.label = field.title
+        else delete entry.label
+      }
+      if (reqCh) {
+        if (field.required) entry.required = true
+        else delete entry.required
+      }
+    }
+  }
+  return next ?? rawParams
 }
 
 /* ── Reordering ──────────────────────────────────────────────── */

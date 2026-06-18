@@ -11,6 +11,10 @@ export type PerfMetric = (typeof PERF_METRICS)[number]
 export const TIMESERIES_GROUPS = ['workflow', 'server', 'user', 'lora'] as const
 export type TimeseriesGroup = (typeof TIMESERIES_GROUPS)[number]
 
+// 'runs' = job count, 'gpu' = GPU-hours, 'users' = distinct active users.
+export const TIMESERIES_METRICS = ['runs', 'gpu', 'users'] as const
+export type TimeseriesMetric = (typeof TIMESERIES_METRICS)[number]
+
 export const DIST_GROUPS = ['server', 'workflow', 'lora'] as const
 export type DistGroup = (typeof DIST_GROUPS)[number]
 
@@ -50,6 +54,12 @@ export function parseTimeseriesGroup(raw: string | undefined): TimeseriesGroup {
   return (TIMESERIES_GROUPS as readonly string[]).includes(raw ?? '')
     ? (raw as TimeseriesGroup)
     : 'workflow'
+}
+
+export function parseTimeseriesMetric(raw: string | undefined): TimeseriesMetric {
+  return (TIMESERIES_METRICS as readonly string[]).includes(raw ?? '')
+    ? (raw as TimeseriesMetric)
+    : 'runs'
 }
 
 export function parseDistGroup(raw: string | undefined): DistGroup {

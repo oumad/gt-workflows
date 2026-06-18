@@ -121,6 +121,26 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Liveness probe against the API's /health (DB ping) on the internal port.
+    # Node 24 ships a global fetch, so no extra tooling is needed. This makes a
+    # wedged/booting api visible in `docker ps` (and gates `depends_on:
+    # condition: service_healthy` if you add it on the frontend).
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    # Bound the api's memory so an OOM is capped + visible (State.OOMKilled)
+    # instead of an unpredictable host-level kill. Tune to your host; the api
+    # itself is light, but the Redis→Postgres sync can spike on large backlogs.
+    mem_limit: 2g
     restart: unless-stopped
 
   # ── Frontend (nginx serving built SPA + /api proxy) ───────────

@@ -67,6 +67,15 @@ function collectFiles(baseDir: string, dir: string = baseDir): ZipEntry[] {
 }
 
 /**
+ * A source for {@link zipSources}: either a whole directory tree (placed under
+ * an optional `archiveRoot/` prefix, with an optional per-file exclude filter
+ * keyed on the path relative to that dir) or a single in-memory file.
+ */
+export type ZipSource =
+  | { kind: 'dir'; dir: string; archiveRoot?: string; exclude?: (rel: string) => boolean }
+  | { kind: 'file'; name: string; data: Buffer; mtime?: Date }
+
+/**
  * Build a ZIP archive from a directory tree.
  *
  *   zipDirectory('/srv/workflows/my-wf', 'my-wf')
@@ -75,14 +84,39 @@ function collectFiles(baseDir: string, dir: string = baseDir): ZipEntry[] {
  * gets a single top-level folder when they extract. Pass `''` for a flat zip.
  */
 export function zipDirectory(dir: string, archiveRoot: string = ''): Buffer {
-  const entries = collectFiles(dir)
+  return zipSources([{ kind: 'dir', dir, archiveRoot }])
+}
+
+/**
+ * Build one ZIP from multiple sources — any mix of directory trees and ad-hoc
+ * in-memory files. Powers the "download all workflows" export: each workflow
+ * folder under its own top-level prefix, plus a generated `workflows.json`
+ * manifest.
+ */
+export function zipSources(sources: ZipSource[]): Buffer {
+  const entries: ZipEntry[] = []
+  for (const src of sources) {
+    if (src.kind === 'file') {
+      entries.push({ name: src.name, data: src.data, mtime: src.mtime ?? new Date() })
+      continue
+    }
+    for (const e of collectFiles(src.dir)) {
+      if (src.exclude?.(e.name)) continue
+      entries.push({ ...e, name: src.archiveRoot ? `${src.archiveRoot}/${e.name}` : e.name })
+    }
+  }
+  return encodeZip(entries)
+}
+
+/** Encode pre-collected entries (each `name` is the final archive path) into a
+ *  ZIP buffer. */
+function encodeZip(entries: ZipEntry[]): Buffer {
   const localChunks: Buffer[] = []
   const centralChunks: Buffer[] = []
   let offset = 0
 
   for (const entry of entries) {
-    const name = archiveRoot ? `${archiveRoot}/${entry.name}` : entry.name
-    const nameBuf = Buffer.from(name, 'utf-8')
+    const nameBuf = Buffer.from(entry.name, 'utf-8')
     const compressed = deflateRawSync(entry.data, { level: 9 })
     const crc = crc32(entry.data)
     const { time, date } = dosDateTime(entry.mtime)

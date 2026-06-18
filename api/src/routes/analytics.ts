@@ -13,6 +13,7 @@ import {
   parseLimit,
   parsePerfMetric,
   parseTimeseriesGroup,
+  parseTimeseriesMetric,
   parseDistGroup,
   parseEntityKind,
 } from '../validators/analytics.js'
@@ -59,7 +60,7 @@ app.get('/timeseries', requireAuth, async (c) => {
   const days = parseDays(c.req.query('days'))
   const top = parseTop(c.req.query('top'))
   const groupBy = parseTimeseriesGroup(c.req.query('groupBy'))
-  const metric = c.req.query('metric') === 'gpu' ? 'gpu' : 'runs'
+  const metric = parseTimeseriesMetric(c.req.query('metric'))
   return c.json(await analyticsService.timeseries(groupBy, metric, days, top))
 })
 

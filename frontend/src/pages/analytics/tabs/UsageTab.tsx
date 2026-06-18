@@ -27,7 +27,16 @@ const USAGE_GROUPS = {
   lora: { label: 'LoRA', plural: 'LoRA models' },
 } as const
 type UsageGroup = keyof typeof USAGE_GROUPS
-type UsageMetric = 'runs' | 'gpu'
+// Per-metric display strings, parallel to USAGE_GROUPS. 'users' = distinct
+// active users per day (count DISTINCT client_id): with "By user" the stacked
+// height per day is the distinct-active-users count with a per-user breakdown;
+// with other groupings it's distinct users per entity.
+const USAGE_METRICS = {
+  runs: { kpiLabel: 'Total runs', caption: 'run counts', unit: '', rankSuffix: 'runs' },
+  gpu: { kpiLabel: 'GPU-hours', caption: 'GPU-hours', unit: 'h', rankSuffix: 'hrs' },
+  users: { kpiLabel: 'Active user-days', caption: 'distinct users', unit: '', rankSuffix: 'users' },
+} as const
+type UsageMetric = keyof typeof USAGE_METRICS
 
 export function UsageTab({ range }: { range: Range }) {
   const days = rangeToDays(range)
@@ -103,22 +112,22 @@ export function UsageTab({ range }: { range: Range }) {
   if (error) return <ErrorView msg={error} />
 
   const top1 = dense[0]
-  const unit = metric === 'gpu' ? 'h' : ''
+  const mm = USAGE_METRICS[metric]
+  const isGpu = metric === 'gpu'
+  const unit = mm.unit
 
   return (
     <>
       <div className="grid-4" style={{ marginBottom: 16 }}>
         <Kpi
-          label={`${metric === 'gpu' ? 'GPU-hours' : 'Total runs'} · ${rangeLabel(range)}`}
-          value={metric === 'gpu' ? `${total.toFixed(1)}h` : total.toLocaleString()}
+          label={`${mm.kpiLabel} · ${rangeLabel(range)}`}
+          value={isGpu ? `${total.toFixed(1)}h` : total.toLocaleString()}
         />
         <Kpi
           label={`Top ${USAGE_GROUPS[groupBy].label.toLowerCase()}`}
           value={top1?.entity ?? '—'}
           valueMono
-          chip={
-            top1 ? `${metric === 'gpu' ? top1.total.toFixed(1) : top1.total}${unit}` : undefined
-          }
+          chip={top1 ? `${isGpu ? top1.total.toFixed(1) : top1.total}${unit}` : undefined}
         />
         <Kpi
           label={`Active ${USAGE_GROUPS[groupBy].plural}`}
@@ -129,10 +138,8 @@ export function UsageTab({ range }: { range: Range }) {
           label="Daily avg"
           value={(() => {
             const denom = days > 0 ? days : dates.length
-            if (denom === 0) return metric === 'gpu' ? '—' : '0'
-            return metric === 'gpu'
-              ? `${(total / denom).toFixed(1)}h`
-              : String(Math.round(total / denom))
+            if (denom === 0) return isGpu ? '—' : '0'
+            return isGpu ? `${(total / denom).toFixed(1)}h` : String(Math.round(total / denom))
           })()}
           chip="per day"
         />
@@ -160,6 +167,13 @@ export function UsageTab({ range }: { range: Range }) {
             <button className={metric === 'gpu' ? 'active' : ''} onClick={() => setMetric('gpu')}>
               GPU-hrs
             </button>
+            <button
+              className={metric === 'users' ? 'active' : ''}
+              onClick={() => setMetric('users')}
+              title="Distinct active users per day"
+            >
+              Users
+            </button>
           </div>
           <button className="btn btn-sm" onClick={onDownload}>
             <Download size={12} /> CSV
@@ -177,13 +191,9 @@ export function UsageTab({ range }: { range: Range }) {
               onNone={() => setSelected([])}
             />
           </div>
-          <StackedBars
-            series={stackSeries}
-            labels={labels}
-            formatY={(v) => (metric === 'gpu' ? `${v}h` : String(v))}
-          />
+          <StackedBars series={stackSeries} labels={labels} formatY={(v) => `${v}${mm.unit}`} />
           <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6 }}>
-            Stacked daily {metric === 'gpu' ? 'GPU-hours' : 'run counts'} · hover bars for value
+            Stacked daily {mm.caption} · hover bars for value
           </div>
         </div>
       </div>
@@ -221,7 +231,9 @@ export function UsageTab({ range }: { range: Range }) {
                   className="mono"
                   style={{ fontSize: 12, color: 'var(--ink-3)', width: 80, textAlign: 'right' }}
                 >
-                  {metric === 'gpu' ? `${s.total.toFixed(1)} hrs` : `${s.total} runs`}
+                  {`${isGpu ? s.total.toFixed(1) : s.total} ${
+                    metric === 'users' && groupBy === 'user' ? 'days' : mm.rankSuffix
+                  }`}
                 </span>
                 <span
                   className="mono"

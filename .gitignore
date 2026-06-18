@@ -114,3 +114,5 @@ redis/
 /workflows/
 references/
 data/
+
+.history/

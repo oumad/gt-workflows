@@ -7,7 +7,13 @@
  */
 import { sql, desc, type SQL } from 'drizzle-orm'
 import { db, workflowJobs, trainingJobs } from '../db/index.js'
-import type { PerfMetric, TimeseriesGroup, DistGroup, EntityKind } from '../validators/analytics.js'
+import type {
+  PerfMetric,
+  TimeseriesGroup,
+  TimeseriesMetric,
+  DistGroup,
+  EntityKind,
+} from '../validators/analytics.js'
 
 /* ─── SQL primitives ──────────────────────────────────────────────
  * `col` is a literal identifier ("created_at" or "wj.created_at") — keep it
@@ -330,14 +336,17 @@ export async function byError(days: number) {
 
 export async function timeseries(
   groupBy: TimeseriesGroup,
-  metric: 'runs' | 'gpu',
+  metric: TimeseriesMetric,
   days: number,
   top: number,
 ) {
   const valueExpr =
     metric === 'gpu'
       ? sql`cast(coalesce(sum(duration_ms) FILTER (WHERE duration_ms IS NOT NULL), 0) / 3600000.0 AS numeric(12, 2))`
-      : sql`count(*)::int`
+      : // distinct active users per bucket (NULL client_id excluded by count DISTINCT)
+        metric === 'users'
+        ? sql`count(DISTINCT client_id)::int`
+        : sql`count(*)::int`
 
   if (groupBy === 'workflow') {
     return db.execute(sql`
@@ -393,7 +402,8 @@ export async function timeseries(
         WHERE ${dateGate(days)} AND client_id IS NOT NULL
       ),
       enriched AS (
-        SELECT COALESCE(u.name, u.email, 'unknown') AS entity, j.duration_ms, j.status, j.created_at
+        SELECT COALESCE(u.name, u.email, 'unknown') AS entity,
+               j.client_id, j.duration_ms, j.status, j.created_at
         FROM unified j LEFT JOIN gt_users u ON u.id = j.client_id
       ),
       top_user AS (
@@ -414,15 +424,15 @@ export async function timeseries(
   // server
   return db.execute(sql`
     WITH unified AS (
-      SELECT server_id, server_url, duration_ms, status, created_at FROM workflow_jobs
+      SELECT client_id, server_id, server_url, duration_ms, status, created_at FROM workflow_jobs
       WHERE ${dateGate(days)}
       UNION ALL
-      SELECT server_id, server_url, duration_ms, status, created_at FROM training_jobs
+      SELECT client_id, server_id, server_url, duration_ms, status, created_at FROM training_jobs
       WHERE ${dateGate(days)}
     ),
     enriched AS (
       SELECT COALESCE(s.name, u.server_url, 'unknown') AS entity,
-             u.duration_ms, u.status, u.created_at
+             u.client_id, u.duration_ms, u.status, u.created_at
       FROM unified u LEFT JOIN servers s ON s.id = u.server_id
     ),
     top_srv AS (

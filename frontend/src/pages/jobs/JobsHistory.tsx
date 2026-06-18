@@ -62,10 +62,10 @@ export type HistoryLock =
  *  very-slow) so defective rows stand out at a glance. Otherwise the usual
  *  per-kind tint (LoRA vs workflow). */
 function historyRowBg(r: Row, avgSec: number | undefined): string {
-  if (r.statusTone === 'bad') return 'color-mix(in oklab, var(--bad) 8%, transparent)'
+  if (r.statusTone === 'bad') return 'color-mix(in oklab, var(--bad) 4%, transparent)'
   const { level } = slowLevel(r, avgSec)
-  if (level === 'very') return 'color-mix(in oklab, var(--warn) 14%, transparent)'
-  if (level === 'slow') return 'color-mix(in oklab, var(--warn) 8%, transparent)'
+  if (level === 'very') return 'color-mix(in oklab, var(--warn) 7%, transparent)'
+  if (level === 'slow') return 'color-mix(in oklab, var(--warn) 4%, transparent)'
   return r.kind === 'lora'
     ? 'color-mix(in oklab, var(--accent) 5%, transparent)'
     : 'color-mix(in oklab, var(--pop-purple) 3%, transparent)'
