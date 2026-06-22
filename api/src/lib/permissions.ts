@@ -21,21 +21,6 @@ export type Role = 'admin' | 'ops' | 'designer' | 'viewer'
 export const ROLES: readonly Role[] = ['admin', 'ops', 'designer', 'viewer']
 const ROLE_SET = new Set<string>(ROLES)
 
-export const ROLE_LABEL: Record<Role, string> = {
-  admin: 'Admin',
-  ops: 'Ops',
-  designer: 'Designer',
-  viewer: 'Viewer',
-}
-
-export const ROLE_DESCRIPTION: Record<Role, string> = {
-  admin: 'Every capability — including user management, credentials, Seto config.',
-  ops: 'Same as admin. Distinct label for accountability.',
-  designer:
-    'Daily driver: workflows, jobs, services, calendar, GT users. Cannot manage users / credentials / Seto / hosts, cannot delete or scrape.',
-  viewer: 'Read-only Analytics + Preferences. No edit anywhere.',
-}
-
 /** Priority order for resolving a primary role when a user has multiple. */
 const ROLE_PRIORITY: Role[] = ['admin', 'ops', 'designer', 'viewer']
 

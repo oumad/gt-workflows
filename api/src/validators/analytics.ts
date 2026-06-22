@@ -46,26 +46,23 @@ export function parseLimit(raw: string | undefined, fallback = 20, max = 200): n
   return Math.min(Math.max(parseInt(raw ?? String(fallback), 10) || fallback, 1), max)
 }
 
-export function parsePerfMetric(raw: string | undefined): PerfMetric | null {
-  return (PERF_METRICS as readonly string[]).includes(raw ?? '') ? (raw as PerfMetric) : null
+/** Return `raw` when it's one of `allowed`, else `fallback`. Collapses the
+ *  five identical allowlist-or-default query parsers below. */
+function oneOf<T extends string, F>(
+  allowed: readonly T[],
+  raw: string | undefined,
+  fallback: F,
+): T | F {
+  return (allowed as readonly string[]).includes(raw ?? '') ? (raw as T) : fallback
 }
 
-export function parseTimeseriesGroup(raw: string | undefined): TimeseriesGroup {
-  return (TIMESERIES_GROUPS as readonly string[]).includes(raw ?? '')
-    ? (raw as TimeseriesGroup)
-    : 'workflow'
-}
-
-export function parseTimeseriesMetric(raw: string | undefined): TimeseriesMetric {
-  return (TIMESERIES_METRICS as readonly string[]).includes(raw ?? '')
-    ? (raw as TimeseriesMetric)
-    : 'runs'
-}
-
-export function parseDistGroup(raw: string | undefined): DistGroup {
-  return (DIST_GROUPS as readonly string[]).includes(raw ?? '') ? (raw as DistGroup) : 'server'
-}
-
-export function parseEntityKind(raw: string | undefined): EntityKind | null {
-  return (ENTITY_KINDS as readonly string[]).includes(raw ?? '') ? (raw as EntityKind) : null
-}
+export const parsePerfMetric = (raw: string | undefined): PerfMetric | null =>
+  oneOf(PERF_METRICS, raw, null)
+export const parseTimeseriesGroup = (raw: string | undefined): TimeseriesGroup =>
+  oneOf(TIMESERIES_GROUPS, raw, 'workflow')
+export const parseTimeseriesMetric = (raw: string | undefined): TimeseriesMetric =>
+  oneOf(TIMESERIES_METRICS, raw, 'runs')
+export const parseDistGroup = (raw: string | undefined): DistGroup =>
+  oneOf(DIST_GROUPS, raw, 'server')
+export const parseEntityKind = (raw: string | undefined): EntityKind | null =>
+  oneOf(ENTITY_KINDS, raw, null)

@@ -26,7 +26,6 @@ export const badRequest = (msg: string) => new HttpError(400, 'bad_request', msg
 export const unauthorized = (msg = 'Unauthorized') => new HttpError(401, 'unauthorized', msg)
 export const forbidden = (msg = 'Forbidden') => new HttpError(403, 'forbidden', msg)
 export const conflict = (msg: string) => new HttpError(409, 'conflict', msg)
-export const unprocessable = (msg: string) => new HttpError(422, 'unprocessable', msg)
 export const internalError = (msg = 'Internal error') => new HttpError(500, 'internal_error', msg)
 
 /** Translate any caught error to `c.json({ error }, status)`. Unknown errors

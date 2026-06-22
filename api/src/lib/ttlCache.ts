@@ -8,27 +8,13 @@ export class TtlCache {
   private store = new Map<string, { data: unknown; at: number }>()
   constructor(private readonly ttlMs: number) {}
 
-  get<T>(key: string): T | null {
-    const hit = this.store.get(key)
-    if (!hit) return null
-    if (Date.now() - hit.at >= this.ttlMs) {
-      this.store.delete(key)
-      return null
-    }
-    return hit.data as T
-  }
-
-  set(key: string, data: unknown): void {
-    this.store.set(key, { data, at: Date.now() })
-  }
-
-  /** Wraps a loader: returns cached value when fresh, otherwise calls
-   *  `load()`, caches the result, and returns it. */
+  /** Returns the cached value when fresh, otherwise calls `load()`, caches the
+   *  result, and returns it. The only access pattern this cache needs. */
   async memo<T>(key: string, load: () => Promise<T>): Promise<T> {
-    const hit = this.get<T>(key)
-    if (hit !== null) return hit
+    const hit = this.store.get(key)
+    if (hit && Date.now() - hit.at < this.ttlMs) return hit.data as T
     const data = await load()
-    this.set(key, data)
+    this.store.set(key, { data, at: Date.now() })
     return data
   }
 }

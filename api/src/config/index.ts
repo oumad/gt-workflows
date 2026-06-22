@@ -162,8 +162,6 @@ export const config = Object.freeze({
   proxyUrl: env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy || '',
   noProxy: env.NO_PROXY || env.no_proxy || '',
   isDev: env.NODE_ENV === 'development',
-  isProd: env.NODE_ENV === 'production',
-  isTest: env.NODE_ENV === 'test',
 })
 
 export type Config = typeof config

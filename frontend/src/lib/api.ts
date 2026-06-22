@@ -58,30 +58,12 @@ export type AbortableInit = { signal?: AbortSignal }
 
 export const api = {
   get: <T>(path: string, opts: AbortableInit = {}) => request<T>(path, opts),
-  getText: (path: string, opts: AbortableInit = {}) => {
-    const session = loadSession()
-    return fetch(`${BASE}${path}`, {
-      headers: session ? { Authorization: `Bearer ${session.token}` } : {},
-      signal: opts.signal,
-    }).then(async (res) => {
-      const text = await res.text()
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`)
-      return text
-    })
-  },
   post: <T>(path: string, json: unknown, opts: AbortableInit = {}) =>
     request<T>(path, { method: 'POST', json, signal: opts.signal }),
   patch: <T>(path: string, json: unknown, opts: AbortableInit = {}) =>
     request<T>(path, { method: 'PATCH', json, signal: opts.signal }),
   put: <T>(path: string, json: unknown, opts: AbortableInit = {}) =>
     request<T>(path, { method: 'PUT', json, signal: opts.signal }),
-  putRaw: (path: string, body: string, opts: AbortableInit = {}) =>
-    request<void>(path, {
-      method: 'PUT',
-      body,
-      headers: { 'Content-Type': 'application/json' },
-      signal: opts.signal,
-    }),
   del: <T>(path: string, opts: AbortableInit = {}) =>
     request<T>(path, { method: 'DELETE', signal: opts.signal }),
 }

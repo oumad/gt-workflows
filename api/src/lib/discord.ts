@@ -203,65 +203,56 @@ function titleNoun(events: ServerAlertEvent[]): string {
   return kinds.size === 1 ? [...kinds][0]! : 'Record'
 }
 
+/** One embed per non-empty event bucket. Emoji/verb/colour and the per-event
+ *  line vary by bucket; title pluralisation+count and footer/timestamp are
+ *  shared. Generic over the narrowed event type so each `line` sees its variant. */
+function alertEmbed<E extends ServerAlertEvent>(
+  emoji: string,
+  verb: string,
+  color: number,
+  events: E[],
+  line: (e: E) => string,
+): DiscordEmbed | null {
+  if (events.length === 0) return null
+  const noun = titleNoun(events)
+  const many = events.length > 1
+  return {
+    title: `${emoji} ${noun}${many ? 's' : ''} ${verb}${many ? ` (${events.length})` : ''}`,
+    color,
+    description: events.map(line).join('\n\n'),
+    timestamp: new Date().toISOString(),
+    footer: { text: 'coffee-maker · health monitor' },
+  }
+}
+
 export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise<void> {
   if (events.length === 0) return
 
-  const down = events.filter((e) => e.kind === 'down')
-  const recovered = events.filter((e) => e.kind === 'recovered')
-  const reminders = events.filter((e) => e.kind === 'still_down')
-
-  const embeds: DiscordEmbed[] = []
-
-  if (down.length > 0) {
-    const noun = titleNoun(down)
-    embeds.push({
-      title: down.length === 1 ? `🚨 ${noun} Down` : `🚨 ${noun}s Down (${down.length})`,
-      color: COLORS.red,
-      description: down
-        .map((e) => `**${e.name}** · ${recordKind(e.url)} — ${e.reason}\n\`${e.url}\``)
-        .join('\n\n'),
-      timestamp: new Date().toISOString(),
-      footer: { text: 'coffee-maker · health monitor' },
-    })
-  }
-
-  if (recovered.length > 0) {
-    const noun = titleNoun(recovered)
-    embeds.push({
-      title:
-        recovered.length === 1
-          ? `✅ ${noun} Recovered`
-          : `✅ ${noun}s Recovered (${recovered.length})`,
-      color: COLORS.green,
-      description: recovered
-        .map(
-          (e) =>
-            `**${e.name}** · ${recordKind(e.url)} — was down for ${fmtDuration(e.downForMs)}\n\`${e.url}\``,
-        )
-        .join('\n\n'),
-      timestamp: new Date().toISOString(),
-      footer: { text: 'coffee-maker · health monitor' },
-    })
-  }
-
-  if (reminders.length > 0) {
-    const noun = titleNoun(reminders)
-    embeds.push({
-      title:
-        reminders.length === 1
-          ? `⏰ ${noun} Still Down`
-          : `⏰ ${noun}s Still Down (${reminders.length})`,
-      color: COLORS.yellow,
-      description: reminders
-        .map(
-          (e) =>
-            `**${e.name}** · ${recordKind(e.url)} — down for ${fmtDuration(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
-        )
-        .join('\n\n'),
-      timestamp: new Date().toISOString(),
-      footer: { text: 'coffee-maker · health monitor' },
-    })
-  }
+  const embeds = [
+    alertEmbed(
+      '🚨',
+      'Down',
+      COLORS.red,
+      events.filter((e) => e.kind === 'down'),
+      (e) => `**${e.name}** · ${recordKind(e.url)} — ${e.reason}\n\`${e.url}\``,
+    ),
+    alertEmbed(
+      '✅',
+      'Recovered',
+      COLORS.green,
+      events.filter((e) => e.kind === 'recovered'),
+      (e) =>
+        `**${e.name}** · ${recordKind(e.url)} — was down for ${fmtDuration(e.downForMs)}\n\`${e.url}\``,
+    ),
+    alertEmbed(
+      '⏰',
+      'Still Down',
+      COLORS.yellow,
+      events.filter((e) => e.kind === 'still_down'),
+      (e) =>
+        `**${e.name}** · ${recordKind(e.url)} — down for ${fmtDuration(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
+    ),
+  ].filter((x): x is DiscordEmbed => x !== null)
 
   await sendWebhook({ username: 'coffee-maker', embeds })
 }

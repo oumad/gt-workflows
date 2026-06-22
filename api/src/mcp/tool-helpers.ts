@@ -2,7 +2,7 @@
  * Shared utilities for MCP tool handlers.
  *
  * The two non-trivial ones:
- *  - `toolError` / `toolText` / `toolJson` — wrap return values into the MCP
+ *  - `toolError` / `toolJson` — wrap return values into the MCP
  *    `CallToolResult` shape (content array). Lets tool handlers `return
  *    toolJson(payload)` without remembering the protocol layout.
  *  - `validateParamsShape` / `validateWorkflowShape` — pre-write sanity
@@ -43,11 +43,6 @@ export function toolJson(payload: unknown): ToolResult {
     content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
     structuredContent,
   }
-}
-
-/** Return plain text. Use for confirmations / short messages. */
-export function toolText(text: string): ToolResult {
-  return { content: [{ type: 'text', text }] }
 }
 
 /** Return an error response. The MCP spec says tool errors travel as a normal

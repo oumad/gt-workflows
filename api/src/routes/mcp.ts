@@ -23,7 +23,7 @@ import { Hono } from 'hono'
 import { personalTokenAuth } from '../middleware/auth.js'
 import { resolveBearerToken } from '../services/personalTokens.js'
 import { buildRequestServer } from '../mcp/server.js'
-import { TOOL_NAMES } from '../mcp/tools/index.js'
+import { buildToolCatalog } from '../mcp/tools/index.js'
 import { buildAuthInfo } from '../mcp/auth-ctx.js'
 import type { AppVariables } from '../types.js'
 
@@ -34,8 +34,9 @@ app.use('*', personalTokenAuth)
 // ── GET /api/mcp/whoami ──────────────────────────────────
 // Smoke test for a freshly-pasted token. Returns the resolved user + the
 // list of tools registered on the server. No protocol framing — plain JSON.
-app.get('/whoami', (c) => {
+app.get('/whoami', async (c) => {
   const me = c.var.user
+  const { server } = await buildRequestServer()
   return c.json({
     user: {
       id: me.id,
@@ -44,7 +45,7 @@ app.get('/whoami', (c) => {
       isAdmin: me.isAdmin,
     },
     via: 'personal-token',
-    tools: TOOL_NAMES,
+    tools: buildToolCatalog(server).map((t) => t.name),
     protocol: { version: '2025-03-26', transport: 'streamable-http', mode: 'stateless-json' },
   })
 })

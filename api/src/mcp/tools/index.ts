@@ -26,52 +26,6 @@ export function registerAllTools(server: McpServer): void {
   registerWorkflowMetadataTools(server)
 }
 
-/** Static list of registered tool names — kept in sync with the registrars
- *  above. Surfaced through GET /api/mcp/whoami so the frontend can preview
- *  what the AI client will be able to do once it connects. */
-export const TOOL_NAMES = [
-  // workflows.ts (read-only)
-  'list_workflows',
-  'read_params',
-  'read_workflow',
-  'get_node_info',
-  'get_field_config',
-  'diff_params',
-  'list_files',
-  // files.ts (read + write)
-  'read_file',
-  'write_file',
-  'delete_file',
-  // node-config.ts (write — read-patch-validate-write, snapshots on every write)
-  'set_node_parser',
-  'set_node_visibility',
-  'set_node_condition',
-  'set_field_condition',
-  'set_subgraph',
-  'set_placeholders',
-  // powerflow.ts (write — params.powerflowConfig top-level)
-  'set_powerflow_flags',
-  'add_pf_connection',
-  'remove_pf_connection',
-  'set_pf_field',
-  // imagine.ts (write — params.imagine + SKILL.md cross-check)
-  'set_imagine_config',
-  'remove_imagine_config',
-  'read_skill_md',
-  'write_skill_md',
-  'validate_imagine',
-  // validation.ts (output comparator + deep validator + snapshot history)
-  'set_output_comparator',
-  'validate_params',
-  'list_snapshots',
-  'snapshot_restore',
-  // workflow-metadata.ts (top-level params.json metadata)
-  'set_workflow_metadata',
-  'set_workflow_tags',
-  'set_workflow_servers',
-  'set_icon_badge',
-] as const
-
 /** Human-readable section per tool — drives grouping in the Preferences UI's
  *  MCP tools catalog card. Keep in sync with TOOL_NAMES. */
 export const TOOL_SECTIONS: Record<string, string> = {

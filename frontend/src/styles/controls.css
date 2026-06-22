@@ -28,6 +28,11 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ─── Drill row (clickable list item) ───────── */
+.drill-row:hover {
+  background: var(--surface-2);
+}
 .btn-primary {
   background: var(--ink);
   color: var(--bg);

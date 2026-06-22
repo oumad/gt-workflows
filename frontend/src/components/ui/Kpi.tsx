@@ -1,4 +1,5 @@
 import { ChevronRight } from 'lucide-react'
+import { clickable } from '../../lib/clickable'
 
 export type KpiTone = 'good' | 'warn' | 'bad' | 'info'
 
@@ -30,15 +31,7 @@ export function Kpi({
   return (
     <div
       className="card card-pad"
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={(e) => {
-        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault()
-          onClick()
-        }
-      }}
+      {...clickable(onClick)}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
       <div className="row" style={{ justifyContent: 'space-between' }}>

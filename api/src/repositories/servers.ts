@@ -4,7 +4,7 @@
  * per-server 24h stats). DB-only; no HTTP or business logic.
  */
 import { eq, and, inArray, notInArray, desc, sql } from 'drizzle-orm'
-import { db, servers, workflows, workflowJobs, trainingJobs } from '../db/index.js'
+import { db, servers, workflowJobs, trainingJobs } from '../db/index.js'
 import type { Server } from '../db/schema.js'
 
 export type ServerType = 'workflow' | 'lora'
@@ -386,7 +386,3 @@ export async function relinkAllOrphans(): Promise<number> {
   const loraCount = Number((lora as unknown as { count?: number }).count ?? 0)
   return wfCount + loraCount
 }
-
-// Touch unused imports so the linter doesn't strip them if the surface changes.
-void servers
-void workflows

@@ -1,6 +1,9 @@
+import { clickable } from '../../lib/clickable'
+
 /** Clickable list-row helper with a hover background. Used in Doctor
  *  Overview to wrap each "top X" item. Behavior matches the reference's
- *  drill-row pattern: cursor-pointer + soft surface-2 highlight on hover. */
+ *  drill-row pattern: cursor-pointer + soft surface-2 highlight on hover
+ *  (the highlight is a CSS `:hover` rule on `.drill-row`). */
 export function DrillRow({
   children,
   onClick,
@@ -12,22 +15,9 @@ export function DrillRow({
 }) {
   return (
     <div
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      className={onClick ? 'drill-row' : undefined}
       title={title}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault()
-          onClick()
-        }
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'
-      }}
-      onMouseLeave={(e) => {
-        ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-      }}
+      {...clickable(onClick)}
       style={{
         cursor: onClick ? 'pointer' : 'default',
         borderRadius: 8,

@@ -4,7 +4,7 @@
  * linked-workflow counts). DB-only; rule logic lives in services/seto.ts.
  */
 import { eq, sql } from 'drizzle-orm'
-import { db, setoConfig, workflowJobs, trainingJobs, servers, workflows } from '../db/index.js'
+import { db, setoConfig, workflows } from '../db/index.js'
 import type { Server, SetoConfig, Workflow } from '../db/schema.js'
 import { errorCodeSqlFor } from './analytics.js'
 
@@ -345,8 +345,3 @@ export async function workflowStats(id: string): Promise<WorkflowStats> {
     topErrorCode: topErr[0] ?? null,
   }
 }
-
-// Touch unused imports so the linter doesn't strip them if the surface changes.
-void servers
-void workflowJobs
-void trainingJobs
