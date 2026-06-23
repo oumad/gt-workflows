@@ -6,6 +6,8 @@ import type { AppVariables } from '../types.js'
 import authRouter from './auth.js'
 import serversRouter from './servers.js'
 import workflowsRouter from './workflows.js'
+import globalEnvRouter from './globalEnv.js'
+import gitRouter from './git.js'
 import jobsRouter from './jobs.js'
 import wfJobsRouter from './wf-jobs.js'
 import loraJobsRouter from './lora-jobs.js'
@@ -40,6 +42,8 @@ api.get('/health', async (c) => {
 api.route('/auth', authRouter) // no requireAuth — public login endpoint
 api.route('/servers', serversRouter)
 api.route('/workflows', workflowsRouter)
+api.route('/global-env', globalEnvRouter) // WS globalEnv bindings (key -> url|url[])
+api.route('/git', gitRouter) // read-only git status (Phase 3)
 api.route('/jobs', jobsRouter) // unified list/live/stats across WF + LoRA
 api.route('/wf-jobs', wfJobsRouter) // WF-specific: detail, logs, avg-duration
 api.route('/lora-jobs', loraJobsRouter) // LoRA-specific: detail, ingest, status webhook

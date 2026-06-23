@@ -68,7 +68,7 @@ export const SNAPSHOT_CAP = 50
  *  could otherwise grow `.history` without bound and fill the WORKFLOWS_DIR
  *  volume. Pruned oldest-first after the count cap. */
 export const SNAPSHOT_HISTORY_MAX_BYTES = 512 * 1024 * 1024
-export type SnapshotKind = 'params' | 'workflow' | 'meta' | 'import'
+export type SnapshotKind = 'params' | 'workflow' | 'meta' | 'import' | 'update'
 
 export function historyRoot(id: string): string {
   return join(getWorkflowsDir(), SNAPSHOT_DIR, id)
@@ -81,7 +81,7 @@ function buildSnapshotId(kind: SnapshotKind, when: Date = new Date()): string {
 }
 
 function parseSnapshotId(snapId: string): { savedAt: string; kind: SnapshotKind } | null {
-  const m = snapId.match(/^(.+?)__(params|workflow|meta|import)$/)
+  const m = snapId.match(/^(.+?)__(params|workflow|meta|import|update)$/)
   if (!m) return null
   // Reverse the timestamp normalization we did in buildSnapshotId. The first
   // 19 chars are YYYY-MM-DDTHH-MM-SS, then `-NNN` ms, then `Z`. We need to
@@ -102,13 +102,15 @@ function parseSnapshotId(snapId: string): { savedAt: string; kind: SnapshotKind 
  *  the shared `pruneHistoryAsync` (count + byte budget) — fired non-blocking so
  *  both snapshot paths share one policy. Best-effort: FS errors are logged but
  *  never fail the calling op. */
-export function snapshotWorkflow(id: string, folderAbs: string, kind: SnapshotKind): void {
+export function snapshotWorkflow(id: string, folderAbs: string, kind: SnapshotKind): string | null {
   try {
     const root = historyRoot(id)
     mkdirSync(root, { recursive: true })
     const snapId = buildSnapshotId(kind)
-    cpSync(folderAbs, join(root, snapId), { recursive: true })
+    const dest = join(root, snapId)
+    cpSync(folderAbs, dest, { recursive: true })
     void pruneHistoryAsync(root)
+    return dest // absolute path of the snapshot — used by git update's take-theirs restore
   } catch (err) {
     console.warn(
       '[workflows] snapshot failed for',
@@ -116,6 +118,7 @@ export function snapshotWorkflow(id: string, folderAbs: string, kind: SnapshotKi
       ':',
       err instanceof Error ? err.message : err,
     )
+    return null
   }
 }
 

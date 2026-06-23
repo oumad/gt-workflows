@@ -9,6 +9,7 @@
  * the icon and ZIP endpoints).
  */
 import { Hono } from 'hono'
+import { z } from 'zod'
 import { stream } from 'hono/streaming'
 import { zValidator } from '@hono/zod-validator'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
@@ -21,6 +22,12 @@ import { runWorkflowTest, auditWorkflow, type TestEvent } from '../services/work
 import type { AppVariables } from '../types.js'
 
 const app = new Hono<{ Variables: AppVariables }>()
+
+// No edit lock: workflows are files on disk, edited concurrently from CM, MCP,
+// and the git repo directly. Two users editing the SAME workflow at the same
+// instant is rare; whoever saves last wins and the other refreshes. Concurrency
+// is handled at publish time (publish is refused when behind — pull or discard
+// first), not by locking edits.
 
 // Authentication: requireAuth on each route accepts both browser JWT and
 // personal tokens (cm_pat_...) — see middleware/auth.ts. The legacy weekly-
@@ -44,6 +51,17 @@ app.get('/export', requireAuth, (c) => {
         'Content-Length': String(buffer.length),
       },
     })
+  } catch (err) {
+    return httpErrorResponse(c, err)
+  }
+})
+
+// ── GET /workflows/global-env/preview — migration generator/viewer ─
+// Distinct globalEnv.<key> tokens referenced across all workflows, diffed
+// against the current WS config: { referenced, present, missing }.
+app.get('/global-env/preview', requireAdmin, (c) => {
+  try {
+    return c.json(wf.globalEnvPreview())
   } catch (err) {
     return httpErrorResponse(c, err)
   }
@@ -287,6 +305,24 @@ app.patch('/:id', requireAdmin, zValidator('json', patchWorkflowSchema), (c) => 
     return httpErrorResponse(c, err)
   }
 })
+
+// ── PUT /workflows/:id/binding — set the server binding only ──
+// Body { serverUrl: string | string[] } — written verbatim as raw refs
+// (literal URLs and/or globalEnv.<key> tokens). Binding-only alias over PATCH.
+app.put(
+  '/:id/binding',
+  requireAdmin,
+  zValidator('json', z.object({ serverUrl: z.union([z.string(), z.array(z.string())]) })),
+  (c) => {
+    try {
+      const { serverUrl } = c.req.valid('json')
+      const refs = Array.isArray(serverUrl) ? serverUrl : [serverUrl]
+      return c.json(wf.setWorkflowBinding(c.req.param('id'), refs))
+    } catch (err) {
+      return httpErrorResponse(c, err)
+    }
+  },
+)
 
 // ── DELETE /workflows/:id ─────────────────────────────────
 app.delete('/:id', requireAdmin, (c) => {

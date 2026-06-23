@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# pre-receive hook for the workflows bare repo. Rejects any push whose tree
+# fails validate-workflows.mjs (literal server URLs / invalid JSON). Install as
+# <bare-repo>/hooks/pre-receive and `chmod +x`. Edit VALIDATOR to its real path.
+set -euo pipefail
+
+VALIDATOR="/opt/coffee-maker/git-hooks/validate-workflows.mjs"
+ZERO="0000000000000000000000000000000000000000"
+
+while read -r _oldrev newrev refname; do
+  # Branch/tag deletions have no tree to check.
+  [ "$newrev" = "$ZERO" ] && continue
+
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  git archive "$newrev" | tar -x -C "$tmp"
+
+  if ! node "$VALIDATOR" "$tmp"; then
+    echo "pre-receive: workflow validation failed on $refname — push rejected." >&2
+    exit 1
+  fi
+done

@@ -57,6 +57,26 @@ const envSchema = z.object({
   // ── Files ─────────────────────────────────────
   WORKFLOWS_DIR: z.string().default('../workflows'),
 
+  // ── Git-managed workflows (phased rollout, off by default) ────
+  // Master feature flag. While false, workflows stay pure-FS (today's
+  // behaviour) and none of the git vars below are required — lets the git
+  // phases land dark. See the git-workflows-design note.
+  GIT_WORKFLOWS_ENABLED: bool.default(false),
+  // Path to Workflow Studio's config file (holds workflowStudio.globalEnv).
+  // External to this repo, per-env.
+  WS_CONFIG_PATH: z.string().optional(),
+  // Scoped push token — injected into GIT_REMOTE at runtime, never persisted
+  // to .git/config. One token per scope (per the design).
+  GIT_TOKEN: z.string().optional(),
+  // Remote URL. Commit a tokenless URL here (e.g.
+  // https://host/group/workflows.git); the token is injected at runtime.
+  GIT_REMOTE: z.string().optional(),
+  // Branch model: agents/MCP pinned to the work branch and can't push to the
+  // default; humans promote. Optional staging branch for a 3-branch flow.
+  GIT_DEFAULT_BRANCH: z.string().default('main'),
+  GIT_WORK_BRANCH: z.string().default('test'),
+  GIT_STAGING_BRANCH: z.string().optional(),
+
   // ── Optional integrations ─────────────────────
   DISCORD_WEBHOOK_URL: z
     .string()

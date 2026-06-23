@@ -15,6 +15,7 @@ import { registerPowerflowTools } from './powerflow.js'
 import { registerImagineTools } from './imagine.js'
 import { registerValidationTools } from './validation.js'
 import { registerWorkflowMetadataTools } from './workflow-metadata.js'
+import { registerGitTools } from './git.js'
 
 export function registerAllTools(server: McpServer): void {
   registerWorkflowTools(server)
@@ -24,6 +25,7 @@ export function registerAllTools(server: McpServer): void {
   registerImagineTools(server)
   registerValidationTools(server)
   registerWorkflowMetadataTools(server)
+  registerGitTools(server)
 }
 
 /** Human-readable section per tool — drives grouping in the Preferences UI's
@@ -69,6 +71,11 @@ export const TOOL_SECTIONS: Record<string, string> = {
   set_workflow_tags: 'Workflow metadata',
   set_workflow_servers: 'Workflow metadata',
   set_icon_badge: 'Workflow metadata',
+  // Git
+  git_status: 'Git',
+  update_workflows: 'Git',
+  publish_workflows: 'Git',
+  switch_branch: 'Git',
 }
 
 export type ToolCatalogEntry = {

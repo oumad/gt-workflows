@@ -26,6 +26,7 @@ import { RangeSelector } from '../../components/ui/RangeSelector'
 import { WorkflowsToolbar } from './WorkflowsToolbar'
 import { WorkflowCategorySection } from './WorkflowCategorySection'
 import { WorkflowsModalStack } from './WorkflowsModalStack'
+import { GitStatusBanner } from './GitStatusBanner'
 
 /**
  * Workflows page — three tabs ("All", "Insights", "Repartition").
@@ -356,6 +357,7 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
         onChange={setTab}
       />
       <div className="body">
+        <GitStatusBanner onChanged={reload} />
         {tab === 'all' && (
           <>
             <WorkflowsToolbar

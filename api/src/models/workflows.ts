@@ -42,7 +42,12 @@ export interface WorkflowSummary {
   path: string
   description: string | null
   category: string
+  /** Resolved real server URLs (globalEnv tokens expanded). For display,
+   *  dispatch and server-matching. */
   serverUrls: string[]
+  /** Raw server refs as stored — literal URLs and/or `globalEnv.<key>` tokens.
+   *  For the editor and round-trip, so a binding token isn't baked into a URL. */
+  serverRefs: string[]
   icon: string | null
   iconBadge: NormalizedIconBadge | null
   tags: string[]
@@ -73,7 +78,7 @@ export interface ImportAnalysis {
 export interface HistoryEntry {
   id: string
   savedAt: string
-  kind: 'params' | 'workflow' | 'meta' | 'import'
+  kind: 'params' | 'workflow' | 'meta' | 'import' | 'update'
   label: string
 }
 

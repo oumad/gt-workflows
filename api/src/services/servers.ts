@@ -10,7 +10,9 @@ import { config } from '../config/index.js'
 import { serverMatchKey, hostnameOf, portOf } from '../lib/serverUrl.js'
 import { sendServerReport } from '../lib/discord.js'
 import { probeOneServer, syncServerHealth } from './serverHealth.js'
+import { comfyServerUrls } from './workflows.js'
 import { notFound, conflict, internalError, HttpError } from '../lib/httpError.js'
+import type { ParamsJson } from '../models/workflows.js'
 import * as repo from '../repositories/servers.js'
 import type {
   ServerHealth,
@@ -398,13 +400,10 @@ export async function scrapeServers(): Promise<ScrapeResult> {
             servers?: unknown
             serverIds?: unknown
           }
-          const raw: unknown = params.comfyui_config?.serverUrl
-          const urls: string[] = Array.isArray(raw)
-            ? raw.filter((x): x is string => typeof x === 'string')
-            : typeof raw === 'string'
-              ? [raw]
-              : []
-          for (const url of urls) addService(url, 'workflow')
+          // Resolve globalEnv.<key> tokens to real URLs so a token-bound
+          // workflow still contributes its actual server here; literal URLs
+          // pass through unchanged.
+          for (const url of comfyServerUrls(params as ParamsJson)) addService(url, 'workflow')
 
           // Legacy `params.servers` was a list of bare hostnames; we
           // materialise them as host:8188 URLs. Filter aggressively — the

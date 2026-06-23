@@ -35,10 +35,11 @@ ENV NODE_ENV=production
 # scrot — we don't screenshot. procps for a usable kill on teardown; iputils-ping
 # provides `ping` for the tier-1 ICMP host check in serverHealth.ts (NET_RAW is
 # in Docker's default cap set; if dropped or ICMP is firewalled, the probe falls
-# back to a TCP connect).
+# back to a TCP connect). git backs the git-managed workflows (simple-git shells
+# out to it) — harmless when GIT_WORKFLOWS_ENABLED is off.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       freerdp2-x11 xvfb procps iputils-ping \
+       freerdp2-x11 xvfb procps iputils-ping git \
     && rm -rf /var/lib/apt/lists/*
 # Fail the BUILD if the RDP toolchain didn't land (apt mirror drift, stale
 # cache) instead of a cryptic `spawn xfreerdp ENOENT` on the first "RDP In"

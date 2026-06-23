@@ -17,7 +17,7 @@ import {
   extractZipToDir,
 } from '../lib/workflowFs.js'
 import { badRequest, notFound, conflict, forbidden, internalError } from '../lib/httpError.js'
-import { findEntry, slugify, readParams, comfyServerUrls } from './workflows.js'
+import { findEntry, slugify, readParams, comfyServerRefs } from './workflows.js'
 import type { ParamsJson, ImportAnalysis, WorkflowSummary } from '../models/workflows.js'
 import { FOLDER_NAME_RE } from '../validators/workflows.js'
 import { readWorkflows } from './workflows.js'
@@ -140,7 +140,9 @@ function importMeta(params: Record<string, unknown> | null) {
 
 function importServers(params: Record<string, unknown> | null): string[] {
   if (!params) return []
-  return comfyServerUrls(params)
+  // Raw refs: the import wizard shows these and writes the user's choice back,
+  // so a globalEnv.<key> token must survive the round-trip unresolved.
+  return comfyServerRefs(params)
 }
 
 /** Parse the optional `params` multipart field into a plain object. The wizard
@@ -172,7 +174,7 @@ export async function analyzeForExisting(
   const currentParams = readParams(resolve(join(dir, entry.name)))
   return {
     ...analysis,
-    currentServers: comfyServerUrls(currentParams),
+    currentServers: comfyServerRefs(currentParams),
     incomingServers: importServers(analysis.params),
   }
 }
