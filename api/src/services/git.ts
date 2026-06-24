@@ -117,16 +117,27 @@ function scrub(msg: string): string {
  *  repo); CM only sets the local config that activates it. Best-effort: a config
  *  failure never aborts the git op. */
 async function installGitIntegration(g: SimpleGit): Promise<void> {
-  try {
-    // Some hardened git builds (Debian bookworm) require this before hooksPath.
-    try { await g.raw(['config', 'safe.allowUnsafeHooksPath', 'true']) } catch { /* older git */ }
-    await g.raw(['config', 'core.hooksPath', '.githooks'])
-    await g.raw(['config', 'filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f'])
-    await g.raw(['config', 'filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f'])
-    await g.raw(['config', 'filter.cmserver.required', 'true'])
-  } catch (err) {
-    console.warn('[git] could not install git integration:', scrub(asMessage(err)))
+  // Each setting is best-effort and INDEPENDENT: a failure on one (e.g.
+  // core.hooksPath on a hardened git) must not skip the serverUrl filter — the
+  // essential part. (Previously one throw aborted the rest, so the filter never
+  // got set and real URLs were committed.)
+  const set = async (...args: string[]) => {
+    try {
+      await g.raw(['config', ...args])
+    } catch (err) {
+      console.warn(`[git] config ${args.join(' ')} failed:`, scrub(asMessage(err)))
+    }
   }
+  // core.hooksPath at a repo-relative path is refused by hardened git (Debian
+  // bookworm) unless safe.allowUnsafeHooksPath is enabled — and git only honors
+  // that from GLOBAL/system scope, never repo-local, so it must be set --global.
+  await set('--global', 'safe.allowUnsafeHooksPath', 'true')
+  await set('core.hooksPath', '.githooks')
+  // The serverUrl clean/smudge filter has no safe-hooks gate, so it applies even
+  // if the hooksPath line above was refused.
+  await set('filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f')
+  await set('filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f')
+  await set('filter.cmserver.required', 'true')
 }
 
 function asMessage(err: unknown): string {
