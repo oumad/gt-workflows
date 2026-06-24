@@ -5,9 +5,8 @@ import type { Server } from '../../types'
 import {
   normServerUrl,
   serverLabel,
-  TOKEN_PREFIX,
+  bindingToken,
   bindingKeyOf,
-  isBindingKeyName,
   type GlobalEnvMap,
 } from './workflowsHelpers'
 
@@ -15,13 +14,13 @@ type ServerInsight = { serverId: string; serverName: string; totalJobs: number }
 
 /**
  * Server binding editor. The value is the list of raw refs a workflow targets
- * (params.json `comfyui_config.serverUrl`): each is either a `globalEnv.<key>`
- * binding token or a literal URL. You can:
- *   - pick an existing globalEnv key/role (writes the TOKEN, never the URL),
- *   - define a new key + URL(s) (PUTs the URL into globalEnv, writes the token),
- *   - or type a literal URL / pick a registered server.
- * A real URL is NEVER written into the workflow for a bound key — that's the
- * whole point: params carry the token, globalEnv carries the env-specific URL.
+ * (params.json `comfyui_config.serverUrl`): each is either a `<globalEnv.key>`
+ * binding expression or a literal URL. You can:
+ *   - pick an existing globalEnv key/pool (writes the EXPRESSION, never the URL),
+ *   - type a literal URL, or pick a registered server.
+ * globalEnv keys are defined in Workflow Studio's config (operator-managed, read
+ * only here) — CM never writes them. The real per-env URL of a literal binding
+ * is kept out of git by the clean/smudge filter (stored in the envtable).
  */
 export function ServerUrlPicker({
   value,
@@ -40,17 +39,14 @@ export function ServerUrlPicker({
   const [focused, setFocused] = useState(false)
   const [leastUsedUrl, setLeastUsedUrl] = useState<string | null>(null)
   const [globalEnv, setGlobalEnv] = useState<GlobalEnvMap>({})
-  const [creating, setCreating] = useState(false) // new-binding form open
-  const [newUrls, setNewUrls] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus()
   }, [autoFocus])
 
-  // Current globalEnv bindings — drives the key picker and the chip labels.
+  // Current globalEnv bindings (from WS config) — drives the key picker and the
+  // chip labels. Read-only: CM never writes this map.
   useEffect(() => {
     api
       .get<GlobalEnvMap>('/api/global-env')
@@ -90,11 +86,9 @@ export function ServerUrlPicker({
     looksUrl &&
     !servers.some((s) => normServerUrl(s.url) === normServerUrl(typed)) &&
     !pickedUrls.has(normServerUrl(typed))
-  const showCreate =
-    typed.length > 0 && !looksUrl && isBindingKeyName(typed) && !(typed in globalEnv)
 
   function addToken(key: string) {
-    if (!pickedKeys.has(key)) onChange([...value, TOKEN_PREFIX + key])
+    if (!pickedKeys.has(key)) onChange([...value, bindingToken(key)])
     setInput('')
     inputRef.current?.focus()
   }
@@ -106,30 +100,6 @@ export function ServerUrlPicker({
   }
   function remove(ref: string) {
     onChange(value.filter((u) => u !== ref))
-  }
-
-  async function createBinding() {
-    const key = input.trim()
-    const urls = newUrls
-      .split(/[\s,]+/)
-      .map((u) => u.trim())
-      .filter(Boolean)
-    if (!isBindingKeyName(key) || urls.length === 0) return
-    setBusy(true)
-    setError(null)
-    try {
-      const map = await api.put<GlobalEnvMap>(`/api/global-env/${encodeURIComponent(key)}`, {
-        urls,
-      })
-      setGlobalEnv(map)
-      addToken(key)
-      setCreating(false)
-      setNewUrls('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save binding')
-    } finally {
-      setBusy(false)
-    }
   }
 
   /** Chip label for a ref: bound key (with pool size) or literal server label. */
@@ -145,9 +115,9 @@ export function ServerUrlPicker({
     const key = bindingKeyOf(ref)
     if (key == null) return ref
     const v = globalEnv[key]
-    if (Array.isArray(v)) return `${TOKEN_PREFIX}${key} → ${v.join(', ')}`
-    if (typeof v === 'string') return `${TOKEN_PREFIX}${key} → ${v}`
-    return `${TOKEN_PREFIX}${key} → (no URL bound yet)`
+    if (Array.isArray(v)) return `${bindingToken(key)} → ${v.join(', ')}`
+    if (typeof v === 'string') return `${bindingToken(key)} → ${v}`
+    return `${bindingToken(key)} → (not defined in WS config yet)`
   }
 
   return (
@@ -210,202 +180,115 @@ export function ServerUrlPicker({
           if (e.key === 'Enter' && typed) {
             e.preventDefault()
             // Enter resolves to the single obvious action: existing key, then
-            // literal URL, then open the new-binding form.
+            // literal URL. (New globalEnv keys are defined in WS config, not here.)
             if (typed in globalEnv) addToken(typed)
             else if (looksUrl) addLiteral(typed)
-            else if (showCreate) setCreating(true)
           }
         }}
-        placeholder={placeholder ?? 'Pick a binding/server or type a key or URL…'}
+        placeholder={placeholder ?? 'Pick a binding/server or type a URL…'}
       />
-
-      {/* new-binding form — key (from input) + URL(s); writes globalEnv + token */}
-      {creating && (
-        <div
-          className="col"
-          style={{
-            gap: 6,
-            border: '1px solid var(--accent)',
-            borderRadius: 7,
-            padding: 8,
-            background: 'var(--surface)',
-          }}
-        >
-          <div style={{ fontSize: 11, color: 'var(--ink-2)' }}>
-            New binding <span className="mono">{TOKEN_PREFIX + (input.trim() || '…')}</span> — enter
-            one URL, or several (space/comma separated) for a pool.
-          </div>
-          <input
-            className="input mono"
-            style={{ fontSize: 11.5, height: 30 }}
-            value={newUrls}
-            autoFocus
-            onChange={(e) => setNewUrls(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void createBinding()
-              }
-            }}
-            placeholder="http://host:8188  http://host2:8188"
-          />
-          {error && <span style={{ fontSize: 11, color: 'var(--bad)' }}>{error}</span>}
-          <div className="row" style={{ gap: 6 }}>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              disabled={busy || !newUrls.trim()}
-              style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}
-              onClick={() => void createBinding()}
-            >
-              {busy ? 'Saving…' : 'Create binding'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={busy}
-              onClick={() => {
-                setCreating(false)
-                setNewUrls('')
-                setError(null)
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* suggestions — normal flow (not absolute) so a host with overflow:hidden,
           e.g. the workflow card, does not clip it */}
-      {focused &&
-        !creating &&
-        (keyMatches.length > 0 || serverMatches.length > 0 || showCustom || showCreate) && (
-          <div
-            style={{
-              border: '1px solid var(--line)',
-              borderRadius: 7,
-              overflow: 'hidden',
-              background: 'var(--surface)',
-              boxShadow: 'var(--shadow-lg)',
-            }}
-          >
-            {/* existing globalEnv bindings */}
-            {keyMatches.slice(0, 6).map((k) => {
-              const v = globalEnv[k]
-              const detail = Array.isArray(v)
-                ? `pool of ${v.length}`
-                : typeof v === 'string'
-                  ? v
-                  : 'unbound'
-              return (
-                <button
-                  key={`k:${k}`}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    addToken(k)
-                  }}
-                  className="row"
-                  style={dropdownRow}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <Link2 size={11} style={{ color: 'var(--accent-ink)' }} />
-                  <span style={{ fontWeight: 600 }}>{k}</span>
-                  <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10 }}>
-                    {detail}
-                  </span>
-                </button>
-              )
-            })}
-
-            {/* registered servers — adds a literal URL */}
-            {serverMatches.slice(0, 6).map((s) => (
+      {focused && (keyMatches.length > 0 || serverMatches.length > 0 || showCustom) && (
+        <div
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: 7,
+            overflow: 'hidden',
+            background: 'var(--surface)',
+            boxShadow: 'var(--shadow-lg)',
+          }}
+        >
+          {/* existing globalEnv bindings (from WS config) */}
+          {keyMatches.slice(0, 6).map((k) => {
+            const v = globalEnv[k]
+            const detail = Array.isArray(v)
+              ? `pool of ${v.length}`
+              : typeof v === 'string'
+                ? v
+                : 'unbound'
+            return (
               <button
-                key={`s:${s.id}`}
+                key={`k:${k}`}
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  addLiteral(s.url)
+                  addToken(k)
                 }}
                 className="row"
                 style={dropdownRow}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span style={{ fontWeight: 600 }}>{s.name}</span>
+                <Link2 size={11} style={{ color: 'var(--accent-ink)' }} />
+                <span style={{ fontWeight: 600 }}>{k}</span>
                 <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10 }}>
-                  {s.url}
+                  {detail}
                 </span>
-                {normServerUrl(s.url) === leastUsedUrl && (
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: 'var(--good)',
-                    }}
-                  >
-                    least used
-                  </span>
-                )}
               </button>
-            ))}
+            )
+          })}
 
-            {/* create a new binding from the typed key */}
-            {showCreate && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  setCreating(true)
-                }}
-                className="row"
-                style={{
-                  ...dropdownRow,
-                  color: 'var(--accent-ink)',
-                  borderTop: topBorder(keyMatches.length + serverMatches.length),
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <Plus size={11} /> New binding "
-                <span className="mono" style={{ color: 'var(--ink)' }}>
-                  {typed}
+          {/* registered servers — adds a literal URL */}
+          {serverMatches.slice(0, 6).map((s) => (
+            <button
+              key={`s:${s.id}`}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                addLiteral(s.url)
+              }}
+              className="row"
+              style={dropdownRow}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ fontWeight: 600 }}>{s.name}</span>
+              <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10 }}>
+                {s.url}
+              </span>
+              {normServerUrl(s.url) === leastUsedUrl && (
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: 'var(--good)',
+                  }}
+                >
+                  least used
                 </span>
-                "
-              </button>
-            )}
+              )}
+            </button>
+          ))}
 
-            {/* literal custom URL */}
-            {showCustom && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  addLiteral(typed)
-                }}
-                className="row"
-                style={{
-                  ...dropdownRow,
-                  color: 'var(--ink-3)',
-                  borderTop: topBorder(
-                    keyMatches.length + serverMatches.length + (showCreate ? 1 : 0),
-                  ),
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <Plus size={11} /> Use custom URL "
-                <span className="mono" style={{ color: 'var(--ink)' }}>
-                  {typed}
-                </span>
-                "
-              </button>
-            )}
-          </div>
-        )}
+          {/* literal custom URL */}
+          {showCustom && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                addLiteral(typed)
+              }}
+              className="row"
+              style={{
+                ...dropdownRow,
+                color: 'var(--ink-3)',
+                borderTop: topBorder(keyMatches.length + serverMatches.length),
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <Plus size={11} /> Use custom URL "
+              <span className="mono" style={{ color: 'var(--ink)' }}>
+                {typed}
+              </span>
+              "
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,27 @@
+# Drop into the WORKFLOWS repo at .github/workflows/validate-workflows.yml.
+# Then: mark the "validate" job a required status check and enable branch
+# protection on main + preprod (Settings → Branches). GitHub can't block the
+# push to test server-side, but this gates the merge into protected branches.
+#
+# Add a repo secret DISCORD_WEBHOOK_URL to get the failure notification; without
+# it the job still fails, just silently (no Discord post).
+name: Validate workflows
+on:
+  pull_request:
+  push:
+    branches: [test, preprod, main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # The guard scripts are vendored under .githooks/. GITHUB_REPOSITORY /
+      # GITHUB_REF_NAME / GITHUB_ACTOR are provided automatically; the webhook is
+      # the only secret. Validation reads the COMMITTED tree, so a clone that
+      # committed without the clean filter (real URL in git) fails here.
+      - run: node .githooks/validate-workflows.mjs .
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

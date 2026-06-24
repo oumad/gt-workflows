@@ -12,6 +12,7 @@ import 'dotenv/config'
 import { readdirSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { db, workflows } from '../src/db/index.js'
+import { ensureWorkflowUuid } from '../src/services/workflows.js'
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -37,13 +38,15 @@ for (const entry of entries) {
   const name = entry.name
   const id   = slugify(name)
   const path = join(WORKFLOWS_DIR, name)
+  // Mirror the folder's stable metadata.json uuid (mint if absent) into PG.
+  const uuid = ensureWorkflowUuid(path)
 
   await db
     .insert(workflows)
-    .values({ id, name, path, serverIds: [] })
+    .values({ id, uuid, name, path, serverIds: [] })
     .onConflictDoUpdate({
       target: workflows.id,
-      set: { name, path, updatedAt: new Date() },
+      set: { uuid, name, path, updatedAt: new Date() },
     })
 
   console.log(`  ${name}`)

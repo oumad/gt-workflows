@@ -56,17 +56,6 @@ app.get('/export', requireAuth, (c) => {
   }
 })
 
-// ── GET /workflows/global-env/preview — migration generator/viewer ─
-// Distinct globalEnv.<key> tokens referenced across all workflows, diffed
-// against the current WS config: { referenced, present, missing }.
-app.get('/global-env/preview', requireAdmin, (c) => {
-  try {
-    return c.json(wf.globalEnvPreview())
-  } catch (err) {
-    return httpErrorResponse(c, err)
-  }
-})
-
 // ── GET /workflows/:id/icon — public, no auth ─────────────
 app.get('/:id/icon', (c) => {
   const icon = wf.getIcon(c.req.param('id'))

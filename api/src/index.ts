@@ -8,6 +8,7 @@ import { sql, eq } from 'drizzle-orm'
 import { config } from './config/index.js'
 import api from './routes/index.js'
 import { sync } from './services/sync.js'
+import { initWorkflowsGit } from './services/git.js'
 import { db, users, servers } from './db/index.js'
 import { applyMigrations } from './db/migrate.js'
 import { setupGlobalProxy } from './lib/proxy.js'
@@ -190,6 +191,11 @@ httpServer.headersTimeout = 66_000
 
 // 5. Start continuous Redis → Postgres sync
 sync.start()
+
+// 6. Init the git-workflows feature: ensure stable/unique workflow ids + install
+//    the repo's hooks + filter (idempotent; no-op when the feature is off or
+//    WORKFLOWS_DIR isn't the workflows repo).
+void initWorkflowsGit()
 
 // Graceful shutdown — wait for the HTTP server to drain before exiting so
 // in-flight requests aren't dropped on SIGTERM (B02).

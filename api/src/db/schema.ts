@@ -141,6 +141,10 @@ export const servers = pgTable('servers', {
 // ─────────────────────────────────────────────
 export const workflows = pgTable('workflows', {
   id: text('id').primaryKey(), // slug, e.g. 'image-edit-qwen'
+  // Stable identity mirrored from the folder's metadata.json — survives renames
+  // (the slug `id` does not) and is the key the gitignored workflow-envtable.json
+  // uses. Nullable: backfilled by seed; null until a workflow has a metadata.json.
+  uuid: text('uuid').unique(),
   name: text('name').notNull(),
   path: text('path').unique().notNull(), // folder name in WORKFLOWS_DIR
   serverIds: text('server_ids')

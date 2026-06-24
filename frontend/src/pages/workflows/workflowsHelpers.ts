@@ -107,14 +107,17 @@ export const compareCategories = (a: string, b: string) => {
 /** Normalize a server URL for comparison — lowercased, trailing slash stripped. */
 export const normServerUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '')
 
-/** A workflow server ref is either a literal URL or a `globalEnv.<key>` binding
- *  token. These mirror the backend's serverRefKey / globalEnv model. */
-export const TOKEN_PREFIX = 'globalEnv.'
+/** A workflow server ref is either a literal URL or a `<globalEnv.key>` binding
+ *  expression. These mirror the backend's serverRefKey. The bracketed form is
+ *  canonical; the bare `globalEnv.key` form is still parsed for pre-rework data. */
 export type GlobalEnvMap = Record<string, string | string[]>
-export const bindingKeyOf = (ref: string): string | null =>
-  ref.startsWith(TOKEN_PREFIX) ? ref.slice(TOKEN_PREFIX.length) : null
-/** Same rule as the backend KEY_RE — a candidate new-binding key name. */
-export const isBindingKeyName = (s: string) => /^[A-Za-z0-9_-]+$/.test(s)
+/** Build the canonical binding expression written into params for a key. */
+export const bindingToken = (key: string) => `<globalEnv.${key}>`
+export const bindingKeyOf = (ref: string): string | null => {
+  const m =
+    /^<globalEnv\.([A-Za-z0-9_-]+)>$/.exec(ref) ?? /^globalEnv\.([A-Za-z0-9_-]+)$/.exec(ref)
+  return m ? m[1]! : null
+}
 
 /** Friendly label for a workflow's server URL, formatted as
  *  `<server_name>:<port>` where:

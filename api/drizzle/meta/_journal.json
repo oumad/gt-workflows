@@ -15,6 +15,13 @@
       "when": 1781006362059,
       "tag": "0001_drop_deprecated_server_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782291925291,
+      "tag": "0002_rich_venus",
+      "breakpoints": true
     }
   ]
 }
