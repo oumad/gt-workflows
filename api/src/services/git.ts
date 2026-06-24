@@ -50,6 +50,14 @@ export function allowedBranches(): string[] {
   ].filter((b): b is string => !!b)
 }
 
+// Pass the hardened-git opt-ins on EVERY git command line (`-c`). Debian's git
+// refuses core.hooksPath and clean/smudge filters unless these are enabled — and
+// the file scopes (system/global) weren't taking effect for our invocations. The
+// command-line scope is the user's explicit, always-honored opt-in, and it covers
+// BOTH configuring core.hooksPath/the filter AND git running them.
+const GIT_UNSAFE_OK = ['safe.allowUnsafeHooksPath=true', 'safe.allowUnsafeFilter=true']
+const gitClient = (baseDir: string): SimpleGit => simpleGit({ baseDir, config: GIT_UNSAFE_OK })
+
 let _git: SimpleGit | null = null
 let _prefix = ''
 
@@ -59,7 +67,7 @@ let _prefix = ''
  *  workflows repo. Cached after first success. */
 async function repo(): Promise<{ g: SimpleGit; prefix: string } | null> {
   if (_git) return { g: _git, prefix: _prefix }
-  const probe = simpleGit({ baseDir: getWorkflowsDir() })
+  const probe = gitClient(getWorkflowsDir())
   try {
     if (!(await probe.checkIsRepo())) return null
     const root = (await probe.revparse(['--show-toplevel'])).trim()
@@ -69,7 +77,7 @@ async function repo(): Promise<{ g: SimpleGit; prefix: string } | null> {
     // stage/push the WRONG repo.
     if (!existsSync(join(root, '.githooks', 'server-urls.mjs'))) return null
     _prefix = (await probe.revparse(['--show-prefix'])).trim() // '' or e.g. 'workflows/'
-    _git = simpleGit({ baseDir: root })
+    _git = gitClient(root)
     return { g: _git, prefix: _prefix }
   } catch {
     return null
@@ -131,15 +139,10 @@ async function installGitIntegration(g: SimpleGit): Promise<void> {
       console.warn(`[git] git config ${key} failed: ${scrub(asMessage(err))}`)
     }
   }
-  // Hardened git (Debian bookworm) refuses to configure BOTH core.hooksPath and
-  // clean/smudge filters unless these "unsafe" opt-ins are enabled — and git only
-  // honors them from a TRUSTED scope (system/global, NEVER repo-local). The api
-  // container runs as root so --system (/etc/gitconfig) is reliable; --global
-  // covers a native/non-root run. Must precede the gated config below.
-  for (const key of ['safe.allowUnsafeHooksPath', 'safe.allowUnsafeFilter']) {
-    await set('--system', key, 'true')
-    await set('--global', key, 'true')
-  }
+  // The hardened-git opt-ins (safe.allowUnsafeHooksPath / safe.allowUnsafeFilter)
+  // that let core.hooksPath + the filter be configured are passed on the command
+  // line by gitClient() (`-c …`), which is the scope git actually honors here, so
+  // these sets just succeed.
   await set('core.hooksPath', '.githooks')
   await set('filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f')
   await set('filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f')
@@ -187,7 +190,7 @@ export async function fetch(): Promise<void> {
   const remote = authedRemote()
   if (!remote) throw new Error('GIT_REMOTE is not configured')
   try {
-    await simpleGit({ baseDir: getWorkflowsDir() }).fetch(remote, config.GIT_WORK_BRANCH)
+    await gitClient(getWorkflowsDir()).fetch(remote, config.GIT_WORK_BRANCH)
     lastFetchOk = Date.now()
   } catch (err) {
     throw new Error(scrub(asMessage(err)))
