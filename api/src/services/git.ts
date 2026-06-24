@@ -127,17 +127,20 @@ async function installGitIntegration(g: SimpleGit): Promise<void> {
     } catch (err) {
       // Log only the config KEY — the VALUE contains '%f', and passing a string
       // with a '%' token to console.warn would consume the error as a format arg.
-      const key = args[0] === '--global' ? args[1] : args[0]
+      const key = args[0]?.startsWith('--') ? args[1] : args[0]
       console.warn(`[git] git config ${key} failed: ${scrub(asMessage(err))}`)
     }
   }
-  // core.hooksPath at a repo-relative path is refused by hardened git (Debian
-  // bookworm) unless safe.allowUnsafeHooksPath is enabled — and git only honors
-  // that from GLOBAL/system scope, never repo-local, so it must be set --global.
-  await set('--global', 'safe.allowUnsafeHooksPath', 'true')
+  // Hardened git (Debian bookworm) refuses to configure BOTH core.hooksPath and
+  // clean/smudge filters unless these "unsafe" opt-ins are enabled — and git only
+  // honors them from a TRUSTED scope (system/global, NEVER repo-local). The api
+  // container runs as root so --system (/etc/gitconfig) is reliable; --global
+  // covers a native/non-root run. Must precede the gated config below.
+  for (const key of ['safe.allowUnsafeHooksPath', 'safe.allowUnsafeFilter']) {
+    await set('--system', key, 'true')
+    await set('--global', key, 'true')
+  }
   await set('core.hooksPath', '.githooks')
-  // The serverUrl clean/smudge filter has no safe-hooks gate, so it applies even
-  // if the hooksPath line above was refused.
   await set('filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f')
   await set('filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f')
   // NOT `required`: a required filter that errors aborts EVERY git op (bricks
