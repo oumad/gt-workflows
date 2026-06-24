@@ -1,5 +1,0 @@
-#!/bin/sh
-# Ensure every workflow has a stable metadata.json id + dedupe filesystem copies,
-# staging the ids into this commit. (Sanitization of serverUrl is the cmserver
-# clean filter, configured separately.)
-exec node .githooks/wf-hooks.mjs precommit

@@ -1,4 +1,0 @@
-#!/bin/sh
-# After a checkout (branch switch / clone): ensure ids + dedupe. serverUrl
-# restoration is automatic (the cmserver smudge filter).
-exec node .githooks/wf-hooks.mjs postmerge

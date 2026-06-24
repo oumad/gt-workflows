@@ -1,4 +1,0 @@
-#!/bin/sh
-# After a pull/merge: ensure ids for newly-arrived workflows + dedupe. serverUrl
-# restoration is automatic (the cmserver smudge filter runs as files are written).
-exec node .githooks/wf-hooks.mjs postmerge

@@ -1,4 +1,0 @@
-#!/bin/sh
-# Local belt mirroring CI: refuse to push any workflow whose serverUrl isn't the
-# sanitized placeholder (i.e. the clean filter wasn't configured on this clone).
-exec node .githooks/validate-workflows.mjs .
