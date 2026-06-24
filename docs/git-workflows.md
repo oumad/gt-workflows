@@ -35,24 +35,26 @@ Off by default — set these on the **api** container (see `api/.env.example`):
 | `GIT_WORK_BRANCH` | Default `test`. Where agents/MCP and the app publish. |
 | `GIT_DEFAULT_BRANCH` | Default `main`. Promotion target; agents can't push here. |
 | `GIT_STAGING_BRANCH` | Optional, e.g. `preprod` (3-branch flow). |
-| `GLOBALENV` | The globalEnv server map as **inline JSON** (`{ "key": "url" \| ["url",…], "default": "…" }`). CM's own config — resolves `globalEnv.<key>` tokens to real URLs. The WS git repo holds workflows only, never this. |
+
+No serverUrl config on CM: the WS repo's smudge filter restores the real URL into
+the working tree, so CM reads it straight from `params.json`.
 
 The checkout must have the branches (`test`/`main`/`preprod`) created locally.
 `git` is in the api image.
 
 ## Repo setup (the WS repo owns it)
 
-ALL the git-side logic lives in the **WS repo**, so it works the same via CM, WS,
+ALL the serverUrl logic lives in the **WS repo**, so it works the same via CM, WS,
 or a plain `git` user. See [`workflow-studio/README.md`](../workflow-studio/README.md)
-for the one-time setup: the committed `.githooks/` (`server-urls.mjs` for the
-serverUrl tokenization, plus the `pre-commit` / `post-merge` / `post-checkout`
-hooks) and the per-clone activation (`git config core.hooksPath .githooks`).
+for the one-time setup: the committed `.githooks/server-urls.mjs` clean/smudge
+filter + `pre-commit` id hook, the `.gitattributes` (`params.json filter=cmserver`)
+and the `.gitignore` (`workflow-envmap.json`), plus the per-clone activation.
 
-**CM activates the hooks automatically** (`installGitIntegration` sets
-`core.hooksPath` at boot and before every git op) — that's the only git config CM
-touches. It adds no filters, no sanitize/restore, no rewriting of its own. A
-clone that skips activation commits real URLs unchanged, which the WS repo's CI
-guard catches.
+**CM activates the integration automatically** (`installGitIntegration` sets
+`core.hooksPath` **and** the `filter.cmserver.clean`/`.smudge` config at boot and
+before every git op). Without that filter config the hooks don't run — CM would
+commit real URLs and never restore them. A clone that skips activation commits
+real URLs unchanged, which the WS repo's CI guard catches.
 
 ## Branch model
 
@@ -67,12 +69,12 @@ in the app to pull. Publishing is squash + fast-forward-only; it never merges.
 - **Save** — writes the workflow's files locally (your working copy).
 - **Update** — pulls the latest. Conflict-free and recoverable: your changed
   workflows are snapshotted to History first, the tree is reset to the latest.
-  Server URLs ride along in `params.json` / the WS repo's `.globalenv.json`.
-  Never merges.
+  The smudge filter restores your real serverUrls from `workflow-envmap.json` as
+  the tree is rewritten. Never merges.
 - **Publish** — squashes your changes into one commit, fast-forward pushes. The
-  WS repo's pre-commit hook tokenizes any literal serverUrl (lifting the real URL
-  into `.globalenv.json`) as it commits, so no real URL ever reaches git. Refused
-  when you're behind — the banner shows **Update** (not Publish) in that case.
+  clean filter swaps every serverUrl to the localhost placeholder (recording the
+  real URL into `workflow-envmap.json`) as it commits, so no real URL ever reaches
+  git. Refused when you're behind — the banner shows **Update** (not Publish).
 - **Discard** — throw away all local changes (snapshotted to History first),
   back to the last commit. Doesn't pull.
 
@@ -82,26 +84,27 @@ prevented at **publish** (refused when behind), not by locking edits.
 
 ## Server URLs
 
-A workflow's `comfyui_config.serverUrl` is handled one of two ways:
+CM always reads, shows, and writes the **real URL** straight from
+`params.json` — the WS repo's smudge filter has already restored it into the
+working tree. There is no token/resolution layer in CM. Keeping the URL out of
+git is entirely the WS repo's clean/smudge filter:
 
-1. **A real URL, directly in `params.json`.** CM reads, shows, and writes it
-   as-is. The WS repo's pre-commit hook is what keeps it out of git (tokenizing
-   it on commit) — CM doesn't.
-2. **A `globalEnv.<key>` token in `params.json`** (set by the WS hooks). CM
-   resolves it to a real URL against the **`GLOBALENV`** env var (CM's own inline
-   JSON `key → url | url[]` map) for display and dispatch. An unresolved token →
-   falls back to the localhost placeholder (and the "N need a server" nudge
-   flags it).
+- git always stores the localhost placeholder;
+- your real URL lives in the gitignored `workflow-envmap.json`, keyed by the
+  workflow's `metadata.json` id;
+- **editing a serverUrl is not a publishable change** — the clean filter masks it,
+  so it never appears in `git diff`/status and CM's dirty count ignores it.
 
 Set a workflow's server in the editor's server picker: pick a registered server
-or type a URL. CM writes the real URL into `params.json`; the WS hooks handle the
-rest at commit time.
+or type a URL. CM writes the real URL into `params.json`; the filter records it
+into the envmap on the next git op. A workflow still on the placeholder (fresh
+clone) is flagged by the "N need a server" nudge.
 
 ## Repo-side guard (the non-CM path)
 
 Commits made straight to the repo by **other** clients (a user's clone, Claude
 editing the checkout) bypass CM. The guard for those lives in the **WS repo
 itself**: a GitHub Actions check that fails if any committed `serverUrl` is a
-real URL rather than a token/placeholder — i.e. the hooks weren't active on that
+real URL rather than the placeholder — i.e. the filter wasn't active on that
 clone. Make it a required check with branch protection on `main`/`preprod`. See
 [`workflow-studio/README.md`](../workflow-studio/README.md).

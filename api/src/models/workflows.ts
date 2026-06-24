@@ -42,8 +42,9 @@ export interface WorkflowSummary {
   path: string
   description: string | null
   category: string
-  /** Server URLs the workflow targets (globalEnv tokens expanded to real URLs).
-   *  For display, the editor, dispatch and server-matching. */
+  /** Real server URLs the workflow targets, from params.json (the WS smudge
+   *  filter restores them locally). For display, the editor, dispatch and
+   *  server-matching. */
   serverUrls: string[]
   icon: string | null
   iconBadge: NormalizedIconBadge | null

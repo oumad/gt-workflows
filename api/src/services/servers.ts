@@ -400,9 +400,7 @@ export async function scrapeServers(): Promise<ScrapeResult> {
             servers?: unknown
             serverIds?: unknown
           }
-          // Resolve globalEnv.<key> tokens to real URLs so a token-bound
-          // workflow still contributes its actual server here; literal URLs
-          // pass through unchanged.
+          // Real serverUrls from params.json (restored by the WS smudge filter).
           for (const url of comfyServerUrls(params as ParamsJson)) addService(url, 'workflow')
 
           // Legacy `params.servers` was a list of bare hostnames; we

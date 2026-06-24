@@ -23,7 +23,6 @@ import {
   listSnapshots,
   historyRoot,
 } from '../lib/workflowFs.js'
-import { loadGlobalEnv, resolveServerRef, isUnbound } from './globalEnv.js'
 import { notFound, badRequest, forbidden, conflict, internalError } from '../lib/httpError.js'
 import type {
   ParamsJson,
@@ -167,25 +166,32 @@ export function normalizeIconBadge(raw: ParamsJson['iconBadge']): NormalizedIcon
   }
 }
 
-/** The raw server references a workflow targets, exactly as stored in
- *  `comfyui_config.serverUrl` (one or a list): literal URLs and/or
- *  `globalEnv.<key>` binding tokens. Use this for the editor and any
- *  read→edit→write round-trip, so a binding token is never silently baked
- *  into its resolved URL. */
+/** The server URLs a workflow targets, exactly as stored in
+ *  `comfyui_config.serverUrl` (one or a list). These are real URLs: the WS
+ *  repo's smudge filter restores each env's real serverUrl into the working
+ *  tree on checkout, so CM reads them straight from params.json — no resolution.
+ *  `comfyServerUrls` is kept as an alias for dispatch/display call sites. */
 export function comfyServerRefs(params: ParamsJson): string[] {
   const raw = params.comfyui_config?.serverUrl
   const list = Array.isArray(raw) ? raw : raw != null ? [raw] : []
   return list.filter((u): u is string => typeof u === 'string' && u.trim() !== '')
 }
+export const comfyServerUrls = comfyServerRefs
 
-/** The real server URLs a workflow targets — `globalEnv.<key>` tokens resolved
- *  against the WS config (a pool key expands to several URLs); literal URLs
- *  pass through unchanged. Use for listing, dispatch, display and
- *  server-matching. An unresolved token falls back to default → localhost
- *  (resolveServerRef never throws). */
-export function comfyServerUrls(params: ParamsJson): string[] {
-  const map = loadGlobalEnv()
-  return comfyServerRefs(params).flatMap((ref) => resolveServerRef(ref, map))
+/** True when every URL is the loopback placeholder — i.e. no real server is set
+ *  (a fresh clone before the smudge filter has a real URL to restore). Drives
+ *  the "N workflows need a server" nudge. */
+export function isUnbound(urls: string[]): boolean {
+  if (urls.length === 0) return true
+  return urls.every((u) => {
+    let host: string
+    try {
+      host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `http://${u}`).hostname.toLowerCase()
+    } catch {
+      return false
+    }
+    return ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].includes(host)
+  })
 }
 
 /** Write a workflow's server list back to `comfyui_config.serverUrl` — a bare
@@ -199,21 +205,18 @@ export function setComfyServerUrls(params: ParamsJson, urls: string[]): void {
   delete params.serverIds
 }
 
-/** "N workflows need a server" nudge: workflows whose serverUrl still resolves
- *  ONLY to the localhost placeholder — i.e. on the unbound `127.0.0.1:8188`
- *  default (a fresh clone before binding), or referencing a `<globalEnv.key>`
- *  that WS config points at localhost. Workflows with no serverUrl field at all
- *  are skipped (templates, not runnable jobs). */
+/** "N workflows need a server" nudge: workflows whose serverUrl is still only the
+ *  localhost placeholder — a fresh clone before this env's real URL is set.
+ *  Workflows with no serverUrl field at all are skipped (templates). */
 export function serverNudge(): { needsServer: number } {
   const dir = getWorkflowsDir()
   if (!existsSync(dir)) return { needsServer: 0 }
   let needsServer = 0
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'script') continue
-    const params = readParams(join(dir, entry.name))
-    if (comfyServerRefs(params).length === 0) continue // no server field — skip
-    const resolved = comfyServerUrls(params) // expands <globalEnv.*> against WS config
-    if (resolved.length > 0 && isUnbound(resolved)) needsServer++
+    const urls = comfyServerRefs(readParams(join(dir, entry.name)))
+    if (urls.length === 0) continue // no server field — skip
+    if (isUnbound(urls)) needsServer++
   }
   return { needsServer }
 }

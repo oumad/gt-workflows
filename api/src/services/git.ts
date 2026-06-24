@@ -106,17 +106,24 @@ function scrub(msg: string): string {
   return t ? msg.split(t).join('***') : msg
 }
 
-/** Point git at the WS repo's committed hooks on THIS clone (idempotent):
- *  `core.hooksPath .githooks`, so pre-commit/post-merge/etc. fire for CM's git
- *  ops just as they would for a plain `git` user. ALL the serverUrl tokenization
- *  + id-dedupe logic lives in those committed scripts, not in CM. If the hooks
- *  are absent this no-ops. Best-effort: a config failure never aborts the git
- *  op. */
+/** Wire the WS repo's git integration on THIS clone (idempotent), so its hooks
+ *  actually run for CM's git ops just as for a plain `git` user:
+ *   - `core.hooksPath .githooks` → the pre-commit / post-merge id hooks fire.
+ *   - the `cmserver` clean/smudge filter → params.json serverUrls are swapped to
+ *     the localhost placeholder in git (clean) and restored from the gitignored
+ *     workflow-envmap.json on checkout (smudge). Without this, CM would commit
+ *     real URLs and never restore them — i.e. "CM ignores the WS hooks".
+ *  ALL the actual logic lives in `.githooks/server-urls.mjs` (committed to the WS
+ *  repo); CM only sets the local config that activates it. Best-effort: a config
+ *  failure never aborts the git op. */
 async function installGitIntegration(g: SimpleGit): Promise<void> {
   try {
     // Some hardened git builds (Debian bookworm) require this before hooksPath.
     try { await g.raw(['config', 'safe.allowUnsafeHooksPath', 'true']) } catch { /* older git */ }
     await g.raw(['config', 'core.hooksPath', '.githooks'])
+    await g.raw(['config', 'filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f'])
+    await g.raw(['config', 'filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f'])
+    await g.raw(['config', 'filter.cmserver.required', 'true'])
   } catch (err) {
     console.warn('[git] could not install git integration:', scrub(asMessage(err)))
   }
@@ -202,6 +209,19 @@ async function nameOnly(g: SimpleGit, args: string[]): Promise<string[]> {
     .filter(Boolean)
 }
 
+/** Workflow-subtree paths that differ from HEAD (tracked, content-level) plus
+ *  untracked files. Uses `git diff` — which runs the cmserver clean filter — so a
+ *  serverUrl-only edit is correctly NOT a change (porcelain `git status` would
+ *  false-positive it from its stat cache). */
+async function dirtyWorkflowPaths(g: SimpleGit, prefix: string): Promise<string[]> {
+  const tracked = underWorkflows(await nameOnly(g, ['diff', '--name-only', '-z', 'HEAD']), prefix)
+  const untracked = underWorkflows(
+    await nameOnly(g, ['ls-files', '--others', '--exclude-standard', '-z']),
+    prefix,
+  )
+  return [...new Set([...tracked, ...untracked])]
+}
+
 /** Top-level workflow folder for a workflow-relative path, or null for files
  *  directly in the workflows dir (workflows.json) and dot/script dirs. */
 function topFolder(p: string): string | null {
@@ -232,11 +252,10 @@ export async function status(): Promise<GitStatus> {
     const r = await repo()
     if (!r) return { ...s, error: NOT_A_REPO }
     const { g, prefix } = r
-    const st = await g.status()
-    s.branch = st.current ?? null
-    // Working-tree changes under the workflows subdir (incl. untracked). Assumes
-    // .history / temp files are gitignored — else they'd inflate this.
-    s.dirty = prefix ? st.files.filter((f) => f.path.startsWith(prefix)).length : st.files.length
+    s.branch = (await g.raw(['rev-parse', '--abbrev-ref', 'HEAD'])).trim() || null
+    // Content-level changes under the workflows subdir (incl. untracked).
+    // serverUrl-only edits don't count — the clean filter masks them.
+    s.dirty = (await dirtyWorkflowPaths(g, prefix)).length
 
     const fetched = await cachedFetch()
     if (!fetched.ok) return { ...s, error: fetched.error }
@@ -351,13 +370,8 @@ export async function publish(site = hostname()): Promise<PublishResult> {
   const { ahead, behind } = await aheadBehind(g)
   if (behind > 0) throw conflict(`You're ${behind} behind — Update first, then publish.`)
 
-  const tracked = underWorkflows(await nameOnly(g, ['diff', '--name-only', '-z', 'HEAD']), prefix)
-  const untracked = underWorkflows(
-    await nameOnly(g, ['ls-files', '--others', '--exclude-standard', '-z']),
-    prefix,
-  )
-  const changed = [...new Set([...tracked, ...untracked])]
-  // Nothing staged AND nothing already committed-ahead → genuinely nothing to do.
+  const changed = await dirtyWorkflowPaths(g, prefix)
+  // Nothing changed AND nothing already committed-ahead → genuinely nothing to do.
   if (changed.length === 0 && ahead === 0) return { ...res, nothingToPublish: true }
 
   if (changed.length > 0) {
@@ -427,13 +441,8 @@ export async function discard(): Promise<{
   await installGitIntegration(g) // ensure the repo's hooks are active for this op
 
   const dir = resolve(getWorkflowsDir())
-  const tracked = underWorkflows(await nameOnly(g, ['diff', '--name-only', '-z', 'HEAD']), prefix)
-  const untracked = underWorkflows(
-    await nameOnly(g, ['ls-files', '--others', '--exclude-standard', '-z']),
-    prefix,
-  )
   const folders = new Set<string>()
-  for (const p of [...tracked, ...untracked]) {
+  for (const p of await dirtyWorkflowPaths(g, prefix)) {
     const f = topFolder(p)
     if (f) folders.add(f)
   }
@@ -460,9 +469,7 @@ export async function switchBranch(branch: string): Promise<{ branch: string }> 
   const r = await repo()
   if (!r) throw badRequest(NOT_A_REPO)
   const { g, prefix } = r
-  const st = await g.status()
-  const dirty = prefix ? st.files.some((f) => f.path.startsWith(prefix)) : st.files.length > 0
-  if (dirty) {
+  if ((await dirtyWorkflowPaths(g, prefix)).length > 0) {
     throw conflict('You have unpublished changes — publish or discard them before switching.')
   }
   try {
