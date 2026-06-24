@@ -63,11 +63,11 @@ async function repo(): Promise<{ g: SimpleGit; prefix: string } | null> {
   try {
     if (!(await probe.checkIsRepo())) return null
     const root = (await probe.revparse(['--show-toplevel'])).trim()
-    // Guard: only operate on the DEDICATED workflows repo, identified by its
-    // committed filter script. WORKFLOWS_DIR may sit inside another repo (e.g.
-    // CM's own checkout when workflows/ isn't its own clone) — without this the
-    // toplevel would resolve to that parent and we'd stage/push the WRONG repo.
-    if (!existsSync(join(root, '.githooks', 'server-filter.mjs'))) return null
+    // Guard: only operate on the DEDICATED WS repo, identified by its committed
+    // hook script. WORKFLOWS_DIR may sit inside another repo (e.g. CM's own
+    // checkout) — without this the toplevel resolves to that parent and we'd
+    // stage/push the WRONG repo.
+    if (!existsSync(join(root, '.githooks', 'server-urls.mjs'))) return null
     _prefix = (await probe.revparse(['--show-prefix'])).trim() // '' or e.g. 'workflows/'
     _git = simpleGit({ baseDir: root })
     return { g: _git, prefix: _prefix }
@@ -119,8 +119,6 @@ function scrub(msg: string): string {
 async function installGitIntegration(g: SimpleGit): Promise<void> {
   try {
     await g.raw(['config', 'core.hooksPath', '.githooks'])
-    await g.raw(['config', 'filter.cmserver.clean', 'node .githooks/server-filter.mjs clean %f'])
-    await g.raw(['config', 'filter.cmserver.smudge', 'node .githooks/server-filter.mjs smudge %f'])
   } catch (err) {
     console.warn('[git] could not install git integration:', scrub(asMessage(err)))
   }
@@ -218,7 +216,7 @@ function topFolder(p: string): string | null {
 
 const NOT_A_REPO =
   'WORKFLOWS_DIR is not a configured workflows git repo — it must be its own ' +
-  'clone (separate from CM) with .githooks/server-filter.mjs installed'
+  'clone (separate from CM) with .githooks/server-urls.mjs present'
 
 /** Current git state for the banner. Resilient: any failure degrades to a
  *  populated-as-far-as-possible result with `error`, never throws. */

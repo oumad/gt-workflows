@@ -35,8 +35,6 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
   const [st, setSt] = useState<GitStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [block, setBlock] = useState<string | null>(null) // WS-config snippet, when shown
-
   const load = useCallback(
     () =>
       api
@@ -81,15 +79,6 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
   }
   function onDiscard() {
     if (window.confirm(DISCARD_CONFIRM)) void run('/api/git/discard')
-  }
-  async function toggleBlock() {
-    if (block) return setBlock(null)
-    try {
-      const b = await api.get<unknown>('/api/global-env/block')
-      setBlock(JSON.stringify(b, null, 2))
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Failed to load server config')
-    }
   }
   async function onSwitch(branch: string) {
     if (!st || branch === st.branch) return
@@ -186,14 +175,6 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
             </span>
           )
         )}
-        <button
-          className="btn btn-sm"
-          disabled={busy}
-          onClick={() => void toggleBlock()}
-          title="Show the workflowStudio.globalEnv block to put in Workflow Studio's config"
-        >
-          Server config
-        </button>
         {(st.dirty > 0 || st.ahead > 0) && (
           <button className="btn btn-sm" disabled={busy} onClick={onDiscard}>
             Discard
@@ -210,35 +191,6 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
           </button>
         )}
       </div>
-      {block && (
-        <div
-          style={{
-            border: '1px solid var(--line)',
-            borderRadius: 8,
-            background: 'var(--surface)',
-            padding: '8px 12px',
-          }}
-        >
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 600 }}>
-              Workflow Studio config — workflowStudio.globalEnv
-            </span>
-            <span className="spacer" style={{ flex: 1 }} />
-            <button
-              className="btn btn-sm"
-              onClick={() => void navigator.clipboard?.writeText(block)}
-            >
-              Copy
-            </button>
-          </div>
-          <pre
-            className="mono"
-            style={{ fontSize: 11, margin: 0, whiteSpace: 'pre-wrap', color: 'var(--ink-2)' }}
-          >
-            {block}
-          </pre>
-        </div>
-      )}
       {actionError && (
         <div
           style={{
