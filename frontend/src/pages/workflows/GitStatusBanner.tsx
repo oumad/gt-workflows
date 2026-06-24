@@ -122,20 +122,8 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
   }
 
   return (
-    <div className="col" style={{ gap: 6, marginBottom: 14 }}>
-      <div
-        className="row"
-        style={{
-          gap: 10,
-          alignItems: 'center',
-          padding: '8px 12px',
-          border: '1px solid var(--line)',
-          borderLeft: `3px solid ${tone}`,
-          borderRadius: 8,
-          background: 'var(--surface)',
-          fontSize: 12.5,
-        }}
-      >
+    <div className="git-bar" style={{ borderLeft: `3px solid ${tone}` }}>
+      <div className="git-bar-row">
         <Icon size={15} style={{ color: tone }} />
         <span style={{ fontWeight: 600 }}>{text}</span>
         {st.error && (
@@ -192,23 +180,12 @@ export function GitStatusBanner({ onChanged }: { onChanged?: () => void }) {
         )}
       </div>
       {actionError && (
-        <div
-          style={{
-            color: 'var(--bad)',
-            background: 'var(--bad-soft)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            fontSize: 12,
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          {actionError}
-        </div>
+        <div style={{ color: 'var(--bad)', fontSize: 12, whiteSpace: 'pre-wrap' }}>{actionError}</div>
       )}
       {st.needsServer > 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--warn)', paddingLeft: 2 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--warn)' }}>
           {st.needsServer} workflow{st.needsServer === 1 ? '' : 's'} need
-          {st.needsServer === 1 ? 's' : ''} a server — bind their servers in the workflow editor.
+          {st.needsServer === 1 ? 's' : ''} a server — set their URL in the workflow editor.
         </div>
       )}
     </div>

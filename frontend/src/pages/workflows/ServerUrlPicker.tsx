@@ -1,26 +1,17 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
-import { Plus, Link2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { api } from '../../lib/api'
 import type { Server } from '../../types'
-import {
-  normServerUrl,
-  serverLabel,
-  bindingToken,
-  bindingKeyOf,
-  type GlobalEnvMap,
-} from './workflowsHelpers'
+import { normServerUrl, serverLabel } from './workflowsHelpers'
 
 type ServerInsight = { serverId: string; serverName: string; totalJobs: number }
 
 /**
- * Server binding editor. The value is the list of raw refs a workflow targets
- * (params.json `comfyui_config.serverUrl`): each is either a `<globalEnv.key>`
- * binding expression or a literal URL. You can:
- *   - pick an existing globalEnv key/pool (writes the EXPRESSION, never the URL),
- *   - type a literal URL, or pick a registered server.
- * globalEnv keys are defined in Workflow Studio's config (operator-managed, read
- * only here) — CM never writes them. The real per-env URL of a literal binding
- * is kept out of git by the clean/smudge filter (stored in the envtable).
+ * Server picker. The value is the list of ComfyUI server URLs a workflow targets
+ * (params.json `comfyui_config.serverUrl`) — plain URLs, nothing else. Pick a
+ * registered server or type a URL. The WS repo's git hooks handle keeping these
+ * out of git (tokenizing via .globalenv.json on commit); CM only ever shows and
+ * writes the real URL.
  */
 export function ServerUrlPicker({
   value,
@@ -30,7 +21,7 @@ export function ServerUrlPicker({
   placeholder,
 }: {
   value: string[]
-  onChange: (refs: string[]) => void
+  onChange: (urls: string[]) => void
   servers: Server[]
   autoFocus?: boolean
   placeholder?: string
@@ -38,21 +29,11 @@ export function ServerUrlPicker({
   const [input, setInput] = useState('')
   const [focused, setFocused] = useState(false)
   const [leastUsedUrl, setLeastUsedUrl] = useState<string | null>(null)
-  const [globalEnv, setGlobalEnv] = useState<GlobalEnvMap>({})
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus()
   }, [autoFocus])
-
-  // Current globalEnv bindings (from WS config) — drives the key picker and the
-  // chip labels. Read-only: CM never writes this map.
-  useEffect(() => {
-    api
-      .get<GlobalEnvMap>('/api/global-env')
-      .then(setGlobalEnv)
-      .catch(() => {})
-  }, [])
 
   // Least-used registered server (by 30d job total) — a hint for picking.
   useEffect(() => {
@@ -67,13 +48,7 @@ export function ServerUrlPicker({
   }, [servers])
 
   const pickedUrls = new Set(value.map(normServerUrl))
-  const pickedKeys = new Set(value.map(bindingKeyOf).filter((k): k is string => !!k))
   const q = input.trim().toLowerCase()
-
-  const keyMatches = Object.keys(globalEnv)
-    .filter((k) => !pickedKeys.has(k))
-    .filter((k) => !q || k.toLowerCase().includes(q))
-    .sort()
 
   const serverMatches = servers
     .filter((s) => !pickedUrls.has(normServerUrl(s.url)))
@@ -87,84 +62,50 @@ export function ServerUrlPicker({
     !servers.some((s) => normServerUrl(s.url) === normServerUrl(typed)) &&
     !pickedUrls.has(normServerUrl(typed))
 
-  function addToken(key: string) {
-    if (!pickedKeys.has(key)) onChange([...value, bindingToken(key)])
-    setInput('')
-    inputRef.current?.focus()
-  }
-  function addLiteral(url: string) {
+  function addUrl(url: string) {
     const u = url.trim()
     if (u && !pickedUrls.has(normServerUrl(u))) onChange([...value, u])
     setInput('')
     inputRef.current?.focus()
   }
-  function remove(ref: string) {
-    onChange(value.filter((u) => u !== ref))
-  }
-
-  /** Chip label for a ref: bound key (with pool size) or literal server label. */
-  function refLabel(ref: string): string {
-    const key = bindingKeyOf(ref)
-    if (key == null) return serverLabel(ref, servers)
-    const v = globalEnv[key]
-    if (Array.isArray(v)) return `${key} · pool of ${v.length}`
-    if (typeof v === 'string') return key
-    return `${key} · unbound`
-  }
-  function refTitle(ref: string): string {
-    const key = bindingKeyOf(ref)
-    if (key == null) return ref
-    const v = globalEnv[key]
-    if (Array.isArray(v)) return `${bindingToken(key)} → ${v.join(', ')}`
-    if (typeof v === 'string') return `${bindingToken(key)} → ${v}`
-    return `${bindingToken(key)} → (not defined in WS config yet)`
+  function remove(url: string) {
+    onChange(value.filter((u) => u !== url))
   }
 
   return (
     <div className="col" style={{ gap: 6 }}>
-      {/* picked refs — tokens render with a link glyph + accent, literals plain */}
+      {/* picked URLs */}
       <div className="row" style={{ flexWrap: 'wrap', gap: 4, minHeight: 20 }}>
         {value.length === 0 && (
           <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>No servers assigned.</span>
         )}
-        {value.map((ref) => {
-          const isToken = bindingKeyOf(ref) != null
-          return (
-            <span
-              key={ref}
-              className="chip row"
+        {value.map((url) => (
+          <span
+            key={url}
+            className="chip row"
+            style={{ fontSize: 10.5, gap: 4, padding: '2px 4px 2px 8px' }}
+          >
+            <span className="mono" title={url}>
+              {serverLabel(url, servers)}
+            </span>
+            <button
+              type="button"
+              onClick={() => remove(url)}
+              title="Remove"
               style={{
-                fontSize: 10.5,
-                gap: 4,
-                padding: '2px 4px 2px 8px',
-                ...(isToken
-                  ? { background: 'var(--accent-soft)', color: 'var(--accent-ink)' }
-                  : {}),
+                border: 0,
+                background: 'transparent',
+                padding: 0,
+                cursor: 'pointer',
+                color: 'inherit',
+                lineHeight: 1,
+                fontSize: 13,
               }}
             >
-              {isToken && <Link2 size={10} />}
-              <span className="mono" title={refTitle(ref)}>
-                {refLabel(ref)}
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(ref)}
-                title="Remove"
-                style={{
-                  border: 0,
-                  background: 'transparent',
-                  padding: 0,
-                  cursor: 'pointer',
-                  color: 'inherit',
-                  lineHeight: 1,
-                  fontSize: 13,
-                }}
-              >
-                ×
-              </button>
-            </span>
-          )
-        })}
+              ×
+            </button>
+          </span>
+        ))}
       </div>
 
       {/* add input */}
@@ -177,20 +118,17 @@ export function ServerUrlPicker({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && typed) {
+          if (e.key === 'Enter' && typed && looksUrl) {
             e.preventDefault()
-            // Enter resolves to the single obvious action: existing key, then
-            // literal URL. (New globalEnv keys are defined in WS config, not here.)
-            if (typed in globalEnv) addToken(typed)
-            else if (looksUrl) addLiteral(typed)
+            addUrl(typed)
           }
         }}
-        placeholder={placeholder ?? 'Pick a binding/server or type a URL…'}
+        placeholder={placeholder ?? 'Pick a server or type a URL…'}
       />
 
       {/* suggestions — normal flow (not absolute) so a host with overflow:hidden,
           e.g. the workflow card, does not clip it */}
-      {focused && (keyMatches.length > 0 || serverMatches.length > 0 || showCustom) && (
+      {focused && (serverMatches.length > 0 || showCustom) && (
         <div
           style={{
             border: '1px solid var(--line)',
@@ -200,44 +138,14 @@ export function ServerUrlPicker({
             boxShadow: 'var(--shadow-lg)',
           }}
         >
-          {/* existing globalEnv bindings (from WS config) */}
-          {keyMatches.slice(0, 6).map((k) => {
-            const v = globalEnv[k]
-            const detail = Array.isArray(v)
-              ? `pool of ${v.length}`
-              : typeof v === 'string'
-                ? v
-                : 'unbound'
-            return (
-              <button
-                key={`k:${k}`}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  addToken(k)
-                }}
-                className="row"
-                style={dropdownRow}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <Link2 size={11} style={{ color: 'var(--accent-ink)' }} />
-                <span style={{ fontWeight: 600 }}>{k}</span>
-                <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10 }}>
-                  {detail}
-                </span>
-              </button>
-            )
-          })}
-
-          {/* registered servers — adds a literal URL */}
+          {/* registered servers */}
           {serverMatches.slice(0, 6).map((s) => (
             <button
               key={`s:${s.id}`}
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault()
-                addLiteral(s.url)
+                addUrl(s.url)
               }}
               className="row"
               style={dropdownRow}
@@ -250,12 +158,7 @@ export function ServerUrlPicker({
               </span>
               {normServerUrl(s.url) === leastUsedUrl && (
                 <span
-                  style={{
-                    marginLeft: 'auto',
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: 'var(--good)',
-                  }}
+                  style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: 'var(--good)' }}
                 >
                   least used
                 </span>
@@ -269,13 +172,13 @@ export function ServerUrlPicker({
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault()
-                addLiteral(typed)
+                addUrl(typed)
               }}
               className="row"
               style={{
                 ...dropdownRow,
                 color: 'var(--ink-3)',
-                borderTop: topBorder(keyMatches.length + serverMatches.length),
+                borderTop: serverMatches.length > 0 ? '1px solid var(--line-2)' : 'none',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -303,5 +206,3 @@ const dropdownRow: CSSProperties = {
   cursor: 'default',
   fontSize: 11.5,
 }
-
-const topBorder = (n: number) => (n > 0 ? '1px solid var(--line-2)' : 'none')

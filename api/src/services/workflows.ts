@@ -23,14 +23,7 @@ import {
   listSnapshots,
   historyRoot,
 } from '../lib/workflowFs.js'
-import {
-  loadGlobalEnv,
-  resolveServerRef,
-  serverRefKey,
-  isUnbound,
-  type GlobalEnvMap,
-} from './globalEnv.js'
-import { setEnvServerUrl, getEnvServerUrl } from './envtable.js'
+import { loadGlobalEnv, resolveServerRef, isUnbound } from './globalEnv.js'
 import { notFound, badRequest, forbidden, conflict, internalError } from '../lib/httpError.js'
 import type {
   ParamsJson,
@@ -89,7 +82,7 @@ export function writeParams(folderPath: string, params: ParamsJson): void {
 
 /** A workflow's stable UUID from its folder's `metadata.json`, or null if it has
  *  none yet. The id is committed to git, so the same workflow has one identity
- *  across every clone/env; the gitignored envtable keys each env's binding by it. */
+ *  across every clone/env. */
 export function readWorkflowUuid(folderPath: string): string | null {
   const p = join(folderPath, 'metadata.json')
   if (!existsSync(p)) return null
@@ -133,17 +126,14 @@ export function remintWorkflowUuid(folderPath: string): string {
 
 /** Ensure every workflow folder has a stable metadata.json uuid AND that no two
  *  share one — a filesystem-level duplicate (e.g. a copied folder) gets a fresh
- *  id so both stay independently configurable. Also captures any existing local
- *  serverUrl binding into the envtable (additive — never overwrites), so a
- *  pre-publish Update can't drop it. Mirrors the repo's pre-commit/post-merge
- *  hooks, for the running app: called at startup and after a pull. */
-export function reconcileWorkflowIds(): { minted: number; deduped: number; seeded: number } {
+ *  id so both stay independently configurable. Mirrors the repo's pre-commit /
+ *  post-merge hooks, for the running app: called at startup and after a pull. */
+export function reconcileWorkflowIds(): { minted: number; deduped: number } {
   const dir = getWorkflowsDir()
-  if (!existsSync(dir)) return { minted: 0, deduped: 0, seeded: 0 }
+  if (!existsSync(dir)) return { minted: 0, deduped: 0 }
   const seen = new Set<string>()
   let minted = 0
   let deduped = 0
-  let seeded = 0
   const names = readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'script')
     .map((e) => e.name)
@@ -160,18 +150,8 @@ export function reconcileWorkflowIds(): { minted: number; deduped: number; seede
       deduped++
     }
     seen.add(id)
-    // Seed the envtable from params when unbound there but params holds a real
-    // serverUrl (a literal or a <globalEnv.x> — not the loopback placeholder).
-    if (getEnvServerUrl(id) === undefined) {
-      const params = readParams(folder)
-      const serverUrl = params.comfyui_config?.serverUrl
-      if (serverUrl != null && !isUnbound(comfyServerRefs(params))) {
-        setEnvServerUrl(id, serverUrl)
-        seeded++
-      }
-    }
   }
-  return { minted, deduped, seeded }
+  return { minted, deduped }
 }
 
 /** Normalize a `params.iconBadge` blob into the trimmed shape the UI uses.
@@ -219,34 +199,6 @@ export function setComfyServerUrls(params: ParamsJson, urls: string[]): void {
   delete params.serverIds
 }
 
-/** Persist a workflow's server binding to the gitignored envtable (keyed by its
- *  UUID), verbatim. The binding is env-local, so it must live in the envtable —
- *  on Update `reset --hard` re-smudges serverUrl from there, NOT from params
- *  (which git holds at the localhost placeholder). Call after setComfyServerUrls
- *  has written the final value into `params`. */
-function recordServerBinding(folderPath: string, params: ParamsJson): void {
-  const serverUrl = params.comfyui_config?.serverUrl
-  if (serverUrl == null) return
-  setEnvServerUrl(ensureWorkflowUuid(folderPath), serverUrl)
-}
-
-/** Distinct `globalEnv.<key>` keys referenced across every workflow's raw
- *  server refs. Drives the migration preview and the additive sync-reconcile. */
-export function referencedGlobalEnvKeys(): string[] {
-  const dir = getWorkflowsDir()
-  const keys = new Set<string>()
-  if (existsSync(dir)) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'script') continue
-      for (const ref of comfyServerRefs(readParams(join(dir, entry.name)))) {
-        const key = serverRefKey(ref)
-        if (key != null) keys.add(key)
-      }
-    }
-  }
-  return [...keys].sort()
-}
-
 /** "N workflows need a server" nudge: workflows whose serverUrl still resolves
  *  ONLY to the localhost placeholder — i.e. on the unbound `127.0.0.1:8188`
  *  default (a fresh clone before binding), or referencing a `<globalEnv.key>`
@@ -266,24 +218,10 @@ export function serverNudge(): { needsServer: number } {
   return { needsServer }
 }
 
-/** The complete `workflowStudio.globalEnv` block Workflow Studio should hold:
- *  every key referenced by a workflow (current value preserved, or the
- *  localhost placeholder if not bound yet) plus a `default` server. This is the
- *  "what to put in WS config" view — an operator can copy it back if the WS
- *  config is reset, and it shows which keys still point at localhost. */
-export function globalEnvBlock(): { workflowStudio: { globalEnv: GlobalEnvMap } } {
-  const map = loadGlobalEnv()
-  const placeholder = 'http://127.0.0.1:8188'
-  const globalEnv: GlobalEnvMap = { default: map['default'] ?? placeholder }
-  for (const key of referencedGlobalEnvKeys()) globalEnv[key] = map[key] ?? placeholder
-  return { workflowStudio: { globalEnv } }
-}
-
 /** Validate-on-publish guard: reject invalid JSON in any changed `.json` file.
- *  The serverUrl secrets guard is no longer here — the clean filter strips every
- *  serverUrl to the localhost placeholder as it stages (so the working tree can
- *  legitimately hold real URLs), and the repo-side CI check is the backstop.
- *  Returns a list of human-readable violations; empty means OK to publish. */
+ *  Keeping real serverUrls out of git is the WS repo's job (its pre-commit hook
+ *  tokenizes them via .globalenv.json), not CM's. Returns a list of
+ *  human-readable violations; empty means OK to publish. */
 export function validateForPublish(changedPaths: string[]): string[] {
   const dir = resolve(getWorkflowsDir())
   const violations: string[] = []
@@ -326,7 +264,6 @@ export function readWorkflows(): WorkflowItem[] {
         description: params.description ?? null,
         category,
         serverUrls: comfyServerUrls(params),
-        serverRefs: comfyServerRefs(params),
         icon: params.icon ?? null,
         iconBadge: normalizeIconBadge(params.iconBadge),
         tags: params.tags ?? [],
@@ -450,18 +387,15 @@ export interface ExportZip {
   filename: string
 }
 
-/** Embedded in every export so whoever imports the workflows elsewhere
- *  understands the binding model (the export carries TOKENS, never real URLs). */
+/** Embedded in every export so whoever imports the workflows understands the
+ *  server model. */
 const EXPORT_README =
   '# Workflows export\n\n' +
-  "Each workflow's `comfyui_config.serverUrl` is the local placeholder\n" +
-  '`http://127.0.0.1:8188`, NOT a real server URL. Real, environment-specific\n' +
-  'URLs are never exported (nor committed to git) — they live in the importing\n' +
-  "env's gitignored `workflow-envtable.json`.\n\n" +
-  'On import, bind each workflow to a server via the editor\'s server picker:\n' +
-  'a literal URL, or a `<globalEnv.key>` expression that resolves against\n' +
-  "Workflow Studio's per-env `workflowStudio.globalEnv` config. Until bound, a\n" +
-  'workflow stays on the `127.0.0.1:8188` placeholder.\n'
+  "Each workflow's `comfyui_config.serverUrl` is handled one of two ways:\n\n" +
+  '1. A real server URL, set directly in `params.json`.\n' +
+  '2. A `globalEnv.<key>` token that the importing app resolves against its own\n' +
+  '   per-env globalEnv map (`key -> url | url[]`) when configured.\n\n' +
+  'Set the server in the editor after importing.\n'
 
 export function buildExportZip(id: string): ExportZip {
   const { folderAbs, folderName } = resolveFolder(id)
@@ -526,7 +460,7 @@ export function duplicateWorkflow(
 
   cpSync(join(dir, entry.name), destPath, { recursive: true })
   // The copy carries the source's metadata.json id — give it a fresh one so the
-  // two are independent (its env-local binding is keyed by id in the envtable).
+  // two are independent.
   remintWorkflowUuid(destPath)
   if (body.label) {
     const destParams = readParams(destPath)
@@ -564,7 +498,6 @@ export function createWorkflow(input: CreateWorkflowInput): WorkflowSummary {
 
   writeParams(folderPath, params)
   ensureWorkflowUuid(folderPath) // every workflow has a stable metadata.json id
-  if (input.serverUrls?.length) recordServerBinding(folderPath, params)
 
   const id = slugify(input.folderName)
   const item = readWorkflows().find((w) => w.id === id)
@@ -588,7 +521,6 @@ export function patchWorkflow(id: string, body: PatchWorkflowInput): WorkflowSum
   if ('order' in body) params.order = body.order
 
   writeParams(folderPath, params)
-  if ('serverUrls' in body) recordServerBinding(folderPath, params)
 
   // Snapshot only when the user made a meaningful edit. Drag-reorder and
   // drag-between-categories fire dozens of PATCHes that change only `order`

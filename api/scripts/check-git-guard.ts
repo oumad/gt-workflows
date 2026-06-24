@@ -1,9 +1,9 @@
 /**
  * Safety check for the workflows-repo guard in services/git.ts. When
- * WORKFLOWS_DIR sits inside a git repo that is NOT the dedicated workflows repo
- * (e.g. CM's own checkout — no .githooks/server-filter.mjs at the root), CM must
- * refuse every git op and never configure the clean/smudge filter on that
- * parent repo. Run (DB/Redis/JWT dummies required by config):
+ * WORKFLOWS_DIR sits inside a git repo that is NOT the dedicated WS repo
+ * (e.g. CM's own checkout — no .githooks/server-urls.mjs at the root), CM must
+ * refuse every git op and never point core.hooksPath at that parent repo. Run
+ * (DB/Redis/JWT dummies required by config):
  *   DATABASE_URL=x REDIS_URL=x JWT_SECRET=<32+ch> npx tsx scripts/check-git-guard.ts
  */
 import assert from 'node:assert/strict'
@@ -38,7 +38,7 @@ try {
     `status should refuse the parent repo, got: ${JSON.stringify(st)}`,
   )
 
-  // publish() must throw before ever configuring the filter
+  // publish() must throw before ever touching the parent repo's config
   await assert.rejects(
     () => git.publish(),
     (e: Error) => /not a configured workflows git repo/i.test(e.message),
@@ -46,16 +46,16 @@ try {
   )
 
   // CRITICAL: the parent repo's git config was never touched
-  let cmFilter = ''
+  let hooksPath = ''
   try {
-    cmFilter = execFileSync('git', ['config', '--get', 'filter.cmserver.clean'], {
+    hooksPath = execFileSync('git', ['config', '--get', 'core.hooksPath'], {
       cwd: parent,
       encoding: 'utf-8',
     }).trim()
   } catch {
-    cmFilter = '' // unset → git config exits non-zero
+    hooksPath = '' // unset → git config exits non-zero
   }
-  assert.equal(cmFilter, '', 'filter.cmserver must NOT be configured on the CM-like parent repo')
+  assert.equal(hooksPath, '', 'core.hooksPath must NOT be configured on the CM-like parent repo')
 
   console.log('check-git-guard: OK')
 } finally {

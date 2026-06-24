@@ -72,9 +72,7 @@ function valuesFrom(wf: Workflow): Values {
     devMode: wf.devMode,
     iconBadge: 'none',
     icon: wf.icon ?? 'workflow',
-    // Edit the RAW refs (globalEnv tokens / literal URLs), not the resolved
-    // URLs — otherwise saving would bake a binding token into its resolved URL.
-    serverUrls: wf.serverRefs,
+    serverUrls: wf.serverUrls,
   }
 }
 

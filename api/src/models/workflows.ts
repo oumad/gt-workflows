@@ -42,12 +42,9 @@ export interface WorkflowSummary {
   path: string
   description: string | null
   category: string
-  /** Resolved real server URLs (globalEnv tokens expanded). For display,
-   *  dispatch and server-matching. */
+  /** Server URLs the workflow targets (globalEnv tokens expanded to real URLs).
+   *  For display, the editor, dispatch and server-matching. */
   serverUrls: string[]
-  /** Raw server refs as stored — literal URLs and/or `globalEnv.<key>` tokens.
-   *  For the editor and round-trip, so a binding token isn't baked into a URL. */
-  serverRefs: string[]
   icon: string | null
   iconBadge: NormalizedIconBadge | null
   tags: string[]

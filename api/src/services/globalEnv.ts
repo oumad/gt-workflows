@@ -1,16 +1,12 @@
 /**
- * Resolve a workflow's server reference(s) to real URL(s). READ-ONLY against
- * Workflow Studio's per-env config — CM never writes WS config (the per-env
- * server binding it owns lives in the gitignored workflow-envtable.json; WS
- * config is reference data the operator maintains).
+ * Resolve a workflow's server reference(s) to real URL(s).
  *
  * A workflow stores `comfyui_config.serverUrl` as either a literal URL or a
- * `<globalEnv.key>` expression — a stable, env-independent binding identity. The
- * real URL for each key comes from WS's config file (WS_CONFIG_PATH →
- * `workflowStudio.globalEnv`), a FLAT map `key -> url | url[]`. We load + cache
- * that map and reload it whenever the file's mtime changes.
+ * `<globalEnv.key>` token — a stable, env-independent binding identity. The real
+ * URL for each key comes from CM's own `GLOBALENV` env var (inline JSON), a FLAT
+ * map `key -> url | url[]`. The WS git repo holds workflows only, never this
+ * config — so CM never reads anything out of the WS checkout to resolve.
  */
-import { statSync, readFileSync } from 'node:fs'
 import { config } from '../config/index.js'
 
 /** Key used as the no-match fallback (per the design). */
@@ -20,47 +16,38 @@ const PLACEHOLDER = 'http://127.0.0.1:8188'
 
 export type GlobalEnvMap = Record<string, string | string[]>
 
-// ponytail: single-process mtime cache. If WS config is ever shared by many
-// readers needing sub-second freshness, switch to fs.watch.
-let cache: { mtimeMs: number; map: GlobalEnvMap } | null = null
+// The env var is fixed for the process lifetime, so parse once.
+let cache: GlobalEnvMap | null = null
 
-/** Load + cache `workflowStudio.globalEnv` (flat key -> url | url[]), reloading
- *  on mtime change. Returns `{}` when WS_CONFIG_PATH is unset or the file is
- *  missing / unreadable / malformed — so literal-URL workflows resolve
- *  identically whether or not a WS config exists (feature stays dark until the
- *  path is configured). */
+/** The globalEnv map from the `GLOBALENV` env var (inline JSON) — a flat
+ *  `{ key: url | url[] }` object. Returns `{}` when unset / malformed — so
+ *  literal-URL workflows resolve identically whether or not it's configured
+ *  (feature stays dark until set). */
 export function loadGlobalEnv(): GlobalEnvMap {
-  const path = config.WS_CONFIG_PATH
-  if (!path) return {}
-  let mtimeMs: number
+  if (cache) return cache
+  cache = parseGlobalEnv(config.GLOBALENV)
+  return cache
+}
+
+function parseGlobalEnv(raw: string | undefined): GlobalEnvMap {
+  if (!raw || !raw.trim()) return {}
+  let obj: unknown
   try {
-    mtimeMs = statSync(path).mtimeMs
+    obj = JSON.parse(raw)
   } catch {
-    cache = null
     return {}
   }
-  if (cache && cache.mtimeMs === mtimeMs) return cache.map
-  try {
-    const json = JSON.parse(readFileSync(path, 'utf-8')) as {
-      workflowStudio?: { globalEnv?: unknown }
-    }
-    const raw = json.workflowStudio?.globalEnv
-    const map: GlobalEnvMap = {}
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        if (typeof v === 'string' && v.trim() !== '') map[k] = v
-        else if (Array.isArray(v)) {
-          const urls = v.filter((u): u is string => typeof u === 'string' && u.trim() !== '')
-          if (urls.length) map[k] = urls
-        }
+  const map: GlobalEnvMap = {}
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim() !== '') map[k] = v
+      else if (Array.isArray(v)) {
+        const urls = v.filter((u): u is string => typeof u === 'string' && u.trim() !== '')
+        if (urls.length) map[k] = urls
       }
     }
-    cache = { mtimeMs, map }
-    return map
-  } catch {
-    cache = null
-    return {}
   }
+  return map
 }
 
 /** The binding key for a `<globalEnv.key>` expression (also accepts the legacy

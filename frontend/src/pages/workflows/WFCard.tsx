@@ -522,8 +522,7 @@ export function WFCard({
                     style={{ fontSize: 11 }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      // Raw refs so a globalEnv token round-trips unresolved.
-                      setServerDraft(wf.serverRefs)
+                      setServerDraft(wf.serverUrls)
                       setEditingField('servers')
                     }}
                   >

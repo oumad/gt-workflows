@@ -2,7 +2,9 @@
 .body {
   padding: 24px 32px 80px;
   flex: 1;
-  overflow-y: auto;
+  /* Clip horizontal so full-bleed sticky headers (.section-head) don't trip a
+   * horizontal scrollbar; vertical scrolls. */
+  overflow: hidden auto;
 }
 
 .row {

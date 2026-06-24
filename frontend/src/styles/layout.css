@@ -273,12 +273,15 @@
 .section-head {
   position: sticky;
   top: 0;
-  z-index: 4;
-  width: 100%;
+  z-index: 6;
+  /* Full-bleed across the body's 32px side padding so cards scrolling underneath
+   * never peek past the header's edges. */
+  width: calc(100% + 64px);
+  margin: 0 -32px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 2px;
+  padding: 10px 32px;
   background: var(--bg);
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -349,4 +352,23 @@
 .tab.active .pill {
   background: var(--accent-soft);
   color: var(--accent-ink);
+}
+
+/* ─── Git status bar ────────────────────────────
+   Slim full-width strip under the tabs. Sits in .main (outside the scrolling
+   .body) so it stays pinned while the list scrolls. */
+.git-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+  font-size: 12.5px;
+}
+.git-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }

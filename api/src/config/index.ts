@@ -62,9 +62,10 @@ const envSchema = z.object({
   // behaviour) and none of the git vars below are required — lets the git
   // phases land dark. See the git-workflows-design note.
   GIT_WORKFLOWS_ENABLED: bool.default(false),
-  // Path to Workflow Studio's config file (holds workflowStudio.globalEnv).
-  // External to this repo, per-env.
-  WS_CONFIG_PATH: z.string().optional(),
+  // globalEnv server map as inline JSON — resolves `globalEnv.<key>` tokens in a
+  // workflow's serverUrl to a real URL. A flat `{ key: url | url[] }` object.
+  // This is CM's OWN config: the WS git repo holds workflows only, never config.
+  GLOBALENV: z.string().optional(),
   // Scoped push token — injected into GIT_REMOTE at runtime, never persisted
   // to .git/config. One token per scope (per the design).
   GIT_TOKEN: z.string().optional(),

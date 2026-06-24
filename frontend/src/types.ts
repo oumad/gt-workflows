@@ -30,13 +30,9 @@ export type Workflow = {
   path: string
   description: string | null
   category: string
-  /** Resolved real ComfyUI server URLs (`<globalEnv.key>` expressions expanded
-   *  against the WS config). For display, matching and dispatch. */
+  /** ComfyUI server URLs the workflow targets (any `<globalEnv.key>` tokens in
+   *  params.json expanded to real URLs). For display, the editor and dispatch. */
   serverUrls: string[]
-  /** Raw server refs as stored in params.json `comfyui_config.serverUrl` —
-   *  literal URLs and/or `<globalEnv.key>` expressions. For the editor, so a
-   *  binding round-trips unresolved instead of being baked into a URL. */
-  serverRefs: string[]
   icon: string | null
   iconBadge: WorkflowIconBadge | null
   tags: string[]

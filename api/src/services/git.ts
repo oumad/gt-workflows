@@ -5,13 +5,13 @@
  * and scope add/clean to the workflows subtree so CM never touches the repo's
  * other files (CI config, README, …).
  *
- * Per-env serverUrls are kept out of git by a clean/smudge filter (see
- * .githooks/server-filter.mjs): `git add` strips each workflow's serverUrl to
- * the localhost placeholder (recording the real value to the gitignored
- * workflow-envtable.json), checkout/reset restores it. So `git status` stays
- * clean for a bound workflow and CM's update/publish don't need any
- * serverUrl-rewriting of their own — they just configure the filter and let
- * git apply it.
+ * Keeping real serverUrls out of git is entirely the WS repo's job, via its own
+ * committed hooks (.githooks/server-urls.mjs): pre-commit rewrites a literal
+ * serverUrl in params.json to a `globalEnv.<key>` token and lifts the real URL
+ * into the gitignored `.globalenv.json`. CM doesn't sanitize anything — it reads
+ * params.json as-is and resolves any `globalEnv.<key>` token against the WS
+ * config for display/dispatch (see services/globalEnv.ts). CM only activates the
+ * hooks on this clone (core.hooksPath); it runs plain git otherwise.
  *
  * Operations: status, update (snapshot + reset, never a merge), discard,
  * squash-publish (ff-only, refused when behind), branch switch. The GitHub PAT
@@ -106,18 +106,16 @@ function scrub(msg: string): string {
   return t ? msg.split(t).join('***') : msg
 }
 
-/** Initialize the workflows repo's git integration on THIS clone (idempotent):
- *  point git at the committed hooks (`core.hooksPath .githooks`) and wire the
- *  serverUrl clean/smudge filter. ALL the sanitize / restore / id-stability /
- *  dedupe logic lives in those committed scripts (`.githooks/*`), so it runs for
- *  every client — CM, WS, a plain `git pull` — not just CM; CM only sets the
- *  LOCAL config that activates them (plain `config` sets, not `--add`, so
- *  repeated calls don't accumulate). Run before any git op so commits/pulls
- *  trigger sanitization + restoration. If the scripts are absent the integration
- *  no-ops and the repo-side CI guard catches any real URL that reaches a commit.
- *  Best-effort: a config failure never aborts the git op. */
+/** Point git at the WS repo's committed hooks on THIS clone (idempotent):
+ *  `core.hooksPath .githooks`, so pre-commit/post-merge/etc. fire for CM's git
+ *  ops just as they would for a plain `git` user. ALL the serverUrl tokenization
+ *  + id-dedupe logic lives in those committed scripts, not in CM. If the hooks
+ *  are absent this no-ops. Best-effort: a config failure never aborts the git
+ *  op. */
 async function installGitIntegration(g: SimpleGit): Promise<void> {
   try {
+    // Some hardened git builds (Debian bookworm) require this before hooksPath.
+    try { await g.raw(['config', 'safe.allowUnsafeHooksPath', 'true']) } catch { /* older git */ }
     await g.raw(['config', 'core.hooksPath', '.githooks'])
   } catch (err) {
     console.warn('[git] could not install git integration:', scrub(asMessage(err)))
@@ -129,11 +127,10 @@ function asMessage(err: unknown): string {
 }
 
 /** Boot init for the git-workflows feature (idempotent): give every workflow a
- *  stable, unique metadata.json id, then install the repo's git integration
- *  (hooks + filter) on this clone. No-op when the feature is off; the integration
- *  half also no-ops when WORKFLOWS_DIR isn't the configured workflows repo (the
- *  repo() guard refuses a non-workflows parent such as CM's own checkout).
- *  Best-effort: a failure here must never block startup. */
+ *  stable, unique metadata.json id, then point this clone at the repo's hooks.
+ *  No-op when the feature is off; the hooks half also no-ops when WORKFLOWS_DIR
+ *  isn't the WS repo (the repo() guard refuses a non-workflows parent such as
+ *  CM's own checkout). Best-effort: a failure here must never block startup. */
 export async function initWorkflowsGit(): Promise<void> {
   if (!config.GIT_WORKFLOWS_ENABLED) return
   try {
@@ -264,11 +261,9 @@ export interface UpdateResult {
 /**
  * Conflict-free update. Fetches; if not behind, no-op. Otherwise snapshots every
  * locally-changed workflow to `.history` (mandatory recoverability) and resets
- * the branch to the fetched commit. No git merge, ever. As the working tree is
- * rewritten the smudge filter re-applies each workflow's env-local serverUrl
- * from the gitignored envtable, so local server bindings survive the update —
- * only workflow CONTENT is taken from the remote (prior content stays in
- * `.history`).
+ * the branch to the fetched commit. No git merge, ever — workflow CONTENT is
+ * taken from the remote (prior content stays in `.history`). Server bindings
+ * ride along in params.json / `.globalenv.json`, both managed by the WS repo.
  */
 export async function update(): Promise<UpdateResult> {
   const res: UpdateResult = {
@@ -281,7 +276,7 @@ export async function update(): Promise<UpdateResult> {
   const r = await repo()
   if (!r) return { ...res, error: NOT_A_REPO }
   const { g, prefix } = r
-  await installGitIntegration(g) // so the reset below re-smudges serverUrls
+  await installGitIntegration(g) // ensure the repo's hooks are active for this op
 
   await fetch() // fresh, not cached
   const { behind } = await aheadBehind(g)
@@ -314,13 +309,12 @@ export async function update(): Promise<UpdateResult> {
   }
 
   // Discard-all to the fetched commit (whole repo — CM only edits the workflows
-  // subtree, the rest tracks the remote). The smudge filter restores serverUrls.
+  // subtree, the rest tracks the remote).
   await g.raw(['reset', '--hard', 'FETCH_HEAD'])
 
   // Refresh ids: a CM update is fetch+reset (not a real merge/checkout), so the
   // repo's post-merge hook doesn't fire — ensure newly-pulled workflows have
-  // stable, unique ids ourselves (tolerates orphaned envtable entries for
-  // workflows the pull deleted: it only scans folders that exist).
+  // stable, unique ids ourselves (only scans folders that exist).
   try {
     reconcileWorkflowIds()
   } catch (err) {
@@ -338,10 +332,9 @@ export interface PublishResult {
 }
 
 /**
- * Squash-publish. Refuses if behind (never merges — Update first). Ensures each
- * changed workflow has a committed id, stages the workflows subtree into ONE
- * commit — the clean filter strips every serverUrl to the localhost placeholder
- * (recording the real value to the gitignored envtable) as it stages — and
+ * Squash-publish. Refuses if behind (never merges — Update first). Stages the
+ * workflows subtree into ONE commit — the repo's pre-commit hook tokenizes any
+ * literal serverUrl into `.globalenv.json` and dedupes ids as it commits — and
  * fast-forward-only pushes. A non-ff rejection means someone published first →
  * surfaced as a conflict telling the user to Update.
  */
@@ -351,7 +344,7 @@ export async function publish(site = hostname()): Promise<PublishResult> {
   const r = await repo()
   if (!r) throw badRequest(NOT_A_REPO)
   const { g, prefix } = r
-  await installGitIntegration(g) // so `git add` below strips serverUrls
+  await installGitIntegration(g) // ensure the repo's pre-commit hook fires
 
   // Refuse when behind — never merge; the user must Update first.
   await fetch()
@@ -368,15 +361,14 @@ export async function publish(site = hostname()): Promise<PublishResult> {
   if (changed.length === 0 && ahead === 0) return { ...res, nothingToPublish: true }
 
   if (changed.length > 0) {
-    // Validate what's about to be committed (JSON validity; the serverUrl
-    // secrets guard is the clean filter + the repo-side CI check).
+    // Validate what's about to be committed (JSON validity; keeping serverUrls
+    // out of git is the repo's pre-commit hook + the repo-side CI check).
     const violations = validateForPublish(changed)
     if (violations.length) throw badRequest('Cannot publish:\n' + violations.join('\n'))
 
     // Stage the workflows subtree only (not the repo's other files) into one
-    // commit. The repo's git hooks do the rest: the clean filter strips each
-    // serverUrl to the placeholder, the pre-commit hook ensures + dedupes the
-    // metadata.json ids (committer identity passed inline, not persisted).
+    // commit. The repo's pre-commit hook does the rest: tokenizes serverUrls and
+    // dedupes metadata.json ids (committer identity passed inline, not persisted).
     await g.add(prefix ? ['-A', '--', prefix] : ['-A'])
     const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
     await g.raw([
@@ -417,8 +409,6 @@ export async function publish(site = hostname()): Promise<PublishResult> {
  * Discard ALL local changes — snapshot every locally-changed workflow to
  * `.history` first (recoverable), then `reset --hard HEAD` + a `clean` scoped to
  * the workflows subtree, back to the last commit. Does NOT pull (use update).
- * The smudge filter re-applies env-local serverUrls as the reset rewrites the
- * working tree, so discarding content edits never drops a server binding.
  */
 export async function discard(): Promise<{
   enabled: boolean
@@ -434,7 +424,7 @@ export async function discard(): Promise<{
   const r = await repo()
   if (!r) throw badRequest(NOT_A_REPO)
   const { g, prefix } = r
-  await installGitIntegration(g) // so the reset below re-smudges serverUrls
+  await installGitIntegration(g) // ensure the repo's hooks are active for this op
 
   const dir = resolve(getWorkflowsDir())
   const tracked = underWorkflows(await nameOnly(g, ['diff', '--name-only', '-z', 'HEAD']), prefix)

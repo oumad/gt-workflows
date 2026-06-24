@@ -356,8 +356,8 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
         active={tab}
         onChange={setTab}
       />
+      <GitStatusBanner onChanged={reload} />
       <div className="body">
-        <GitStatusBanner onChanged={reload} />
         {tab === 'all' && (
           <>
             <WorkflowsToolbar

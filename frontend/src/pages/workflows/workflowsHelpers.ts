@@ -102,22 +102,10 @@ export const compareCategories = (a: string, b: string) => {
   return a.localeCompare(b)
 }
 
-/* ─── Server URLs & bindings ────────────────────────────────── */
+/* ─── Server URLs ───────────────────────────────────────────── */
 
 /** Normalize a server URL for comparison — lowercased, trailing slash stripped. */
 export const normServerUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '')
-
-/** A workflow server ref is either a literal URL or a `<globalEnv.key>` binding
- *  expression. These mirror the backend's serverRefKey. The bracketed form is
- *  canonical; the bare `globalEnv.key` form is still parsed for pre-rework data. */
-export type GlobalEnvMap = Record<string, string | string[]>
-/** Build the canonical binding expression written into params for a key. */
-export const bindingToken = (key: string) => `<globalEnv.${key}>`
-export const bindingKeyOf = (ref: string): string | null => {
-  const m =
-    /^<globalEnv\.([A-Za-z0-9_-]+)>$/.exec(ref) ?? /^globalEnv\.([A-Za-z0-9_-]+)$/.exec(ref)
-  return m ? m[1]! : null
-}
 
 /** Friendly label for a workflow's server URL, formatted as
  *  `<server_name>:<port>` where:
