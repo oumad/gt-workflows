@@ -125,7 +125,10 @@ async function installGitIntegration(g: SimpleGit): Promise<void> {
     try {
       await g.raw(['config', ...args])
     } catch (err) {
-      console.warn(`[git] config ${args.join(' ')} failed:`, scrub(asMessage(err)))
+      // Log only the config KEY — the VALUE contains '%f', and passing a string
+      // with a '%' token to console.warn would consume the error as a format arg.
+      const key = args[0] === '--global' ? args[1] : args[0]
+      console.warn(`[git] git config ${key} failed: ${scrub(asMessage(err))}`)
     }
   }
   // core.hooksPath at a repo-relative path is refused by hardened git (Debian
@@ -137,7 +140,10 @@ async function installGitIntegration(g: SimpleGit): Promise<void> {
   // if the hooksPath line above was refused.
   await set('filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f')
   await set('filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f')
-  await set('filter.cmserver.required', 'true')
+  // NOT `required`: a required filter that errors aborts EVERY git op (bricks
+  // status/publish). The filter is written to never fail; set false to recover
+  // any clone a previous build left with required=true.
+  await set('filter.cmserver.required', 'false')
 }
 
 function asMessage(err: unknown): string {
