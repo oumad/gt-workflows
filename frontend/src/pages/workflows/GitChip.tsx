@@ -13,6 +13,11 @@ type GitStatus = {
 }
 
 const POLL_MS = 60_000 // matches the server-side fetch cache
+const RETRY_MS = 5_000 // before the first success (status fetch is slow / may fail)
+
+// Last status, cached at module scope so the chip shows instantly on remount
+// (navigating back to Workflows) instead of blinking out while it refetches.
+let cached: GitStatus | null = null
 
 const UPDATE_CONFIRM =
   'Update brings in the latest version. Your current local changes are saved in ' +
@@ -28,25 +33,37 @@ const DISCARD_CONFIRM =
  * Renders nothing when git is disabled.
  */
 export function GitChip({ onChanged }: { onChanged?: () => void }) {
-  const [st, setSt] = useState<GitStatus | null>(null)
+  const [st, setSt] = useState<GitStatus | null>(() => cached)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
+  // On failure keep the last status (don't blank the chip); retry fast until the
+  // first success, then settle to the slow poll.
   const load = useCallback(
-    () => api.get<GitStatus>('/api/git/status').then(setSt).catch(() => {}),
+    () =>
+      api
+        .get<GitStatus>('/api/git/status')
+        .then((s) => {
+          cached = s
+          setSt(s)
+        })
+        .catch(() => {}),
     [],
   )
 
   useEffect(() => {
-    let cancelled = false
-    const tick = () => !cancelled && void load()
-    tick()
-    const t = window.setInterval(tick, POLL_MS)
+    let alive = true
+    let timer: number
+    const tick = async () => {
+      await load()
+      if (alive) timer = window.setTimeout(tick, cached ? POLL_MS : RETRY_MS)
+    }
+    void tick()
     return () => {
-      cancelled = true
-      window.clearInterval(t)
+      alive = false
+      window.clearTimeout(timer)
     }
   }, [load])
 
@@ -173,27 +190,24 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
               {st.branch ?? '—'}
             </span>
             <span className="spacer" style={{ flex: 1 }} />
-            {st.branches.length > 1 && (
-              <select
-                className="input mono"
-                style={{ fontSize: 11, height: 26, padding: '0 6px', width: 'auto' }}
-                value=""
-                disabled={busy || st.dirty > 0}
-                title={st.dirty > 0 ? 'Publish or discard changes before switching' : 'Switch branch'}
-                onChange={(e) => void onSwitch(e.target.value)}
-              >
-                <option value="" disabled>
-                  Switch…
-                </option>
-                {st.branches
-                  .filter((b) => b !== st.branch)
-                  .map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-              </select>
-            )}
+            {st.branches
+              .filter((b) => b !== st.branch)
+              .map((b) => (
+                <button
+                  key={b}
+                  className="btn btn-sm mono"
+                  style={{ fontSize: 11, height: 24, padding: '0 8px' }}
+                  disabled={busy || st.dirty > 0}
+                  title={
+                    st.dirty > 0
+                      ? 'Publish or discard changes before switching'
+                      : `Switch to ${b}`
+                  }
+                  onClick={() => onSwitch(b)}
+                >
+                  {b}
+                </button>
+              ))}
           </div>
 
           {/* counts */}
