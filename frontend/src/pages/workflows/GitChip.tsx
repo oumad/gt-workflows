@@ -111,18 +111,23 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
   const toPublish = st.dirty > 0 ? st.dirty : st.ahead
 
   // Chip tone + label. Behind (blue) takes priority over unpublished (amber).
+  // `soft` tints the whole chip when there's something to act on (null = clean).
   let tone = 'var(--good)'
+  let soft: string | null = null
   let label = 'Up to date'
   let glyph: 'dot' | 'up' | 'down' = 'dot'
   if (st.error) {
     tone = 'var(--warn)'
+    soft = 'var(--warn-soft)'
     label = 'Unavailable'
   } else if (incoming > 0) {
     tone = 'var(--info)'
+    soft = 'var(--info-soft)'
     label = `${incoming} incoming`
     glyph = 'down'
   } else if (toPublish > 0) {
     tone = 'var(--warn)'
+    soft = 'var(--warn-soft)'
     label = `${toPublish} to publish`
     glyph = 'up'
   }
@@ -148,20 +153,22 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
           height: 30,
           padding: '0 10px',
           borderRadius: 999,
-          border: '1px solid var(--line)',
-          background: open ? 'var(--surface-2)' : 'var(--surface)',
+          border: `1px solid ${soft ? tone : 'var(--line)'}`,
+          background: soft ?? (open ? 'var(--surface-2)' : 'var(--surface)'),
           fontSize: 12,
           cursor: 'pointer',
           color: 'var(--ink)',
         }}
       >
-        <GitBranch size={12} style={{ color: 'var(--ink-3)' }} />
+        <GitBranch size={12} style={{ color: soft ? tone : 'var(--ink-3)' }} />
         <span style={{ fontWeight: 600 }} className="mono">
           {st.branch ?? '—'}
         </span>
-        <span style={{ width: 1, height: 14, background: 'var(--line)' }} />
+        <span style={{ width: 1, height: 14, background: soft ? tone : 'var(--line)', opacity: soft ? 0.35 : 1 }} />
         {Indicator}
-        <span style={{ color: 'var(--ink-2)' }}>{label}</span>
+        <span style={{ color: soft ? 'var(--ink)' : 'var(--ink-3)', fontWeight: soft ? 600 : 400 }}>
+          {label}
+        </span>
         <ChevronDown size={12} style={{ color: 'var(--ink-3)' }} />
       </button>
 
