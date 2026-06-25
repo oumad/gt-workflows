@@ -46,14 +46,6 @@ RUN apt-get update \
 # click. FreeRDP 2 installs the client as plain `xfreerdp`.
 RUN command -v xfreerdp && command -v Xvfb
 
-# Open the two hardened-git gates in SYSTEM config so the workflows repo can wire
-# core.hooksPath and the serverUrl clean/smudge filter. Debian's git refuses both
-# unless these are enabled in a trusted scope (system/global, never repo-local).
-# Baked into the image so it's present before the app runs — independent of the
-# app's runtime config attempts (which can be defeated by build-layer caching).
-RUN git config --system safe.allowUnsafeHooksPath true \
- && git config --system safe.allowUnsafeFilter true
-
 # Re-install only production deps. Skips drizzle-kit / tsc / eslint / tsx /
 # typescript-eslint etc., which the runtime never touches — the in-process
 # migrator uses drizzle-orm (a runtime dep), no CLI needed.

@@ -50,13 +50,13 @@ export function allowedBranches(): string[] {
   ].filter((b): b is string => !!b)
 }
 
-// Pass the hardened-git opt-ins on EVERY git command line (`-c`). Debian's git
-// refuses core.hooksPath and clean/smudge filters unless these are enabled — and
-// the file scopes (system/global) weren't taking effect for our invocations. The
-// command-line scope is the user's explicit, always-honored opt-in, and it covers
-// BOTH configuring core.hooksPath/the filter AND git running them.
-const GIT_UNSAFE_OK = ['safe.allowUnsafeHooksPath=true', 'safe.allowUnsafeFilter=true']
-const gitClient = (baseDir: string): SimpleGit => simpleGit({ baseDir, config: GIT_UNSAFE_OK })
+// simple-git (not git!) refuses to configure core.hooksPath and clean/smudge
+// filters by default — its block-unsafe-operations plugin treats them as command
+// injection vectors. Opt in via the `unsafe` option so we can wire the WS repo's
+// hooks + serverUrl filter. (This is a simple-git guard; no git config affects it
+// — which is why --system/--global/-c on git did nothing.)
+const gitClient = (baseDir: string): SimpleGit =>
+  simpleGit({ baseDir, unsafe: { allowUnsafeHooksPath: true, allowUnsafeFilter: true } })
 
 let _git: SimpleGit | null = null
 let _prefix = ''
@@ -139,10 +139,9 @@ async function installGitIntegration(g: SimpleGit): Promise<void> {
       console.warn(`[git] git config ${key} failed: ${scrub(asMessage(err))}`)
     }
   }
-  // The hardened-git opt-ins (safe.allowUnsafeHooksPath / safe.allowUnsafeFilter)
-  // that let core.hooksPath + the filter be configured are passed on the command
-  // line by gitClient() (`-c …`), which is the scope git actually honors here, so
-  // these sets just succeed.
+  // gitClient() passes the `unsafe` option that lets simple-git configure these
+  // (it blocks core.hooksPath + clean/smudge filters otherwise), so the sets below
+  // go through to git.
   await set('core.hooksPath', '.githooks')
   await set('filter.cmserver.clean', 'node .githooks/server-urls.mjs clean %f')
   await set('filter.cmserver.smudge', 'node .githooks/server-urls.mjs smudge %f')
