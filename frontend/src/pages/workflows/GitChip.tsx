@@ -65,12 +65,11 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
     }
   }, [open])
 
-  async function run(path: string, confirm?: string) {
-    if (confirm && !window.confirm(confirm)) return
+  async function act(fn: () => Promise<unknown>) {
     setBusy(true)
     setErr(null)
     try {
-      await api.post(path, {})
+      await fn()
       await load()
       onChanged?.()
     } catch (e) {
@@ -80,19 +79,13 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
     }
   }
 
-  async function onSwitch(branch: string) {
-    if (!st || branch === st.branch) return
-    setBusy(true)
-    setErr(null)
-    try {
-      await api.post('/api/git/switch', { branch })
-      await load()
-      onChanged?.()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Branch switch failed')
-    } finally {
-      setBusy(false)
-    }
+  function run(path: string, confirm?: string) {
+    if (confirm && !window.confirm(confirm)) return
+    void act(() => api.post(path, {}))
+  }
+  function onSwitch(branch: string) {
+    if (!st) return
+    void act(() => api.post('/api/git/switch', { branch }))
   }
 
   if (!st || !st.enabled) return null
