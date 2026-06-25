@@ -8,19 +8,14 @@ import { zValidator } from '@hono/zod-validator'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
 import * as git from '../services/git.js'
-import { serverNudge } from '../services/workflows.js'
 import type { AppVariables } from '../types.js'
 
 const app = new Hono<{ Variables: AppVariables }>()
 
-// ── GET /api/git/status — git state + "needs a server" nudge ──
+// ── GET /api/git/status — git state for the workflows chip ──
 app.get('/status', requireAuth, async (c) => {
   try {
-    const status = await git.status()
-    // Nudge only when enabled (the scan is pointless otherwise, and the banner
-    // is hidden anyway).
-    const nudge = status.enabled ? serverNudge() : { needsServer: 0 }
-    return c.json({ ...status, ...nudge })
+    return c.json(await git.status())
   } catch (err) {
     return httpErrorResponse(c, err)
   }

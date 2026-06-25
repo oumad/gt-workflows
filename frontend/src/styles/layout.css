@@ -353,22 +353,3 @@
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
-
-/* ─── Git status bar ────────────────────────────
-   Slim full-width strip under the tabs. Sits in .main (outside the scrolling
-   .body) so it stays pinned while the list scrolls. */
-.git-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 32px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  flex-shrink: 0;
-  font-size: 12.5px;
-}
-.git-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}

@@ -26,7 +26,7 @@ import { RangeSelector } from '../../components/ui/RangeSelector'
 import { WorkflowsToolbar } from './WorkflowsToolbar'
 import { WorkflowCategorySection } from './WorkflowCategorySection'
 import { WorkflowsModalStack } from './WorkflowsModalStack'
-import { GitStatusBanner } from './GitStatusBanner'
+import { GitChip } from './GitChip'
 
 /**
  * Workflows page — three tabs ("All", "Insights", "Repartition").
@@ -329,6 +329,7 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
             {(tab === 'insights' || tab === 'repartition') && (
               <RangeSelector range={range} onChange={setRange} />
             )}
+            <GitChip onChanged={reload} />
             <button className="btn btn-sm" onClick={reload}>
               <RefreshCw size={14} /> Refresh
             </button>
@@ -337,7 +338,7 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
             </button>
             {isAdmin && (
               <button className="btn btn-sm btn-primary" onClick={() => setCreating(true)}>
-                <Plus size={14} /> New workflow
+                <Plus size={14} /> New
               </button>
             )}
           </>
@@ -356,7 +357,6 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
         active={tab}
         onChange={setTab}
       />
-      <GitStatusBanner onChanged={reload} />
       <div className="body">
         {tab === 'all' && (
           <>

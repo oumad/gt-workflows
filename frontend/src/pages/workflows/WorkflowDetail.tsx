@@ -19,7 +19,6 @@ import {
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
 import { WorkflowConfig } from './WorkflowConfig'
-import { GitStatusBanner } from './GitStatusBanner'
 import { NodeManager } from './node-manager/NodeManager'
 import { WorkflowFiles } from './WorkflowFiles'
 import { api } from '../../lib/api'
@@ -598,7 +597,6 @@ export function WorkflowDetail({
       />
 
       <div className="body">
-        <GitStatusBanner onChanged={() => onSaved(wf)} />
         {activeTab === 'overview' && (
           <OverviewTab
             wf={wf}

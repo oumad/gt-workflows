@@ -178,22 +178,6 @@ export function comfyServerRefs(params: ParamsJson): string[] {
 }
 export const comfyServerUrls = comfyServerRefs
 
-/** True when every URL is the loopback placeholder — i.e. no real server is set
- *  (a fresh clone before the smudge filter has a real URL to restore). Drives
- *  the "N workflows need a server" nudge. */
-export function isUnbound(urls: string[]): boolean {
-  if (urls.length === 0) return true
-  return urls.every((u) => {
-    let host: string
-    try {
-      host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `http://${u}`).hostname.toLowerCase()
-    } catch {
-      return false
-    }
-    return ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].includes(host)
-  })
-}
-
 /** Write a workflow's server list back to `comfyui_config.serverUrl` — a bare
  *  string for a single server, an array for several, `[]` for none. Also clears
  *  the legacy top-level `servers` / `serverIds` keys, which are no longer used. */
@@ -203,22 +187,6 @@ export function setComfyServerUrls(params: ParamsJson, urls: string[]): void {
   cfg.serverUrl = clean.length === 1 ? clean[0]! : clean
   delete params.servers
   delete params.serverIds
-}
-
-/** "N workflows need a server" nudge: workflows whose serverUrl is still only the
- *  localhost placeholder — a fresh clone before this env's real URL is set.
- *  Workflows with no serverUrl field at all are skipped (templates). */
-export function serverNudge(): { needsServer: number } {
-  const dir = getWorkflowsDir()
-  if (!existsSync(dir)) return { needsServer: 0 }
-  let needsServer = 0
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'script') continue
-    const urls = comfyServerRefs(readParams(join(dir, entry.name)))
-    if (urls.length === 0) continue // no server field — skip
-    if (isUnbound(urls)) needsServer++
-  }
-  return { needsServer }
 }
 
 /** Validate-on-publish guard: reject invalid JSON in any changed `.json` file.
