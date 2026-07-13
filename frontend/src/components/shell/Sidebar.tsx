@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
-import { canSee } from '../../lib/permissions'
+import { canSee, ROLE_LABEL } from '../../lib/permissions'
 import { isHostRecord } from '../../lib/serverLinks'
 import type { Page } from '../../types'
 
@@ -190,7 +190,7 @@ export function Sidebar({ page, navigate }: Props) {
         <div className="avatar">{initials}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="user-name">{user?.username}</div>
-          <div className="user-role">{user?.isAdmin ? 'Admin' : 'Member'}</div>
+          <div className="user-role">{role ? ROLE_LABEL[role] : '—'}</div>
         </div>
         <button
           className="btn btn-ghost btn-icon"

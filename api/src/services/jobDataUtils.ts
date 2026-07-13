@@ -35,7 +35,7 @@ export function str(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 /** Recursively search for a key anywhere in a nested object (last-resort fallback). */
-export function deepFind(obj: unknown, ...keys: string[]): string {
+function deepFind(obj: unknown, ...keys: string[]): string {
   if (typeof obj !== 'object' || obj === null) return ''
   const o = obj as Record<string, unknown>
   for (const k of keys) {

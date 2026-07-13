@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { db, calendarEvents, alerts } from '../db/index.js'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
+
+// Calendar is only visible to roles with access on the calendar brew
+// (admin, operator) — reads and writes both go through the brew guard.
+const requireCalRead = requireAccess('calendar', 'read')
+const requireCalWrite = requireAccess('calendar', 'write')
 import type { AppVariables } from '../types.js'
 
 const app = new Hono<{ Variables: AppVariables }>()
@@ -54,7 +59,7 @@ const listQuery = z.object({
   categories: z.string().optional(),
 })
 
-app.get('/', requireAuth, zValidator('query', listQuery), async (c) => {
+app.get('/', requireAuth, requireCalRead, zValidator('query', listQuery), async (c) => {
   const q = c.req.valid('query')
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -272,7 +277,7 @@ const createSchema = z.object({
   notes: z.string().max(2000).nullish(),
 })
 
-app.post('/', requireAuth, zValidator('json', createSchema), async (c) => {
+app.post('/', requireAuth, requireCalWrite, zValidator('json', createSchema), async (c) => {
   const body = c.req.valid('json')
   const userId = c.get('user')?.id ?? null
   const [row] = await db
@@ -295,7 +300,7 @@ app.post('/', requireAuth, zValidator('json', createSchema), async (c) => {
 
 /* ── PATCH /calendar/:id ─────────────────────────────────── */
 const patchSchema = createSchema.partial()
-app.patch('/:id', requireAuth, zValidator('json', patchSchema), async (c) => {
+app.patch('/:id', requireAuth, requireCalWrite, zValidator('json', patchSchema), async (c) => {
   const id = c.req.param('id')
   const body = c.req.valid('json')
   const updates: Record<string, unknown> = { updatedAt: new Date() }
@@ -327,7 +332,7 @@ app.patch('/:id', requireAuth, zValidator('json', patchSchema), async (c) => {
 })
 
 /* ── DELETE /calendar/:id ────────────────────────────────── */
-app.delete('/:id', requireAuth, async (c) => {
+app.delete('/:id', requireAuth, requireCalWrite, async (c) => {
   const id = c.req.param('id')
   const [row] = await db
     .delete(calendarEvents)
@@ -349,7 +354,7 @@ function icsDateTime(date: string, time: string): string {
   return `${date.replace(/-/g, '')}T${time.replace(/:/g, '').padEnd(6, '0')}`
 }
 
-app.get('/export.ics', requireAuth, async (c) => {
+app.get('/export.ics', requireAuth, requireCalRead, async (c) => {
   // Re-use the merged feed with default window.
   const params = new URLSearchParams()
   const q = c.req.query()

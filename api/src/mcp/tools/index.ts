@@ -16,6 +16,8 @@ import { registerImagineTools } from './imagine.js'
 import { registerValidationTools } from './validation.js'
 import { registerWorkflowMetadataTools } from './workflow-metadata.js'
 import { registerGitTools } from './git.js'
+import { canWrite } from '../../lib/permissions.js'
+import { getMcpAuth } from '../auth-ctx.js'
 
 export function registerAllTools(server: McpServer): void {
   registerWorkflowTools(server)
@@ -26,6 +28,40 @@ export function registerAllTools(server: McpServer): void {
   registerValidationTools(server)
   registerWorkflowMetadataTools(server)
   registerGitTools(server)
+  enforceWriteAccess(server)
+}
+
+/** Personal tokens inherit their owner's role, and every MCP tool here edits
+ *  the workflows brew — so mutating tools require write access on it. One
+ *  central wrapper beats a per-tool check that's easy to forget on the next
+ *  tool group. Relies on the same `_registeredTools` internal as
+ *  buildToolCatalog below. */
+function enforceWriteAccess(server: McpServer): void {
+  const registered = (server as unknown as { _registeredTools?: Record<string, RegisteredTool> })
+    ._registeredTools
+  if (!registered) return
+  for (const t of Object.values(registered)) {
+    if (t.annotations?.readOnlyHint === true) continue
+    const original = t.handler as (...a: unknown[]) => unknown
+    t.handler = ((...a: unknown[]) => {
+      // `extra` (which carries authInfo) is always the last callback arg,
+      // whether or not the tool declares an input schema.
+      const extra = a[a.length - 1] as Parameters<typeof getMcpAuth>[0]
+      const { user } = getMcpAuth(extra)
+      if (!canWrite(user.role, 'workflows')) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Forbidden: role '${user.role}' has read-only access to workflows.`,
+            },
+          ],
+          isError: true,
+        }
+      }
+      return original(...a)
+    }) as typeof t.handler
+  }
 }
 
 /** Human-readable section per tool — drives grouping in the Preferences UI's

@@ -19,7 +19,7 @@ export function serverMatchKey(url: string): string {
  *  Used by the RDP probe to derive the host to connect to — the RDP port
  *  (3389) is independent of whatever ComfyUI port the server's URL carries.
  *  Returns null when the URL doesn't parse to anything useful. */
-export function hostnameOf(rawUrl: string): string | null {
+export function hostnameOf(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) return null
   try {
     const trimmed = rawUrl.trim()
@@ -33,7 +33,7 @@ export function hostnameOf(rawUrl: string): string | null {
 /** Extract the port from a server URL, or null when there isn't one. Used to
  *  tell a port-less HOST record (`http://worker`) from a ported SERVICE record
  *  (`http://worker:8188`) when rolling service job-counts up onto their host. */
-export function portOf(rawUrl: string): string | null {
+export function portOf(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) return null
   try {
     const trimmed = rawUrl.trim()

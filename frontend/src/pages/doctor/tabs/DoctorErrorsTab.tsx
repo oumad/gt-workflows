@@ -332,7 +332,7 @@ function ErrorRowMenu({
               top: pos.top,
               right: pos.right,
               width: 200,
-              zIndex: 9999,
+              zIndex: 'var(--z-pop)',
               background: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: 8,

@@ -149,16 +149,18 @@ export function ServerDetail({
   // host; a host doesn't have one of its own.
   const linkedHost = kindLabel === 'service' ? findHostFor(server, servers) : null
 
-  // Settings tab requires the matching edit capability — designer can
-  // patch services (edit-service), but only admin/ops can patch hosts
-  // (edit-server). Actions tab is admin/ops only (it owns Delete + the
-  // ComfyUI control buttons).
-  const { can } = useAuth()
-  const canEdit = kindLabel === 'service' ? can('edit-service') : can('edit-server')
+  // Settings tab requires write on the matching brew — operators can patch
+  // services, but only admin can patch hosts (Servers tool).
+  const { canWrite } = useAuth()
+  const canEdit = canWrite(kindLabel === 'service' ? 'services' : 'servers')
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'jobs', label: 'Jobs' },
-    ...(isWorkflow ? [{ id: 'workflows', label: 'Workflows', pill: wfs.length }] : []),
+    // Jobs and Workflows are service-level concepts — a physical host doesn't
+    // run them itself, its services do.
+    ...(kindLabel === 'service' ? [{ id: 'jobs', label: 'Jobs' }] : []),
+    ...(kindLabel === 'service' && isWorkflow
+      ? [{ id: 'workflows', label: 'Workflows', pill: wfs.length }]
+      : []),
     ...(isWorkflow ? [{ id: 'logs', label: 'Logs' }] : []),
     ...(canEdit ? [{ id: 'settings', label: 'Settings' }] : []),
     ...(isAdmin ? [{ id: 'actions', label: 'Actions' }] : []),
@@ -242,7 +244,7 @@ export function ServerDetail({
                 position: 'fixed',
                 top: pickerPos.top,
                 left: pickerPos.left,
-                zIndex: 1000,
+                zIndex: 'var(--z-pop)',
                 background: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 10,

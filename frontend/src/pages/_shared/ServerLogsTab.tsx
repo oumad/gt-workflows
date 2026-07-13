@@ -239,32 +239,11 @@ export function ServerLogsModal({
   const titleCap = kindLabel === 'service' ? 'Service' : 'Server'
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 500,
-        background: 'rgba(0,0,0,0.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={onClose}
-    >
+    <div className="modal-stage" onClick={onClose}>
       <div
+        className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 860,
-          maxWidth: '95vw',
-          maxHeight: '88vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--surface)',
-          borderRadius: 12,
-          border: '1px solid var(--line)',
-          boxShadow: 'var(--shadow-lg)',
-          overflow: 'hidden',
-        }}
+        style={{ width: 'min(860px, 95vw)' }}
       >
         {/* Header */}
         <div

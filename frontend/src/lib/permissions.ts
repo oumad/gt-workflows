@@ -1,115 +1,129 @@
 /**
- * Frontend mirror of api/src/lib/permissions.ts. Same Role + Capability types,
- * same can() table. When you add a capability, add it BOTH sides so the
- * frontend hides the button and the backend rejects the call.
- */
-
-export type Role = 'admin' | 'ops' | 'designer' | 'viewer'
-
-export const ROLES: readonly Role[] = ['admin', 'ops', 'designer', 'viewer']
-
-export const ROLE_LABEL: Record<Role, string> = {
-  admin: 'Admin',
-  ops: 'Ops',
-  designer: 'Designer',
-  viewer: 'Viewer',
-}
-
-export const ROLE_DESCRIPTION: Record<Role, string> = {
-  admin: 'Every capability — including user management, credentials, Seto config.',
-  ops: 'Same as admin. Distinct label for accountability.',
-  designer:
-    'Daily driver: workflows, jobs, services, calendar, GT users. Cannot manage users / credentials / Seto / hosts, cannot delete or scrape.',
-  viewer: 'Read-only Analytics + Preferences. No edit anywhere.',
-}
-
-const ROLE_PRIORITY: Role[] = ['admin', 'ops', 'designer', 'viewer']
-
-export function derivePrimaryRole(roles: readonly string[] | null | undefined): Role {
-  if (!roles) return 'viewer'
-  for (const r of ROLE_PRIORITY) if (roles.includes(r)) return r
-  return 'viewer'
-}
-
-export function isRole(s: unknown): s is Role {
-  return typeof s === 'string' && (ROLES as readonly string[]).includes(s)
-}
-
-export type Capability =
-  | 'view-users'
-  | 'view-credentials'
-  | 'view-seto-config'
-  | 'view-servers'
-  | 'use-seto-modal'
-  | 'edit-workflow'
-  | 'edit-calendar'
-  | 'edit-service'
-  | 'edit-server'
-  | 'edit-user'
-  | 'edit-credential'
-  | 'edit-seto-config'
-  | 'delete-service'
-  | 'delete-server'
-  | 'scrape'
-  | 'stop-job'
-  | 'rdp'
-
-const CAPABILITY_BY_ROLE: Record<Capability, ReadonlySet<Role>> = {
-  'view-users': new Set<Role>(['admin', 'ops']),
-  'view-credentials': new Set<Role>(['admin', 'ops']),
-  'view-seto-config': new Set<Role>(['admin', 'ops']),
-  'view-servers': new Set<Role>(['admin', 'ops']),
-  'use-seto-modal': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-workflow': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-calendar': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-service': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-server': new Set<Role>(['admin', 'ops']),
-  'edit-user': new Set<Role>(['admin', 'ops']),
-  'edit-credential': new Set<Role>(['admin', 'ops']),
-  'edit-seto-config': new Set<Role>(['admin', 'ops']),
-  'delete-service': new Set<Role>(['admin', 'ops']),
-  'delete-server': new Set<Role>(['admin', 'ops']),
-  scrape: new Set<Role>(['admin', 'ops']),
-  'stop-job': new Set<Role>(['admin', 'ops', 'designer']),
-  rdp: new Set<Role>(['admin', 'ops']),
-}
-
-export function can(role: Role | undefined | null, capability: Capability): boolean {
-  if (!role) return false
-  return CAPABILITY_BY_ROLE[capability].has(role)
-}
-
-/* ── Page access ────────────────────────────────────────────
- * Which roles can see each top-level page. Drives sidebar filtering and the
- * App-level guard that redirects forbidden pages back to a landing.
+ * Frontend mirror of api/src/lib/permissions.ts — per-brew read/write access.
+ * Edit both sides together: the frontend hides the affordance, the backend
+ * rejects the call.
  *
- * Viewer's landing is /analytics (their only meaningful page). Everyone else
- * lands on /home as before.
+ *   admin    — write on everything
+ *   operator — Workflows / Jobs / Services / Doctor / Analytics / Calendar / GT Users
+ *   master   — Workflows + Jobs read-only, Analytics, GT Users ("MasterUser")
+ *   user     — Workflows + Jobs read-only, Analytics
  */
 import type { Page } from '../types'
 
-export const PAGE_ACCESS: Record<Page, ReadonlySet<Role>> = {
-  home: new Set<Role>(['admin', 'ops', 'designer']),
-  workflows: new Set<Role>(['admin', 'ops', 'designer']),
-  jobs: new Set<Role>(['admin', 'ops', 'designer']),
-  doctor: new Set<Role>(['admin', 'ops', 'designer']),
-  services: new Set<Role>(['admin', 'ops', 'designer']),
-  servers: new Set<Role>(['admin', 'ops']), // designer hidden
-  analytics: new Set<Role>(['admin', 'ops', 'designer', 'viewer']),
-  calendar: new Set<Role>(['admin', 'ops', 'designer']),
-  clients: new Set<Role>(['admin', 'ops', 'designer']),
-  users: new Set<Role>(['admin', 'ops']),
-  credentials: new Set<Role>(['admin', 'ops']),
-  seto: new Set<Role>(['admin', 'ops']),
-  preferences: new Set<Role>(['admin', 'ops', 'designer', 'viewer']),
+export type Role = 'admin' | 'operator' | 'master' | 'user'
+
+export const ROLES: readonly Role[] = ['admin', 'operator', 'master', 'user']
+const ROLE_SET = new Set<string>(ROLES)
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Admin',
+  operator: 'Operator',
+  master: 'MasterUser',
+  user: 'User',
 }
 
-export function canSee(role: Role | undefined | null, page: Page): boolean {
-  if (!role) return false
-  return PAGE_ACCESS[page].has(role)
+export const ROLE_DESCRIPTION: Record<Role, string> = {
+  admin: 'All access — every brew writable, user management, credentials, Seto config.',
+  operator: 'Runs the floor: Workflows, Jobs, Services, Doctor, Analytics, Calendar, GT Users.',
+  master: 'Workflows & Jobs read-only, plus Analytics and GT Users.',
+  user: 'Workflows & Jobs read-only, plus Analytics. No editing anywhere.',
 }
 
-export function landingFor(role: Role | undefined | null): Page {
-  if (role === 'viewer') return 'analytics'
-  return 'home'
+/** Pre-rename role strings still present in stored sessions / old JWTs. */
+const LEGACY_ROLE: Record<string, Role> = {
+  ops: 'operator',
+  designer: 'operator',
+  viewer: 'user',
+}
+
+export function normalizeRoles(roles: readonly string[]): Role[] {
+  const out: Role[] = []
+  for (const r of roles) {
+    const norm = ROLE_SET.has(r) ? (r as Role) : LEGACY_ROLE[r]
+    if (norm && !out.includes(norm)) out.push(norm)
+  }
+  return out
+}
+
+const ROLE_PRIORITY: Role[] = ['admin', 'operator', 'master', 'user']
+
+export function derivePrimaryRole(roles: readonly string[] | null | undefined): Role {
+  if (!roles) return 'user'
+  const norm = normalizeRoles(roles)
+  for (const r of ROLE_PRIORITY) if (norm.includes(r)) return r
+  return 'user'
+}
+
+export function isRole(s: unknown): s is Role {
+  return typeof s === 'string' && ROLE_SET.has(s)
+}
+
+/* ── Brew access ─────────────────────────────────────────────────
+ * One table drives the sidebar, the App-level route guard, and every edit
+ * affordance. 'write' → full UI; 'read' → view-only UI (no edit tabs,
+ * buttons, drag-drop, or cross-entity links); absent → page hidden. */
+
+export type Access = 'read' | 'write'
+
+const ALL_WRITE: Record<Page, Access> = {
+  home: 'write',
+  workflows: 'write',
+  jobs: 'write',
+  services: 'write',
+  servers: 'write',
+  doctor: 'write',
+  analytics: 'write',
+  calendar: 'write',
+  clients: 'write',
+  users: 'write',
+  credentials: 'write',
+  seto: 'write',
+  preferences: 'write',
+}
+
+export const ROLE_ACCESS: Record<Role, Partial<Record<Page, Access>>> = {
+  admin: ALL_WRITE,
+  operator: {
+    home: 'read',
+    workflows: 'write',
+    jobs: 'write',
+    services: 'write',
+    doctor: 'write',
+    analytics: 'read',
+    calendar: 'write',
+    clients: 'write',
+    preferences: 'write',
+  },
+  master: {
+    workflows: 'read',
+    jobs: 'read',
+    analytics: 'read',
+    clients: 'write',
+    preferences: 'write',
+  },
+  user: {
+    workflows: 'read',
+    jobs: 'read',
+    analytics: 'read',
+    preferences: 'write',
+  },
+}
+
+export function accessFor(role: Role | null | undefined, page: Page): Access | null {
+  if (!role) return null
+  return ROLE_ACCESS[role][page] ?? null
+}
+
+/** Page visible at all (read or write)? Drives sidebar + route guard. */
+export function canSee(role: Role | null | undefined, page: Page): boolean {
+  return accessFor(role, page) != null
+}
+
+/** Page fully editable? Drives every edit affordance inside the page. */
+export function canWrite(role: Role | null | undefined, page: Page): boolean {
+  return accessFor(role, page) === 'write'
+}
+
+export function landingFor(role: Role | null | undefined): Page {
+  return canSee(role, 'home') ? 'home' : 'workflows'
 }

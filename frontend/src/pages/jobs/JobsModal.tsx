@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { withScheme } from '../../lib/serverLinks'
 import { copyToClipboard } from '../../lib/clipboard'
 import { useNotifications } from '../../context/NotificationsContext'
+import { useAuth } from '../../context/AuthContext'
 import { SetoModal } from '../../components/seto/SetoModal'
 import type { Tone, Row } from './jobs-types'
 import { fmtSec, fmtTime } from './jobs-utils'
@@ -325,11 +326,16 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
     fetchData()
   }, [fetchData])
 
+  // Read-only roles get a view-only modal: no stop buttons, no Seto, no
+  // links out to entities they can't see.
+  const { canSee, canWrite } = useAuth()
+
   // Stop button — visible only when this is a WF job that's still running.
   // The backend refuses already-terminal jobs but we hide the affordance
   // anyway so users don't click a doomed action. Terminal states match the
   // set in services/wfJobStop.ts.
   const isStoppable =
+    canWrite('jobs') &&
     row.kind === 'wf' &&
     row.status !== 'completed' &&
     row.status !== 'failed' &&
@@ -374,6 +380,7 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
   // terminates it in BOTH stores — the BullMQ hash and the Postgres row —
   // without contacting any runner.
   const isForceStoppable =
+    canWrite('jobs') &&
     row.kind === 'lora' &&
     row.status !== 'completed' &&
     row.status !== 'failed' &&
@@ -597,13 +604,15 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
           {/* Ask Seto from the modal — gives every job, regardless of entry
               point (Live, History, Slow, By error), a path to Seto without
               needing a separate row menu on each table. */}
-          <button
-            className="btn btn-sm"
-            onClick={() => setSetoOpen(true)}
-            title="Ask Seto to analyse this job"
-          >
-            <Bot size={13} /> Ask Seto
-          </button>
+          {canWrite('services') && (
+            <button
+              className="btn btn-sm"
+              onClick={() => setSetoOpen(true)}
+              title="Ask Seto to analyse this job"
+            >
+              <Bot size={13} /> Ask Seto
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={fetchData} title="Refresh">
             <RefreshCw size={13} />
           </button>
@@ -629,7 +638,7 @@ export function JobModal({ row, onClose }: { row: Row; onClose: () => void }) {
           <Field label="Type">{row.kind === 'wf' ? 'Workflow' : 'LoRA training'}</Field>
           <Field label="User">{row.who}</Field>
           <Field label="Service" mono>
-            {serviceHref ? (
+            {serviceHref && canSee('services') ? (
               <a
                 href={serviceHref}
                 target="_blank"

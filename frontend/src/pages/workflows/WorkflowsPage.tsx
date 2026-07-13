@@ -47,8 +47,11 @@ import { GitChip } from './GitChip'
  *  - WorkflowDetail           — full detail view (sub-page)
  */
 export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
-  const { user } = useAuth()
-  const isAdmin = user?.isAdmin ?? false
+  const { canWrite } = useAuth()
+  // "isAdmin" downstream really means "can edit workflows" — admin + operator.
+  // Read-only roles (master/user) get a browse-only page: no create/import,
+  // no drag-drop, no card menus, no inline edits.
+  const isAdmin = canWrite('workflows')
 
   const { workflows, loading, error, reload } = useWorkflows()
   const { servers } = useServers()
@@ -329,13 +332,16 @@ export function WorkflowsPage({ navigate }: { navigate?: NavigateFn }) {
             {(tab === 'insights' || tab === 'repartition') && (
               <RangeSelector range={range} onChange={setRange} />
             )}
-            <GitChip onChanged={reload} />
+            {/* Git + export are edit-tier tooling — read-only roles just browse. */}
+            {isAdmin && <GitChip onChanged={reload} />}
             <button className="btn btn-sm" onClick={reload}>
               <RefreshCw size={14} /> Refresh
             </button>
-            <button className="btn btn-sm" onClick={handleDownloadAll}>
-              <Download size={14} /> Download all
-            </button>
+            {isAdmin && (
+              <button className="btn btn-sm" onClick={handleDownloadAll}>
+                <Download size={14} /> Download all
+              </button>
+            )}
             {isAdmin && (
               <button className="btn btn-sm btn-primary" onClick={() => setCreating(true)}>
                 <Plus size={14} /> New

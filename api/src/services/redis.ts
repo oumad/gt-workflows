@@ -146,20 +146,6 @@ export async function getRedisJobLogs(id: string, start = 0, end = -1): Promise<
   }
 }
 
-/**
- * Get queue depth (waiting + active) directly from Redis.
- * Used as fallback when the ComfyUI /queue endpoint is unreachable.
- */
-export async function getQueueDepth(): Promise<{ waiting: number; active: number }> {
-  try {
-    const r = getClient()
-    const [waiting, active] = await Promise.all([r.llen(`${KEY}:wait`), r.llen(`${KEY}:active`)])
-    return { waiting, active }
-  } catch {
-    return { waiting: 0, active: 0 }
-  }
-}
-
 // ── Live batch reader ─────────────────────────
 
 /** Minimal WF job shape returned by getLiveWfJobs — built from Redis only */

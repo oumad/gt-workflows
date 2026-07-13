@@ -8,10 +8,10 @@
  */
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireAdmin, requireCapability } from '../middleware/auth.js'
+import { requireAuth, requireAdmin, requireAccess } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
-import { hostnameOf } from '../lib/serverUrl.js'
-import { can } from '../lib/permissions.js'
+import { portOf } from '../lib/serverUrl.js'
+import { canWrite } from '../lib/permissions.js'
 import * as repo from '../repositories/servers.js'
 import {
   createServerSchema,
@@ -152,41 +152,29 @@ app.get('/:id/gpu', requireAuth, async (c) => {
 })
 
 // ── PATCH /servers/:id ───────────────────────────────────
-// Edit-service is the floor (designer + above can call). Inside the handler
-// we check the target row's URL shape — a designer can patch a service
-// (URL with port) but not a host (port-less). Servers/hosts edit requires
-// admin/ops, gated via the per-row check.
+// Services write is the floor (operator + above can call). Inside the handler
+// we check the target row's URL shape — an operator can patch a service
+// (URL with port) but not a host (port-less). Host edits require write on
+// the servers brew (admin only), gated via the per-row check.
 app.patch(
   '/:id',
   requireAuth,
-  requireCapability('edit-service'),
+  requireAccess('services', 'write'),
   zValidator('json', patchServerSchema),
   async (c) => {
     try {
       const id = c.req.param('id')
       const row = await repo.findById(id)
       if (!row) return c.json({ error: 'Not found' }, 404)
-      // hostnameOf returns the hostname only; if the URL has no port the
-      // serverUrl URL.port is empty — defensive check against URL shape.
-      const isHost = (() => {
-        try {
-          const u = new URL(/^https?:\/\//i.test(row.url) ? row.url : `http://${row.url}`)
-          return !u.port
-        } catch {
-          return true // unparseable → conservative: treat as host
-        }
-      })()
-      if (isHost && !can(c.var.user.role, 'edit-server')) {
+      // Port-less URL → host record. (Unparseable URLs return null from
+      // portOf, which conservatively counts as a host.)
+      const isHost = portOf(row.url) == null
+      if (isHost && !canWrite(c.var.user.role, 'servers')) {
         return c.json(
-          {
-            error: 'Forbidden',
-            code: 'missing_capability',
-            capability: 'edit-server',
-          },
+          { error: 'Forbidden', code: 'missing_access', brew: 'servers', level: 'write' },
           403,
         )
       }
-      void hostnameOf // touch import (used in other routes)
       return c.json(await svc.patchServer(id, c.req.valid('json')))
     } catch (err) {
       return httpErrorResponse(c, err)
@@ -214,7 +202,7 @@ app.post('/:id/report', requireAuth, zValidator('json', reportServerSchema), asy
 })
 
 // ── POST /servers/:id/comfy/restart ──────────────────────
-app.post('/:id/comfy/restart', requireAuth, requireAdmin, async (c) => {
+app.post('/:id/comfy/restart', requireAuth, requireAccess('services', 'write'), async (c) => {
   try {
     await comfy.restartComfy(c.req.param('id'))
     return c.json({ ok: true })
@@ -224,7 +212,7 @@ app.post('/:id/comfy/restart', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── POST /servers/:id/comfy/empty-vram ───────────────────
-app.post('/:id/comfy/empty-vram', requireAuth, requireAdmin, async (c) => {
+app.post('/:id/comfy/empty-vram', requireAuth, requireAccess('services', 'write'), async (c) => {
   try {
     await comfy.emptyVram(c.req.param('id'))
     return c.json({ ok: true })
@@ -234,7 +222,7 @@ app.post('/:id/comfy/empty-vram', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── POST /servers/:id/comfy/clear-cache ──────────────────
-app.post('/:id/comfy/clear-cache', requireAuth, requireAdmin, async (c) => {
+app.post('/:id/comfy/clear-cache', requireAuth, requireAccess('services', 'write'), async (c) => {
   try {
     await comfy.clearCache(c.req.param('id'))
     return c.json({ ok: true })

@@ -20,11 +20,11 @@ const V: Record<
   }
 > = {
   live: {
-    bg: '#1e1b16',
+    bg: 'var(--ink)',
     border: '1px solid rgba(255,255,255,.1)',
     iconBg: 'transparent',
     iconColor: 'var(--accent)',
-    titleColor: '#ffffff',
+    titleColor: 'var(--bg)',
     bodyColor: 'rgba(255,255,255,.5)',
     closeColor: 'rgba(255,255,255,.5)',
   },
@@ -234,7 +234,7 @@ export function Notifications() {
         position: 'fixed',
         top: 20,
         right: 20,
-        zIndex: 9000,
+        zIndex: 'var(--z-toast)',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { BrowserRouter, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
 import { NotificationsProvider } from './context/NotificationsContext'
@@ -107,7 +107,7 @@ function AppShell() {
   // everyone else lands on /home.
   useEffect(() => {
     if (user && location.pathname === '/login') {
-      const r = derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : ['designer']))
+      const r = derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : ['operator']))
       const landing = landingFor(r)
       routerNav(`/${landing}`, { replace: true })
     } else if (!user && location.pathname !== '/login') {
@@ -134,7 +134,7 @@ function AppShell() {
   // page and fire API requests that 403. Block here so the UX is "page
   // doesn't open" instead of "page opens then breaks". `canSee` is the
   // source of truth, mirrored by the backend's requireCapability checks.
-  const role = derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : ['designer']))
+  const role = derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : ['operator']))
   const blockedByAuth = !canSee(role, page)
 
   return (
@@ -234,6 +234,3 @@ export function App() {
     </BrowserRouter>
   )
 }
-
-// Silence unused-import warnings for re-exports that may be needed later.
-export { Navigate }

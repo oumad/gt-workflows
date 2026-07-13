@@ -76,29 +76,8 @@ export function CreateEventDrawer({
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(20,18,14,.35)',
-        zIndex: 100,
-        display: 'flex',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 460,
-          height: '100%',
-          background: 'var(--surface)',
-          borderLeft: '1px solid var(--line)',
-          boxShadow: 'var(--shadow-lg)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+    <div className="drawer-backdrop" onClick={onClose}>
+      <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
         <div style={{ height: 6, background: CAL_CATEGORIES[cat].color }} />
         <div
           className="row"

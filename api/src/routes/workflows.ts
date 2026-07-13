@@ -12,7 +12,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { stream } from 'hono/streaming'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import { httpErrorResponse, notFound } from '../lib/httpError.js'
 import { createWorkflowSchema, patchWorkflowSchema } from '../validators/workflows.js'
 import * as wf from '../services/workflows.js'
@@ -116,7 +116,7 @@ app.get('/:id/fs/raw', requireAuth, (c) => {
 
 // ── PUT /workflows/:id/fs/file?path=... — write text contents ─
 // Body: { text: string }. Creates the file if it doesn't exist (parent must).
-app.put('/:id/fs/file', requireAdmin, async (c) => {
+app.put('/:id/fs/file', requireAccess('workflows', 'write'), async (c) => {
   let body: { path?: string; text?: string } = {}
   try {
     body = await c.req.json()
@@ -133,7 +133,7 @@ app.put('/:id/fs/file', requireAdmin, async (c) => {
 })
 
 // ── POST /workflows/:id/fs/folder — body { path } ─
-app.post('/:id/fs/folder', requireAdmin, async (c) => {
+app.post('/:id/fs/folder', requireAccess('workflows', 'write'), async (c) => {
   let body: { path?: string } = {}
   try {
     body = await c.req.json()
@@ -148,7 +148,7 @@ app.post('/:id/fs/folder', requireAdmin, async (c) => {
 })
 
 // ── POST /workflows/:id/fs/rename — body { from, to } ─
-app.post('/:id/fs/rename', requireAdmin, async (c) => {
+app.post('/:id/fs/rename', requireAccess('workflows', 'write'), async (c) => {
   let body: { from?: string; to?: string } = {}
   try {
     body = await c.req.json()
@@ -164,7 +164,7 @@ app.post('/:id/fs/rename', requireAdmin, async (c) => {
 })
 
 // ── DELETE /workflows/:id/fs/file?path=... ─
-app.delete('/:id/fs/file', requireAdmin, (c) => {
+app.delete('/:id/fs/file', requireAccess('workflows', 'write'), (c) => {
   try {
     const path = c.req.query('path') ?? ''
     wfs.deletePath(c.req.param('id'), path)
@@ -175,7 +175,7 @@ app.delete('/:id/fs/file', requireAdmin, (c) => {
 })
 
 // ── POST /workflows/:id/fs/upload — multipart, fields: file, dest ─
-app.post('/:id/fs/upload', requireAdmin, async (c) => {
+app.post('/:id/fs/upload', requireAccess('workflows', 'write'), async (c) => {
   let parsed: Record<string, string | File>
   try {
     parsed = await c.req.parseBody()
@@ -204,7 +204,7 @@ app.get('/:id/files/:kind', requireAuth, (c) => {
 })
 
 // ── PUT /workflows/:id/files/params — write raw params.json ──
-app.put('/:id/files/params', requireAdmin, async (c) => {
+app.put('/:id/files/params', requireAccess('workflows', 'write'), async (c) => {
   let body: unknown
   try {
     body = await c.req.json()
@@ -220,7 +220,7 @@ app.put('/:id/files/params', requireAdmin, async (c) => {
 })
 
 // ── PUT /workflows/:id/files/workflow — write raw workflow.json ──
-app.put('/:id/files/workflow', requireAdmin, async (c) => {
+app.put('/:id/files/workflow', requireAccess('workflows', 'write'), async (c) => {
   let body: unknown
   try {
     body = await c.req.json()
@@ -256,7 +256,7 @@ app.get('/:id/export', requireAuth, (c) => {
 })
 
 // ── POST /workflows/:id/duplicate ─────────────────────────
-app.post('/:id/duplicate', requireAdmin, async (c) => {
+app.post('/:id/duplicate', requireAccess('workflows', 'write'), async (c) => {
   let body: { folderName?: string; label?: string } = {}
   try {
     body = await c.req.json()
@@ -278,7 +278,7 @@ app.get('/:id', requireAuth, (c) => {
 })
 
 // ── POST /workflows — create new ──────────────────────────
-app.post('/', requireAdmin, zValidator('json', createWorkflowSchema), (c) => {
+app.post('/', requireAccess('workflows', 'write'), zValidator('json', createWorkflowSchema), (c) => {
   try {
     return c.json(wf.createWorkflow(c.req.valid('json')), 201)
   } catch (err) {
@@ -287,7 +287,7 @@ app.post('/', requireAdmin, zValidator('json', createWorkflowSchema), (c) => {
 })
 
 // ── PATCH /workflows/:id — update params.json ─────────────
-app.patch('/:id', requireAdmin, zValidator('json', patchWorkflowSchema), (c) => {
+app.patch('/:id', requireAccess('workflows', 'write'), zValidator('json', patchWorkflowSchema), (c) => {
   try {
     return c.json(wf.patchWorkflow(c.req.param('id'), c.req.valid('json')))
   } catch (err) {
@@ -300,7 +300,7 @@ app.patch('/:id', requireAdmin, zValidator('json', patchWorkflowSchema), (c) => 
 // (literal URLs and/or globalEnv.<key> tokens). Binding-only alias over PATCH.
 app.put(
   '/:id/binding',
-  requireAdmin,
+  requireAccess('workflows', 'write'),
   zValidator('json', z.object({ serverUrl: z.union([z.string(), z.array(z.string())]) })),
   (c) => {
     try {
@@ -314,7 +314,7 @@ app.put(
 )
 
 // ── DELETE /workflows/:id ─────────────────────────────────
-app.delete('/:id', requireAdmin, (c) => {
+app.delete('/:id', requireAccess('workflows', 'write'), (c) => {
   try {
     wf.deleteWorkflow(c.req.param('id'))
     return c.body(null, 204)
@@ -377,7 +377,7 @@ app.get('/:id/history', requireAuth, (c) => {
 })
 
 // ── POST /workflows/:id/history/:snapshotId/restore ──────
-app.post('/:id/history/:snapshotId/restore', requireAdmin, (c) => {
+app.post('/:id/history/:snapshotId/restore', requireAccess('workflows', 'write'), (c) => {
   try {
     return c.json(wf.restoreSnapshotById(c.req.param('id'), c.req.param('snapshotId')))
   } catch (err) {
@@ -386,7 +386,7 @@ app.post('/:id/history/:snapshotId/restore', requireAdmin, (c) => {
 })
 
 // ── POST /workflows/:id/import/analyze ───────────────────
-app.post('/:id/import/analyze', requireAdmin, async (c) => {
+app.post('/:id/import/analyze', requireAccess('workflows', 'write'), async (c) => {
   let parsed: Record<string, string | File>
   try {
     parsed = await c.req.parseBody()
@@ -403,7 +403,7 @@ app.post('/:id/import/analyze', requireAdmin, async (c) => {
 })
 
 // ── POST /workflows/:id/import/apply ─────────────────────
-app.post('/:id/import/apply', requireAdmin, async (c) => {
+app.post('/:id/import/apply', requireAccess('workflows', 'write'), async (c) => {
   let parsed: Record<string, string | File>
   try {
     parsed = await c.req.parseBody()
@@ -420,7 +420,7 @@ app.post('/:id/import/apply', requireAdmin, async (c) => {
 })
 
 // ── POST /workflows/import/analyze — inspect a file for a NEW workflow ──
-app.post('/import/analyze', requireAdmin, async (c) => {
+app.post('/import/analyze', requireAccess('workflows', 'write'), async (c) => {
   let parsed: Record<string, string | File>
   try {
     parsed = await c.req.parseBody()
@@ -437,7 +437,7 @@ app.post('/import/analyze', requireAdmin, async (c) => {
 })
 
 // ── POST /workflows/import/create — create new workflow from an import ──
-app.post('/import/create', requireAdmin, async (c) => {
+app.post('/import/create', requireAccess('workflows', 'write'), async (c) => {
   let parsed: Record<string, string | File>
   try {
     parsed = await c.req.parseBody()

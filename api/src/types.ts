@@ -1,8 +1,7 @@
 // Lightweight user object decoded from JWT — no DB lookup required.
-// Populated by requireAuth; contains every claim embedded at login time.
-// `role` is derived from `roles` at session creation and cached on the JWT
-// so we don't recompute it on every middleware pass. `isAdmin` is the legacy
-// flag (admin OR ops); preserved for every requireAdmin callsite.
+// Populated by requireAuth. `role` is re-derived from `roles` on every
+// middleware pass (normalising legacy role strings). `isAdmin` is true only
+// for the admin role; it backs every requireAdmin callsite.
 export type AuthUser = {
   id: string
   username: string

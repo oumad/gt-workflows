@@ -5,7 +5,6 @@ import { analyzeImport, createImport } from '../../lib/workflowImport'
 import { useFileDrop } from '../../hooks/useFileDrop'
 import { FileDropOverlay } from '../../components/ui/FileDropOverlay'
 import { ServerUrlPicker } from './ServerUrlPicker'
-import { Button } from '../../components/ui/Button'
 import { ErrorAlert } from '../../components/ui/Alert'
 import type { Workflow, Server } from '../../types'
 
@@ -320,33 +319,29 @@ export function WorkflowForm({ initial, servers, onSaved, onDeleted, onCancel }:
         {isEdit &&
           onDeleted &&
           (confirm ? (
-            <Button
+            <button
+              className="btn btn-danger"
               type="button"
               onClick={handleDelete}
               disabled={busy}
-              style={{
-                marginRight: 'auto',
-                background: 'var(--bad)',
-                color: 'white',
-                borderColor: 'var(--bad)',
-              }}
+              style={{ marginRight: 'auto' }}
             >
               Confirm delete
-            </Button>
+            </button>
           ) : (
-            <Button
+            <button
+              className="btn btn-ghost"
               type="button"
-              variant="ghost"
               onClick={() => setConfirm(true)}
               style={{ marginRight: 'auto', color: 'var(--bad)' }}
             >
               Delete
-            </Button>
+            </button>
           ))}
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
+        <button className="btn btn-ghost" type="button" onClick={onCancel} disabled={busy}>
           Cancel
-        </Button>
-        <Button type="submit" variant="primary" disabled={busy || importing}>
+        </button>
+        <button className="btn btn-primary" type="submit" disabled={busy || importing}>
           {busy
             ? 'Saving…'
             : isEdit
@@ -354,7 +349,7 @@ export function WorkflowForm({ initial, servers, onSaved, onDeleted, onCancel }:
               : imported
                 ? 'Create & import'
                 : 'Create workflow'}
-        </Button>
+        </button>
       </div>
     </form>
   )

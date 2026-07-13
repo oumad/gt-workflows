@@ -2,6 +2,8 @@
 // This module just formats payloads and posts to the webhook URL.
 
 import { config } from '../config/index.js'
+import { fmtDurationMs } from './format.js'
+import { portOf } from './serverUrl.js'
 
 const WEBHOOK_URL = config.DISCORD_WEBHOOK_URL ?? ''
 
@@ -177,24 +179,11 @@ export type ServerAlertEvent =
       reminder: number
     }
 
-function fmtDuration(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ${s % 60}s`
-  const h = Math.floor(m / 60)
-  return `${h}h ${m % 60}m`
-}
-
 // Server (physical host) vs Service (a ported process on it) — the same URL-
 // shape rule the rest of the app uses: a port means service, port-less means
 // host. Lets the alert say which kind is down instead of a generic "Server".
 function recordKind(url: string): 'Server' | 'Service' {
-  try {
-    return new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).port ? 'Service' : 'Server'
-  } catch {
-    return 'Server'
-  }
+  return portOf(url) ? 'Service' : 'Server'
 }
 
 /** Title noun for a batch: the shared kind when uniform, else generic. */
@@ -242,7 +231,7 @@ export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise
       COLORS.green,
       events.filter((e) => e.kind === 'recovered'),
       (e) =>
-        `**${e.name}** · ${recordKind(e.url)} — was down for ${fmtDuration(e.downForMs)}\n\`${e.url}\``,
+        `**${e.name}** · ${recordKind(e.url)} — was down for ${fmtDurationMs(e.downForMs)}\n\`${e.url}\``,
     ),
     alertEmbed(
       '⏰',
@@ -250,7 +239,7 @@ export async function sendServerStatusAlert(events: ServerAlertEvent[]): Promise
       COLORS.yellow,
       events.filter((e) => e.kind === 'still_down'),
       (e) =>
-        `**${e.name}** · ${recordKind(e.url)} — down for ${fmtDuration(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
+        `**${e.name}** · ${recordKind(e.url)} — down for ${fmtDurationMs(e.downForMs)} (reminder #${e.reminder})\n\`${e.url}\``,
     ),
   ].filter((x): x is DiscordEmbed => x !== null)
 

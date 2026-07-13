@@ -109,7 +109,7 @@
 .tile-icon {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   color: white;
@@ -149,11 +149,11 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(26, 24, 20, 0.5);
+  background: rgba(26, 24, 20, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-overlay);
   padding: 20px;
   backdrop-filter: blur(2px);
 }
@@ -200,18 +200,21 @@
 .modal-stage {
   position: fixed;
   inset: 0;
-  background: rgba(26, 24, 20, 0.4);
-  z-index: 100;
+  background: rgba(26, 24, 20, 0.45);
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(2px);
 }
+.modal-stage > .modal.modal-sm {
+  width: min(440px, 92vw);
+}
 .modal-stage > .modal {
   width: min(960px, 92vw);
   max-height: 88vh;
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(26, 24, 20, 0.28);
@@ -244,8 +247,8 @@
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(26, 24, 20, 0.4);
-  z-index: 100;
+  background: rgba(26, 24, 20, 0.45);
+  z-index: var(--z-overlay);
   display: flex;
   justify-content: flex-end;
   backdrop-filter: blur(2px);
@@ -335,7 +338,7 @@
 
 /* ─── Alert component ───────────────────────── */
 .alert {
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px 14px;
   font-size: 13px;
   display: flex;

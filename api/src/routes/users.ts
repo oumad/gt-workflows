@@ -5,7 +5,13 @@ import { eq } from 'drizzle-orm'
 import { db, users } from '../db/index.js'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
-import { derivePrimaryRole, deriveIsAdmin, ROLES, type Role } from '../lib/permissions.js'
+import {
+  derivePrimaryRole,
+  deriveIsAdmin,
+  normalizeRoles,
+  ROLES,
+  type Role,
+} from '../lib/permissions.js'
 import type { AppVariables } from '../types.js'
 
 /* ─── Shared schemas ────────────────────────────────────────────
@@ -26,8 +32,8 @@ type DbUserRow = typeof users.$inferSelect
  *  `role` + canonical `isAdmin`. Every returned-user code path goes through
  *  this so the frontend always sees the same shape. */
 function projectUser(row: Omit<DbUserRow, 'passwordHash'>) {
-  const roles = row.roles ?? []
-  const effective = roles.length > 0 ? roles : row.isAdmin ? ['admin'] : ['designer']
+  const roles = normalizeRoles(row.roles ?? [])
+  const effective = roles.length > 0 ? roles : row.isAdmin ? ['admin'] : ['operator']
   return {
     ...row,
     roles: effective,
@@ -172,7 +178,7 @@ app.post('/', requireAuth, requireAdmin, zValidator('json', createUserSchema), a
       username: normalized,
       passwordHash: hash,
       roles: [role],
-      isAdmin: role === 'admin' || role === 'ops',
+      isAdmin: role === 'admin',
     })
     .returning()
   if (!row) return c.json({ error: 'Failed to create user' }, 500)
@@ -236,15 +242,15 @@ app.patch('/:id', requireAuth, requireAdmin, zValidator('json', patchSchema), as
   const update: Partial<typeof users.$inferInsert> = {}
   if (body.role !== undefined) {
     update.roles = [body.role]
-    update.isAdmin = body.role === 'admin' || body.role === 'ops'
+    update.isAdmin = body.role === 'admin'
   } else if (body.roles !== undefined) {
-    update.roles = body.roles
+    update.roles = normalizeRoles(body.roles)
     update.isAdmin = deriveIsAdmin(body.roles)
   } else if (body.isAdmin !== undefined) {
     // Legacy: if only isAdmin is provided, translate to a role array so
     // we don't leave the row's roles[] inconsistent with the flag.
     update.isAdmin = body.isAdmin
-    update.roles = body.isAdmin ? ['admin'] : ['designer']
+    update.roles = body.isAdmin ? ['admin'] : ['operator']
   }
 
   if (Object.keys(update).length === 0) {

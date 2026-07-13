@@ -28,56 +28,6 @@ export function cardTint(imgKey: string): React.CSSProperties {
   return { background: `linear-gradient(180deg, oklch(96% 0.04 ${hue}) 0%, var(--surface) 60%)` }
 }
 
-export function workflowStats(name: string) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
-  const r = (n: number) => {
-    h = (h * 1103515245 + 12345) | 0
-    return Math.abs(h % n)
-  }
-  const runs = 60 + r(940)
-  const success = 78 + r(21)
-  const avgSec = 6 + r(594)
-  const p95Sec = Math.round(avgSec * (1.6 + r(120) / 100))
-  const maxSec = Math.round(p95Sec * (1.3 + r(140) / 100))
-  return { runs, success, avgSec, p95Sec, maxSec }
-}
-
-export const MOCK_SERVERS = [
-  'node-01',
-  'node-02',
-  'node-03',
-  'node-04',
-  'node-05',
-  'node-06',
-  'node-07',
-  'node-08',
-  'node-09',
-  'node-10',
-  'node-12',
-]
-
-export function workflowServerMatrix(name: string, serverIds: string[]) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
-  const r = () => {
-    h = (h * 1103515245 + 12345) | 0
-    return Math.abs(h % 1000) / 1000
-  }
-  const declared = serverIds.filter((s) => /^node-/.test(s))
-  const candidates = declared.length ? declared : MOCK_SERVERS
-  const k = 2 + Math.floor(r() * 3)
-  const picks: string[] = []
-  const pool = candidates.slice()
-  for (let i = 0; i < Math.min(k, pool.length); i++) {
-    const idx = Math.floor(r() * pool.length)
-    picks.push(pool.splice(idx, 1)[0])
-  }
-  const weights = picks.map((_, i) => (i === 0 ? 40 + r() * 40 : 5 + r() * 35))
-  const sum = weights.reduce((a, b) => a + b, 0)
-  return picks.map((s, i) => ({ server: s, pct: weights[i] / sum }))
-}
-
 // Duration formatting now lives in the shared lib/format module; `fmtDur` is
 // kept as an alias of the canonical `fmtDuration` so existing imports work.
 export { fmtDuration as fmtDur } from '../../lib/format'

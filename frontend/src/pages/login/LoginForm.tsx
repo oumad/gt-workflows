@@ -1,6 +1,5 @@
 import { type FormEvent, useState } from 'react'
 import { User, Lock, Eye, EyeOff, ChevronRight } from 'lucide-react'
-import { Button } from '../../components/ui/Button'
 import { ErrorAlert } from '../../components/ui/Alert'
 import { api } from '../../lib/api'
 import { saveSession } from '../../lib/storage'
@@ -95,9 +94,9 @@ export function LoginForm() {
 
       {error && <ErrorAlert>{error}</ErrorAlert>}
 
-      <Button
+      <button
+        className="btn btn-accent"
         type="submit"
-        variant="accent"
         disabled={busy}
         style={{ height: 40, fontSize: 14, justifyContent: 'center' }}
       >
@@ -109,7 +108,7 @@ export function LoginForm() {
             <ChevronRight size={14} />
           </>
         )}
-      </Button>
+      </button>
     </form>
   )
 }

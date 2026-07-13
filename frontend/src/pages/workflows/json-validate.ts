@@ -1,6 +1,4 @@
-/* JSON parsing with friendly errors + ComfyUI workflow validator. Used by
- * JsonFileEditor. Lives outside so the validator can be reused for tests or
- * a CLI lint command later. */
+/* JSON parsing with friendly errors. Used by JsonFileEditor. */
 
 export type ParseOk = { ok: true; value: Record<string, unknown> }
 export type ParseError = {
@@ -52,49 +50,6 @@ export function parseJsonFriendly(text: string): ParseResult {
     else friendly = `Line ${line}: ${msg.replace(/^.*?:\s*/, '')}`
     return { ok: false, error: { line, col, message: friendly, raw: msg } }
   }
-}
-
-export type Issue = { level: 'error' | 'warn'; path?: string; message: string }
-
-/** Walk a ComfyUI-shaped workflow object and surface obvious mistakes:
- *  missing class_type on a node, inputs that aren't objects, references to
- *  node ids that don't exist. */
-export function validateComfy(obj: Record<string, unknown>): Issue[] {
-  const issues: Issue[] = []
-  const ids = Object.keys(obj)
-  if (ids.length === 0) {
-    issues.push({ level: 'warn', message: 'Workflow has no nodes.' })
-    return issues
-  }
-  for (const id of ids) {
-    const node = obj[id] as Record<string, unknown> | null
-    if (!node || typeof node !== 'object') {
-      issues.push({ level: 'error', path: id, message: `Node "${id}" should be an object.` })
-      continue
-    }
-    if (!node['class_type'])
-      issues.push({ level: 'error', path: id, message: `Node "${id}" is missing "class_type".` })
-    if (node['inputs'] && typeof node['inputs'] !== 'object')
-      issues.push({ level: 'error', path: id, message: `Node "${id}" — inputs must be an object.` })
-    if (node['inputs'] && typeof node['inputs'] === 'object') {
-      for (const [k, v] of Object.entries(node['inputs'] as Record<string, unknown>)) {
-        if (
-          Array.isArray(v) &&
-          v.length === 2 &&
-          (typeof v[0] === 'string' || typeof v[0] === 'number')
-        ) {
-          const ref = String(v[0])
-          if (!obj[ref])
-            issues.push({
-              level: 'warn',
-              path: `${id}.inputs.${k}`,
-              message: `Node "${id}" → "${k}" refs node "${ref}" which doesn't exist.`,
-            })
-        }
-      }
-    }
-  }
-  return issues
 }
 
 export function prettify(text: string): string {

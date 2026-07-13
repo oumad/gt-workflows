@@ -5,10 +5,10 @@ const AVATAR_COLORS = [
   'var(--pop-purple)',
   'var(--pop-pink)',
   'var(--pop-cyan)',
-  '#6366f1',
-  '#0ea5e9',
-  '#10b981',
-  '#f59e0b',
+  'var(--warn)',
+  'var(--bad)',
+  'var(--pop-yellow)',
+  'var(--accent-ink)',
 ]
 
 export function avatarColor(id: string): string {
@@ -49,14 +49,6 @@ export function relTime(iso: string | null): { label: string; tone: string } {
 // name this helper has historically used.
 export { fmtDurationMs as fmtMs } from '../../lib/format'
 
-export function fmtHours(ms: number | null | undefined): string {
-  if (!ms) return '—'
-  const h = ms / 3_600_000
-  if (h < 1) return `${Math.round(h * 60)}m`
-  if (h < 10) return `${h.toFixed(1)}h`
-  return `${Math.round(h)}h`
-}
-
 export function fmtDate(s: string): string {
   return new Date(s).toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
@@ -87,15 +79,3 @@ export function RankChip({ rank, of }: { rank: number | null; of: number }) {
   )
 }
 
-export function PctBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
-      <div className="bar" style={{ flex: 1 }}>
-        <i style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
-      </div>
-      <span className="mono" style={{ fontSize: 11, width: 32, textAlign: 'right', flexShrink: 0 }}>
-        {pct.toFixed(0)}%
-      </span>
-    </div>
-  )
-}

@@ -189,34 +189,11 @@ export function SetoModal({
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 500,
-        background: 'rgba(0,0,0,.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
-      onClick={onClose}
-    >
+    <div className="modal-stage" onClick={onClose} style={{ padding: 16 }}>
       <div
+        className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 540,
-          maxWidth: '100%',
-          maxHeight: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--surface)',
-          borderRadius: 14,
-          border: '1px solid var(--line)',
-          boxShadow: 'var(--shadow-lg)',
-          overflow: 'hidden',
-          cursor: 'default',
-        }}
+        style={{ width: 'min(540px, 92vw)', maxHeight: '85vh', cursor: 'default' }}
       >
         {/* Persona header */}
         <div

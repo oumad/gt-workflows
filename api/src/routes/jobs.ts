@@ -9,7 +9,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { streamSSE } from 'hono/streaming'
-import { requireAuth, requireCapability } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
 import { listJobsQuery, jobReportSchema, forceStopSchema } from '../validators/jobs.js'
 import * as jobsService from '../services/jobs.js'
@@ -72,12 +72,12 @@ app.get('/stats', requireAuth, async (c) => c.json(await jobsService.stats()))
 // Operator escape hatch for jobs no runner will ever finish (trainer lost
 // the job, stale rows): force-fails the BullMQ hash and closes the Postgres
 // row. No runner is contacted. Optional body.kind disambiguates wf/lora ids.
-// Gated on 'stop-job' — same capability as the ComfyUI stop; this writes the
+// Gated on jobs write — same access as the ComfyUI stop; this writes the
 // shared gt-workflows queue so it must not be weaker than the gentler stop.
 app.post(
   '/:id/force-stop',
   requireAuth,
-  requireCapability('stop-job'),
+  requireAccess('jobs', 'write'),
   zValidator('json', forceStopSchema),
   async (c) => {
     try {

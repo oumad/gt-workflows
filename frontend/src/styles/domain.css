@@ -91,7 +91,7 @@
   background: var(--surface-2);
   color: var(--ink-3);
   padding: 2px 7px;
-  border-radius: 99px;
+  border-radius: 999px;
   border: 1px solid var(--line);
 }
 
@@ -157,7 +157,7 @@
   position: absolute;
   background: var(--surface);
   border: 1.5px solid var(--ink);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -170,7 +170,7 @@
 .wf-node-icon {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   color: white;

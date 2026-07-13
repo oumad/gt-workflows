@@ -40,26 +40,14 @@
   --shadow-sm: 0 1px 2px rgba(26, 24, 20, 0.04), 0 1px 0 rgba(26, 24, 20, 0.02);
   --shadow: 0 1px 2px rgba(26, 24, 20, 0.04), 0 4px 14px rgba(26, 24, 20, 0.06);
   --shadow-lg: 0 12px 36px rgba(26, 24, 20, 0.12);
+
+  /* Layering scale — the only three z-index values the app uses */
+  --z-overlay: 100; /* modals, drawers, lightboxes */
+  --z-pop: 200; /* dropdowns / popovers (must beat a modal when opened inside one) */
+  --z-toast: 1000; /* toasts, system status banner */
 }
 
-/* ─── Density modes ─────────────────────────── */
-[data-density='compact'] {
-  --pad: 10px;
-  --gap: 10px;
-  --row-h: 30px;
-}
-[data-density='comfy'] {
-  --pad: 18px;
-  --gap: 18px;
-  --row-h: 42px;
-}
-
-/* ─── Font modes ────────────────────────────── */
-[data-font='mono'] {
-  --font-ui: 'JetBrains Mono', ui-monospace, monospace;
-  --font-display: 'JetBrains Mono', ui-monospace, monospace;
-}
-[data-font='serif'] {
-  --font-ui: 'Fraunces', 'Source Serif 4', Georgia, serif;
-  --font-display: 'Fraunces', Georgia, serif;
-}
+/* ─── Type scale (convention, not tokens) ───────────────────────
+   Stick to this px ladder for font-size:
+   10 uppercase micro-labels · 11 labels/chips · 12 secondary text
+   13 body/buttons · 15 modal & drawer titles · 18+ display headings */

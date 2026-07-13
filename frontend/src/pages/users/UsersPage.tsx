@@ -11,56 +11,39 @@ import {
   ROLES as ROLE_VALUES,
   ROLE_LABEL,
   ROLE_DESCRIPTION,
+  ROLE_ACCESS,
   type Role,
 } from '../../lib/permissions'
+import type { Page } from '../../types'
 
 /* ─── Shared password rule (mirrors api/src/routes/users.ts validators) ──
    Min 8 chars. Documented in the create/reset modals so admins know up front
    instead of finding out from a server error. */
 const PASSWORD_MIN = 8
 
-/* ─── Static reference data ─────────────────────────────────────
-   These role definitions describe the intended permission model. The Admin
-   toggle (PATCH /api/users/:id) is the only piece the backend persists today;
-   the role cards and permission matrix are presented as read-only reference
-   until a full RBAC backend exists. */
-const ROLES = [
-  {
-    id: 'admin',
-    label: 'Admin',
-    color: 'var(--bad)',
-    desc: 'Full access including user management and service config.',
-    perms: { workflows: true, jobs: true, servers: true, users: true, training: true },
-  },
-  {
-    id: 'operator',
-    label: 'Operator',
-    color: 'var(--pop-purple)',
-    desc: 'Can run jobs and manage workflows. Cannot manage users.',
-    perms: { workflows: true, jobs: true, servers: false, users: false, training: true },
-  },
-  {
-    id: 'user',
-    label: 'User',
-    color: 'var(--accent)',
-    desc: 'Can run workflows and view results.',
-    perms: { workflows: true, jobs: false, servers: false, users: false, training: false },
-  },
-  {
-    id: 'viewer',
-    label: 'Viewer',
-    color: 'var(--ink-3)',
-    desc: 'Read-only access to workflows and job history.',
-    perms: { workflows: false, jobs: false, servers: false, users: false, training: false },
-  },
-]
+/* ─── Roles/Permissions reference ────────────────────────────────
+   The cards and matrix render straight from ROLE_ACCESS in lib/permissions
+   (the same table that drives the sidebar, route guard, and backend mirror)
+   so this page can never drift from what's actually enforced. */
+const ROLE_COLOR: Record<Role, string> = {
+  admin: 'var(--bad)',
+  operator: 'var(--pop-purple)',
+  master: 'var(--info)',
+  user: 'var(--accent)',
+}
 
-const PERM_KEYS: { id: string; label: string }[] = [
+const PERM_KEYS: { id: Page; label: string }[] = [
   { id: 'workflows', label: 'Workflows' },
   { id: 'jobs', label: 'Jobs' },
-  { id: 'servers', label: 'Services' },
-  { id: 'training', label: 'Training' },
+  { id: 'services', label: 'Services' },
+  { id: 'servers', label: 'Servers' },
+  { id: 'doctor', label: 'Doctor' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'calendar', label: 'Calendar' },
+  { id: 'clients', label: 'GT Users' },
   { id: 'users', label: 'Users' },
+  { id: 'credentials', label: 'Credentials' },
+  { id: 'seto', label: 'Seto' },
 ]
 
 function initials(name: string | null | undefined) {
@@ -299,7 +282,7 @@ function UserDrawer({
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<Role>('designer')
+  const [role, setRole] = useState<Role>('user')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -323,18 +306,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,.4)',
-        display: 'grid',
-        placeItems: 'center',
-        zIndex: 1000,
-        padding: 20,
-      }}
-    >
+    <div className="modal-stage" onClick={onClose} style={{ padding: 20 }}>
       <div
         onClick={(e) => e.stopPropagation()}
         className="card card-pad col"
@@ -506,7 +478,6 @@ function AllUsers() {
               <tr>
                 <th>User</th>
                 <th>Role</th>
-                <th>Custom roles</th>
                 <th>Created</th>
                 <th>Last seen</th>
                 <th></th>
@@ -524,22 +495,15 @@ function AllUsers() {
                     </div>
                   </td>
                   <td>
-                    <span className={`chip ${u.isAdmin ? 'chip-bad' : ''}`}>
-                      {u.isAdmin ? 'Admin' : 'Member'}
+                    <span
+                      className="chip"
+                      style={{
+                        background: `color-mix(in oklab, ${ROLE_COLOR[u.role]} 14%, transparent)`,
+                        color: ROLE_COLOR[u.role],
+                      }}
+                    >
+                      {ROLE_LABEL[u.role]}
                     </span>
-                  </td>
-                  <td>
-                    {u.roles.length === 0 ? (
-                      <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>—</span>
-                    ) : (
-                      <div className="row" style={{ gap: 3, flexWrap: 'wrap' }}>
-                        {u.roles.map((r) => (
-                          <span key={r} className="chip" style={{ fontSize: 10 }}>
-                            {r}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                     {new Date(u.createdAt).toLocaleDateString('en-US', {
@@ -606,38 +570,45 @@ function AllUsers() {
 function RolesTab() {
   return (
     <div className="grid-2">
-      {ROLES.map((r) => (
-        <div key={r.id} className="card card-pad">
+      {ROLE_VALUES.map((r) => (
+        <div key={r} className="card card-pad">
           <div className="row" style={{ marginBottom: 10 }}>
             <span
               className="chip"
               style={{
-                background: `color-mix(in oklab, ${r.color} 14%, transparent)`,
-                color: r.color,
+                background: `color-mix(in oklab, ${ROLE_COLOR[r]} 14%, transparent)`,
+                color: ROLE_COLOR[r],
               }}
             >
-              {r.label}
+              {ROLE_LABEL[r]}
             </span>
-            <Shield size={14} style={{ color: r.color, marginLeft: 'auto' }} />
+            <Shield size={14} style={{ color: ROLE_COLOR[r], marginLeft: 'auto' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 12, lineHeight: 1.4 }}>
-            {r.desc}
+            {ROLE_DESCRIPTION[r]}
           </div>
           <div className="col" style={{ gap: 6 }}>
-            {PERM_KEYS.map((p) => (
-              <div key={p.id} className="row" style={{ gap: 8 }}>
-                <span style={{ flex: 1, fontSize: 12, color: 'var(--ink-2)' }}>{p.label}</span>
-                {r.perms[p.id as keyof typeof r.perms] ? (
-                  <span className="chip chip-good" style={{ padding: '1px 6px' }}>
-                    <Check size={10} /> On
-                  </span>
-                ) : (
-                  <span className="chip" style={{ padding: '1px 6px', color: 'var(--ink-3)' }}>
-                    Off
-                  </span>
-                )}
-              </div>
-            ))}
+            {PERM_KEYS.map((p) => {
+              const access = ROLE_ACCESS[r][p.id] ?? null
+              return (
+                <div key={p.id} className="row" style={{ gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--ink-2)' }}>{p.label}</span>
+                  {access === 'write' ? (
+                    <span className="chip chip-good" style={{ padding: '1px 6px' }}>
+                      <Check size={10} /> Write
+                    </span>
+                  ) : access === 'read' ? (
+                    <span className="chip chip-info" style={{ padding: '1px 6px' }}>
+                      Read
+                    </span>
+                  ) : (
+                    <span className="chip" style={{ padding: '1px 6px', color: 'var(--ink-3)' }}>
+                      Off
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -646,26 +617,26 @@ function RolesTab() {
 }
 
 /* ─── Permissions tab ───────────────────────────────────────────
-   Read-only matrix. Per-permission editing requires a backend that the
-   current schema doesn't support — only the Admin boolean on users is
-   persisted today. */
+   Read-only matrix rendered from ROLE_ACCESS — W = write, R = read-only,
+   blank = brew hidden for that role. Roles are assigned per user in the
+   All users tab; per-cell editing is intentionally not a thing. */
 function PermissionsTab() {
   return (
     <div className="card">
       <div className="card-head">
         <div className="card-title">Permission matrix</div>
         <span className="chip" style={{ fontSize: 11 }}>
-          Reference · admin flag is the only persisted toggle
+          W = write · R = read-only · blank = hidden
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table className="tbl" style={{ minWidth: 600 }}>
           <thead>
             <tr>
-              <th>Permission</th>
-              {ROLES.map((r) => (
-                <th key={r.id} style={{ textAlign: 'center', color: r.color }}>
-                  {r.label}
+              <th>Brew</th>
+              {ROLE_VALUES.map((r) => (
+                <th key={r} style={{ textAlign: 'center', color: ROLE_COLOR[r] }}>
+                  {ROLE_LABEL[r]}
                 </th>
               ))}
             </tr>
@@ -674,21 +645,27 @@ function PermissionsTab() {
             {PERM_KEYS.map((p) => (
               <tr key={p.id}>
                 <td style={{ fontWeight: 500 }}>{p.label}</td>
-                {ROLES.map((r) => (
-                  <td key={r.id} style={{ textAlign: 'center' }}>
-                    <span
-                      className="perm-cell"
-                      data-on={r.perms[p.id as keyof typeof r.perms] ? '' : undefined}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {r.perms[p.id as keyof typeof r.perms] && <Check size={12} />}
-                    </span>
-                  </td>
-                ))}
+                {ROLE_VALUES.map((r) => {
+                  const access = ROLE_ACCESS[r][p.id] ?? null
+                  return (
+                    <td key={r} style={{ textAlign: 'center' }}>
+                      <span
+                        className="perm-cell"
+                        data-on={access === 'write' ? '' : undefined}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: access ? undefined : 'var(--ink-3)',
+                        }}
+                      >
+                        {access === 'write' ? 'W' : access === 'read' ? 'R' : ''}
+                      </span>
+                    </td>
+                  )
+                })}
               </tr>
             ))}
           </tbody>

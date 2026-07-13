@@ -10,8 +10,9 @@ import {
 } from 'lucide-react'
 import type { Row } from './jobs-types'
 import { fmtSec, fmtCompleted } from './jobs-utils'
-import { JobKindBadge, JobName, StatusPill, SlowChip } from './JobsModal'
+import { JobKindBadge, JobName, SlowChip } from './JobsModal'
 import { SetoModal } from '../../components/seto/SetoModal'
+import { useAuth } from '../../context/AuthContext'
 import { STATUS_TONE, STATUS_LABEL } from '../_shared/serverHelpers'
 import type { Page } from '../../types'
 import { classifyError, errorCodeTone, ERROR_CODE_LABEL } from '../analytics/analyticsHelpers'
@@ -44,6 +45,9 @@ export function JobRowMenu({
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   const [setoOpen, setSeto] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
+  // Read-only roles must not be able to reach entities they can't see —
+  // every cross-entity item below is gated on brew visibility.
+  const { canSee, canWrite } = useAuth()
 
   useEffect(() => {
     if (!open) return
@@ -126,7 +130,7 @@ export function JobRowMenu({
               top: pos.top,
               right: pos.right,
               width: 200,
-              zIndex: 9999,
+              zIndex: 'var(--z-pop)',
               background: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: 8,
@@ -137,7 +141,7 @@ export function JobRowMenu({
           >
             {/* Only offer "Show user" when we know the user id — without it the
               link is useless (it'd just open the bare list). */}
-            {r.who !== '—' && r.clientId && navigate && (
+            {r.who !== '—' && r.clientId && navigate && canSee('clients') && (
               <Item
                 icon={User}
                 label={`Show user: ${r.who}`}
@@ -146,19 +150,22 @@ export function JobRowMenu({
             )}
             {/* Server present + linked → open detail. Server present but linked
               row is gone → offer to create one pre-filled with the URL. */}
-            {r.server && r.serverId && navigate && (
+            {r.server && r.serverId && navigate && canSee('services') && (
               <Item
                 icon={ServerIcon}
                 label={`Show service: ${r.server}`}
-                onClick={() => navigate('servers', `/servers/${r.serverId}`)}
+                onClick={() => navigate('services', `/services/${r.serverId}`)}
               />
             )}
-            {r.server && !r.serverId && navigate && (
+            {r.server && !r.serverId && navigate && canWrite('services') && (
               <Item
                 icon={ServerIcon}
                 label={`Create service: ${r.server}`}
                 onClick={() =>
-                  navigate('servers', `/servers?addUrl=${encodeURIComponent(`http://${r.server}`)}`)
+                  navigate(
+                    'services',
+                    `/services?addUrl=${encodeURIComponent(`http://${r.server}`)}`,
+                  )
                 }
               />
             )}
@@ -176,13 +183,16 @@ export function JobRowMenu({
                   />
                 )
               })()}
-            {(r.clientId ||
-              r.serverId ||
-              (r.kind === 'wf' &&
-                (r.raw as { workflowId?: string | null } | null)?.workflowId)) && (
-              <div style={{ height: 1, background: 'var(--line)', margin: '3px 0' }} />
+            {canWrite('services') &&
+              (r.clientId ||
+                r.serverId ||
+                (r.kind === 'wf' &&
+                  (r.raw as { workflowId?: string | null } | null)?.workflowId)) && (
+                <div style={{ height: 1, background: 'var(--line)', margin: '3px 0' }} />
+              )}
+            {canWrite('services') && (
+              <Item icon={Bot} label="Ask Seto" onClick={() => setSeto(true)} />
             )}
-            <Item icon={Bot} label="Ask Seto" onClick={() => setSeto(true)} />
           </div>,
           document.body,
         )}
@@ -197,114 +207,6 @@ export function JobRowMenu({
         />
       )}
     </td>
-  )
-}
-
-/* ─── Job history table (reusable) ─────────────────────────────── */
-export function JobHistoryTable({
-  rows,
-  loading,
-  onSelect,
-  hideServer = false,
-  avgDurations,
-  navigate,
-}: {
-  rows: Row[]
-  loading?: boolean
-  onSelect: (r: Row) => void
-  hideServer?: boolean
-  /** Workflow-name → avg seconds, used to flag slow runs inline. Optional —
-   *  when absent, slow chips are simply not rendered. */
-  avgDurations?: Record<string, number>
-  navigate?: NavigateFn
-}) {
-  const hasDotMenu = !!navigate
-  const cols = (hideServer ? 8 : 9) + (hasDotMenu ? 1 : 0)
-  return (
-    <table className="tbl">
-      <thead>
-        <tr>
-          <th style={{ width: 44 }}>Type</th>
-          <th style={{ width: 100 }}>Job ID</th>
-          <th>Name</th>
-          <th style={{ width: 130 }}>User</th>
-          {!hideServer && <th style={{ width: 110 }}>Service</th>}
-          <th style={{ width: 90 }}>Total</th>
-          <th style={{ width: 100 }}>Wait</th>
-          <th style={{ width: 155 }}>Completed</th>
-          <th style={{ width: 115 }}>Status</th>
-          {hasDotMenu && <th style={{ width: 32 }}></th>}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={r.key}
-            style={{
-              background:
-                r.kind === 'lora'
-                  ? 'color-mix(in oklab, var(--accent) 5%, transparent)'
-                  : 'color-mix(in oklab, var(--pop-purple) 3%, transparent)',
-              cursor: 'pointer',
-            }}
-            onClick={() => onSelect(r)}
-          >
-            <td>
-              <JobKindBadge kind={r.kind} />
-            </td>
-            <td>
-              <span className="mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>
-                {r.id}
-              </span>
-            </td>
-            <td>
-              {r.arch ? (
-                <span className="row" style={{ gap: 6, alignItems: 'baseline' }}>
-                  <strong>{r.name}</strong>
-                  <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
-                    · {r.arch}
-                  </span>
-                </span>
-              ) : (
-                <strong>{r.name}</strong>
-              )}
-            </td>
-            <td style={{ color: r.who === '—' ? 'var(--ink-3)' : undefined }}>{r.who}</td>
-            {!hideServer && (
-              <td className="mono" style={{ color: !r.server ? 'var(--ink-3)' : undefined }}>
-                {r.server ?? '—'}
-              </td>
-            )}
-            <td className="mono">
-              {fmtSec(r.totalSec)}
-              <SlowChip row={r} avgSec={avgDurations?.[r.name]} />
-            </td>
-            <td className="mono" style={{ color: waitColor(r.waitTimeSec) }}>
-              {fmtSec(r.waitTimeSec)}
-            </td>
-            <td style={{ color: 'var(--ink-2)', fontSize: 12 }}>{fmtCompleted(r.completedAt)}</td>
-            <td>
-              <StatusPill tone={r.statusTone}>{r.statusLabel}</StatusPill>
-            </td>
-            {hasDotMenu && <JobRowMenu r={r} navigate={navigate} />}
-          </tr>
-        ))}
-        {rows.length === 0 && !loading && (
-          <tr>
-            <td colSpan={cols} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 24 }}>
-              No jobs found.
-            </td>
-          </tr>
-        )}
-        {loading && (
-          <tr>
-            <td colSpan={cols} style={{ textAlign: 'center', color: 'var(--ink-3)', padding: 24 }}>
-              Loading…
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
   )
 }
 

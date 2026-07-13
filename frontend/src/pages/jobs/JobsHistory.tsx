@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { api, isAbortError } from '../../lib/api'
 import { useData } from '../../context/DataContext'
 import { RefreshCw, Download, Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -105,7 +106,7 @@ export function History({
     }
   })()
   const [query, setQuery] = useState(initialQ) // controlled input
-  const [qApplied, setQApplied] = useState(initialQ) // debounced value sent to API
+  const qApplied = useDebouncedValue(query.trim()) // debounced value sent to API
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -139,13 +140,6 @@ export function History({
       .then(setAvgDurations)
       .catch(() => {})
   }, [])
-
-  // Debounce the search input: 300 ms after the last keystroke we promote
-  // `query` into `qApplied`, which the load effect picks up and refetches.
-  useEffect(() => {
-    const t = setTimeout(() => setQApplied(query.trim()), 300)
-    return () => clearTimeout(t)
-  }, [query])
 
   // Track the in-flight request so a fast typist can't have a stale response
   // overwrite their latest one. We abort the previous controller before firing

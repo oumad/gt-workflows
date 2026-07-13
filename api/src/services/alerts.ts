@@ -1,15 +1,7 @@
 import { db, alerts } from '../db/index.js'
 import type { NewAlert } from '../db/schema.js'
 import type { ServerAlertEvent } from '../lib/discord.js'
-
-function fmtDuration(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ${s % 60}s`
-  const h = Math.floor(m / 60)
-  return `${h}h ${m % 60}m`
-}
+import { fmtDurationMs } from '../lib/format.js'
 
 /**
  * Persist server-health alert events to the `alerts` table so the calendar can
@@ -37,7 +29,7 @@ export async function recordServerAlerts(events: ServerAlertEvent[]): Promise<vo
         kind: 'server_recovered',
         severity: 'info',
         title: `${e.name} recovered`,
-        body: `Back online after ${fmtDuration(e.downForMs)} of downtime.`,
+        body: `Back online after ${fmtDurationMs(e.downForMs)} of downtime.`,
         downtimeMs: e.downForMs,
       }
     }
@@ -46,7 +38,7 @@ export async function recordServerAlerts(events: ServerAlertEvent[]): Promise<vo
       kind: 'server_still_down',
       severity: 'warning',
       title: `${e.name} still down`,
-      body: `Down for ${fmtDuration(e.downForMs)} — reminder #${e.reminder}.`,
+      body: `Down for ${fmtDurationMs(e.downForMs)} — reminder #${e.reminder}.`,
       downtimeMs: e.downForMs,
     }
   })

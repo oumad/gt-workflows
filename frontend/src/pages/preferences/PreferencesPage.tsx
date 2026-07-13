@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Check } from 'lucide-react'
 import { PageHead } from '../../components/shell/PageHead'
 import { useAuth } from '../../context/AuthContext'
+import { ROLE_LABEL } from '../../lib/permissions'
 import { api } from '../../lib/api'
 import type { User } from '../../types'
 import { PersonalTokensCard } from './PersonalTokensCard'
@@ -58,7 +59,7 @@ function savePrefs(p: Prefs) {
 }
 
 export function PreferencesPage() {
-  const { user, setUser } = useAuth()
+  const { user, role, setUser } = useAuth()
   const saved = loadPrefs()
 
   const [displayName, setDisplayName] = useState<string>(user?.username ?? '')
@@ -344,7 +345,7 @@ export function PreferencesPage() {
               <div className="health-row">
                 <span className="health-label">Role</span>
                 <span className="health-val" style={{ fontSize: 12 }}>
-                  {user?.isAdmin ? 'Admin' : 'Member'}
+                  {role ? ROLE_LABEL[role] : '—'}
                 </span>
               </div>
             </div>

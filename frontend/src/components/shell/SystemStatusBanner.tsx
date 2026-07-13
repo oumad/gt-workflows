@@ -120,7 +120,7 @@ export function SystemStatusBanner() {
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 10_000,
+        zIndex: 'var(--z-toast)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

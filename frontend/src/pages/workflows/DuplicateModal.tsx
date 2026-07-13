@@ -35,32 +35,12 @@ export function DuplicateModal({
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9998,
-        background: 'rgba(0,0,0,.45)',
-        backdropFilter: 'blur(3px)',
-        display: 'grid',
-        placeItems: 'center',
-      }}
-      onClick={onClose}
-    >
+    <div className="modal-stage" onClick={onClose}>
       <form
+        className="modal modal-sm"
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 14,
-          boxShadow: 'var(--shadow-lg)',
-          width: 420,
-          padding: 24,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}
+        style={{ padding: 24, gap: 16 }}
       >
         <div style={{ fontWeight: 600, fontSize: 16 }}>Duplicate "{wf.name}"</div>
         <div className="form-row">

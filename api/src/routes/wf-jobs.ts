@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { getRedisJob, getRedisJobLogs } from '../services/redis.js'
 import { getAvgDurationsLast90d } from '../services/workflowAvgDurations.js'
 import { stopWfJob } from '../services/wfJobStop.js'
-import { requireAuth, requireCapability } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
 import type { AppVariables } from '../types.js'
 
@@ -50,7 +50,7 @@ app.get('/:id/logs', requireAuth, async (c) => {
 // services/wfJobStop.ts for the rationale). Any auth'd user can fire this;
 // the audit row on workflow_jobs.cm_audit_log captures the username for
 // accountability.
-app.post('/:id/stop', requireAuth, requireCapability('stop-job'), async (c) => {
+app.post('/:id/stop', requireAuth, requireAccess('jobs', 'write'), async (c) => {
   try {
     const result = await stopWfJob(c.req.param('id'), c.var.user.username)
     return c.json(result)

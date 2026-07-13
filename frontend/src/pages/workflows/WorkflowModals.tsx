@@ -144,11 +144,12 @@ type LiveNode = {
 }
 type LogLine = { t: number; level: 'info' | 'debug' | 'warn' | 'error'; msg: string }
 
-const LOG_COLORS: Record<string, string> = {
-  info: '#d6d2c4',
-  debug: '#8a8674',
-  warn: '#f4c97a',
-  error: '#f48b8b',
+/* Map log levels onto the shared `.log` block's span classes (surfaces.css) */
+const LOG_CLASS: Record<string, string> = {
+  info: '',
+  debug: 't',
+  warn: 'warn',
+  error: 'err',
 }
 const NODE_STATUS_META: Record<string, { color: string; bg: string; label: string }> = {
   queued: { color: 'var(--ink-3)', bg: 'var(--surface-2)', label: 'queued' },
@@ -638,7 +639,7 @@ export function TestWorkflowModal({ wf, onClose }: { wf: Workflow; onClose: () =
             </div>
             <div
               className="modal-body"
-              style={{ padding: 0, background: subtab === 'logs' ? '#15140f' : 'var(--surface)' }}
+              style={{ padding: 0, background: subtab === 'logs' ? 'var(--ink)' : 'var(--surface)' }}
             >
               {subtab === 'nodes' && (
                 <div style={{ padding: '6px 0' }}>
@@ -650,23 +651,16 @@ export function TestWorkflowModal({ wf, onClose }: { wf: Workflow; onClose: () =
               {subtab === 'logs' && (
                 <div
                   ref={logsRef}
-                  className="mono"
-                  style={{
-                    padding: '10px 14px',
-                    color: '#d6d2c4',
-                    fontSize: 12,
-                    lineHeight: 1.55,
-                    maxHeight: 360,
-                    overflowY: 'auto',
-                  }}
+                  className="log"
+                  style={{ maxHeight: 360, borderRadius: 0 }}
                 >
-                  {logs.length === 0 && <div style={{ color: '#6b6657' }}>Awaiting output…</div>}
+                  {logs.length === 0 && <div className="t">Awaiting output…</div>}
                   {logs.map((l, i) => (
                     <div key={i} style={{ display: 'flex', gap: 10 }}>
-                      <span style={{ color: '#6b6657', flexShrink: 0 }}>{fmtClock(l.t)}</span>
-                      <span
-                        style={{ color: LOG_COLORS[l.level] ?? '#d6d2c4', whiteSpace: 'pre-wrap' }}
-                      >
+                      <span className="t" style={{ flexShrink: 0 }}>
+                        {fmtClock(l.t)}
+                      </span>
+                      <span className={LOG_CLASS[l.level] || undefined} style={{ whiteSpace: 'pre-wrap' }}>
                         {l.msg}
                       </span>
                     </div>

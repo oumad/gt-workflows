@@ -1,7 +1,14 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import type { Session, User } from '../types'
 import { loadSession, clearSession, updateStoredSession } from '../lib/storage'
-import { type Capability, type Role, can as canFn, derivePrimaryRole } from '../lib/permissions'
+import {
+  type Role,
+  canSee as canSeeFn,
+  canWrite as canWriteFn,
+  derivePrimaryRole,
+  isRole,
+} from '../lib/permissions'
+import type { Page } from '../types'
 
 type AuthContextValue = {
   session: Session | null
@@ -11,8 +18,10 @@ type AuthContextValue = {
    *  sessions (handles the cross-release transition without forcing a
    *  re-login). `null` when no user is logged in. */
   role: Role | null
-  /** Quick capability check — false when no user. Cheap; wraps `can()`. */
-  can: (capability: Capability) => boolean
+  /** Brew visible at all (read or write)? False when no user. */
+  canSee: (page: Page) => boolean
+  /** Brew fully editable? Gates every edit affordance. False when no user. */
+  canWrite: (page: Page) => boolean
   login: (s: Session) => void
   logout: () => void
   setUser: (u: User) => void
@@ -42,15 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const user = session?.user ?? null
-  // Prefer the backend-stamped `role`; fall back to deriving from `roles[]`
-  // so a session created before the role field shipped keeps working.
+  // Prefer the backend-stamped `role` (when it's a current role string);
+  // otherwise derive from `roles[]` — this also normalises legacy roles
+  // (ops/designer/viewer) from sessions created before the rename.
   const role: Role | null = user
-    ? (user.role ?? derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : [])))
+    ? isRole(user.role)
+      ? user.role
+      : derivePrimaryRole(user.roles ?? (user.isAdmin ? ['admin'] : []))
     : null
-  const can = (cap: Capability) => canFn(role, cap)
+  const canSee = (page: Page) => canSeeFn(role, page)
+  const canWrite = (page: Page) => canWriteFn(role, page)
 
   return (
-    <AuthContext.Provider value={{ session, user, role, can, login, logout, setUser }}>
+    <AuthContext.Provider value={{ session, user, role, canSee, canWrite, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   )

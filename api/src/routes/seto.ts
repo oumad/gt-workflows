@@ -12,7 +12,7 @@
  */
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireAdmin, requireCapability } from '../middleware/auth.js'
+import { requireAuth, requireAdmin, requireAccess } from '../middleware/auth.js'
 import { patchConfigSchema, checkSchema } from '../validators/seto.js'
 import * as setoService from '../services/seto.js'
 import type { AppVariables } from '../types.js'
@@ -36,12 +36,12 @@ app.patch(
 )
 
 // ── POST /seto/check ────────────────────────────────────────
-// Gated on 'use-seto-modal' so viewer accounts (read-only) can't run the
-// rule engine — admin / ops / designer pass.
+// Gated on services write so read-only accounts can't run the rule engine —
+// admin / operator pass.
 app.post(
   '/check',
   requireAuth,
-  requireCapability('use-seto-modal'),
+  requireAccess('services', 'write'),
   zValidator('json', checkSchema),
   async (c) => {
     const { kind, id } = c.req.valid('json')

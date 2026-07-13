@@ -148,7 +148,7 @@ export function PersonalTokensCard() {
           </button>
         </div>
 
-        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.55 }}>
           Long-lived bearer tokens for programmatic access and MCP. Use as{' '}
           <code>Authorization: Bearer cm_pat_…</code> against{' '}
           <code>{window.location.origin}/api</code>. Tokens inherit your role — a viewer's token is
@@ -270,18 +270,7 @@ function CreateTokenModal({
   }
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        background: 'rgba(0,0,0,.4)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 20,
-      }}
-    >
+    <div className="modal-stage" onClick={onCancel} style={{ padding: 20 }}>
       <div
         onClick={(e) => e.stopPropagation()}
         className="card card-pad col"
@@ -356,19 +345,7 @@ function FreshTokenModal({
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        background: 'rgba(0,0,0,.45)',
-        backdropFilter: 'blur(2px)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 20,
-      }}
-    >
+    <div className="modal-stage" onClick={onClose} style={{ padding: 20 }}>
       <div
         onClick={(e) => e.stopPropagation()}
         className="card card-pad col"
@@ -444,7 +421,7 @@ function FreshTokenModal({
               borderRadius: 6,
               background: 'var(--surface-2)',
               border: '1px solid var(--line)',
-              fontSize: 11.5,
+              fontSize: 12,
               fontFamily: 'var(--font-mono)',
               overflow: 'auto',
               maxHeight: 180,
@@ -475,7 +452,7 @@ function FreshTokenModal({
               borderRadius: 6,
               background: 'var(--surface-2)',
               border: '1px solid var(--line)',
-              fontSize: 11.5,
+              fontSize: 12,
               fontFamily: 'var(--font-mono)',
               overflow: 'auto',
               whiteSpace: 'pre-wrap',

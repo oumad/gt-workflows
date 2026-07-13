@@ -147,7 +147,7 @@
   color: var(--ink-3);
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   cursor: default;
@@ -166,7 +166,7 @@
 .login-err {
   background: var(--bad-soft);
   color: var(--bad);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   font-size: 12px;
   display: flex;

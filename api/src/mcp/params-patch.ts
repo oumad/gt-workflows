@@ -57,10 +57,9 @@ export type PatchResult = {
 export function applyParamsPatch(workflowId: string, mutator: ParamsMutator): PatchResult {
   const { folderAbs } = resolveFolder(workflowId)
   const before = readParams(folderAbs) as Record<string, unknown>
-  // Deep clone via JSON round-trip — params.json is JSON anyway, so this is
-  // safe and cheap, and guarantees the mutator can't sneak a reference back
-  // into the on-disk state if it deviates from the immutable pattern.
-  const draft = JSON.parse(JSON.stringify(before)) as Record<string, unknown>
+  // Deep clone so the mutator can't sneak a reference back into the on-disk
+  // state if it deviates from the immutable pattern.
+  const draft = structuredClone(before)
   const after = mutator(draft)
 
   const issues = validateParamsShape(after)

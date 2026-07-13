@@ -1,100 +1,138 @@
 /**
- * Role-based access control.
+ * Role-based access control — per-brew read/write.
  *
- *   admin    — every right
- *   ops      — every right (same effective set as admin; the distinct label
- *              lets us see who's actually carrying the pager)
- *   designer — daily-driver: workflows, jobs, services, calendar, GT users,
- *              analytics. Cannot manage users, credentials, Seto config,
- *              hosts (Servers tool), nor perform destructive actions
- *              (delete, scrape) or admin-grade ones (RDP). CAN edit services.
- *   viewer   — read-only analytics + preferences. Nothing else, nothing edit.
+ * Every top-level tool ("brew") is either invisible, read-only, or writable
+ * for a role. One table drives the sidebar, the route guards, and the UI
+ * edit affordances:
+ *
+ *   admin    — write on everything
+ *   operator — Workflows / Jobs / Services / Doctor / Analytics / Calendar / GT Users
+ *   master   — Workflows + Jobs read-only, Analytics, GT Users ("MasterUser")
+ *   user     — Workflows + Jobs read-only, Analytics
  *
  * A user holds zero or more roles in `users.roles` (text[]). The *primary*
- * role is the first one we recognise in a fixed priority order; that's what
- * the UI shows and what `can()` evaluates against. The schema-array shape is
- * kept for future multi-role layering — today we treat it as single-role.
+ * role is the first one recognised in priority order. Legacy role strings
+ * (ops / designer / viewer) are normalised at read time so old DB rows and
+ * old JWTs keep working without a migration.
+ *
+ * Mirrored in frontend/src/lib/permissions.ts — edit both sides together.
  */
 
-export type Role = 'admin' | 'ops' | 'designer' | 'viewer'
+export type Role = 'admin' | 'operator' | 'master' | 'user'
 
-export const ROLES: readonly Role[] = ['admin', 'ops', 'designer', 'viewer']
+export const ROLES: readonly Role[] = ['admin', 'operator', 'master', 'user']
 const ROLE_SET = new Set<string>(ROLES)
 
+/** Pre-rename role strings still present in DB rows / long-lived JWTs. */
+const LEGACY_ROLE: Record<string, Role> = {
+  ops: 'operator',
+  designer: 'operator',
+  viewer: 'user',
+}
+
+/** Map any historical role string onto the current 4-role set. */
+export function normalizeRoles(roles: readonly string[]): Role[] {
+  const out: Role[] = []
+  for (const r of roles) {
+    const norm = ROLE_SET.has(r) ? (r as Role) : LEGACY_ROLE[r]
+    if (norm && !out.includes(norm)) out.push(norm)
+  }
+  return out
+}
+
 /** Priority order for resolving a primary role when a user has multiple. */
-const ROLE_PRIORITY: Role[] = ['admin', 'ops', 'designer', 'viewer']
+const ROLE_PRIORITY: Role[] = ['admin', 'operator', 'master', 'user']
 
-/** Resolve the effective role for a user. Used everywhere that asks "what
- *  can this user do" — single source of truth so a user record with weird
- *  data (empty array, unknown role strings) always lands on a defined value. */
+/** Resolve the effective role for a user. Unknown/empty → 'user' (the
+ *  most restricted role: read-only workflows/jobs/analytics). */
 export function derivePrimaryRole(roles: readonly string[]): Role {
-  for (const r of ROLE_PRIORITY) if (roles.includes(r)) return r
-  // No recognised role → safest default. Newly-created users with no role
-  // see only analytics until an admin promotes them.
-  return 'viewer'
+  const norm = normalizeRoles(roles)
+  for (const r of ROLE_PRIORITY) if (norm.includes(r)) return r
+  return 'user'
 }
 
-/** Legacy isAdmin flag (used by every existing requireAdmin check). True for
- *  admin AND ops — same effective set. Keeping this derivation lets the
- *  pre-existing middleware keep working without touching every callsite. */
+/** True only for the admin role. (Pre-refactor this also covered 'ops';
+ *  operators now go through brew-level guards instead of requireAdmin.) */
 export function deriveIsAdmin(roles: readonly string[]): boolean {
-  return roles.includes('admin') || roles.includes('ops')
+  return normalizeRoles(roles).includes('admin')
 }
 
-/** Type-safe role validator for input (form submits, API patches). */
-export function isRole(s: unknown): s is Role {
-  return typeof s === 'string' && ROLE_SET.has(s)
+/* ── Brew access ─────────────────────────────────────────────────
+ * A brew is a top-level tool. Access is 'write', 'read', or absent
+ * (invisible). This single table replaces the old capability list. */
+
+export type Brew =
+  | 'home'
+  | 'workflows'
+  | 'jobs'
+  | 'services'
+  | 'servers'
+  | 'doctor'
+  | 'analytics'
+  | 'calendar'
+  | 'clients' // GT Users
+  | 'users' // Coffee Maker users
+  | 'credentials'
+  | 'seto'
+  | 'preferences'
+
+export type Access = 'read' | 'write'
+
+const ALL_WRITE: Record<Brew, Access> = {
+  home: 'write',
+  workflows: 'write',
+  jobs: 'write',
+  services: 'write',
+  servers: 'write',
+  doctor: 'write',
+  analytics: 'write',
+  calendar: 'write',
+  clients: 'write',
+  users: 'write',
+  credentials: 'write',
+  seto: 'write',
+  preferences: 'write',
 }
 
-/* ── Capabilities ────────────────────────────────────────────────
- * A capability names a single sensitive action. The frontend uses the same
- * set of names to gate buttons; backend middleware uses them to gate routes.
- * Adding one in only one half is a bug — pair them up in the same PR. */
-
-export type Capability =
-  | 'view-users'
-  | 'view-credentials'
-  | 'view-seto-config'
-  | 'view-servers'
-  | 'use-seto-modal'
-  | 'edit-workflow'
-  | 'edit-calendar'
-  | 'edit-service'
-  | 'edit-server'
-  | 'edit-user'
-  | 'edit-credential'
-  | 'edit-seto-config'
-  | 'delete-service'
-  | 'delete-server'
-  | 'scrape'
-  | 'stop-job'
-  | 'rdp'
-
-const CAPABILITY_BY_ROLE: Record<Capability, Set<Role>> = {
-  // View — page-level gates. "view-servers" is the host-tool, not Services.
-  'view-users': new Set<Role>(['admin', 'ops']),
-  'view-credentials': new Set<Role>(['admin', 'ops']),
-  'view-seto-config': new Set<Role>(['admin', 'ops']),
-  'view-servers': new Set<Role>(['admin', 'ops']),
-  // Use the Ask Seto modal anywhere — designer is fine, viewer is not.
-  'use-seto-modal': new Set<Role>(['admin', 'ops', 'designer']),
-  // Edit
-  'edit-workflow': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-calendar': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-service': new Set<Role>(['admin', 'ops', 'designer']),
-  'edit-server': new Set<Role>(['admin', 'ops']),
-  'edit-user': new Set<Role>(['admin', 'ops']),
-  'edit-credential': new Set<Role>(['admin', 'ops']),
-  'edit-seto-config': new Set<Role>(['admin', 'ops']),
-  // Destructive
-  'delete-service': new Set<Role>(['admin', 'ops']),
-  'delete-server': new Set<Role>(['admin', 'ops']),
-  scrape: new Set<Role>(['admin', 'ops']),
-  // Operational
-  'stop-job': new Set<Role>(['admin', 'ops', 'designer']),
-  rdp: new Set<Role>(['admin', 'ops']),
+export const ROLE_ACCESS: Record<Role, Partial<Record<Brew, Access>>> = {
+  admin: ALL_WRITE,
+  operator: {
+    home: 'read',
+    workflows: 'write',
+    jobs: 'write',
+    services: 'write',
+    doctor: 'write',
+    analytics: 'read',
+    calendar: 'write',
+    clients: 'write',
+    preferences: 'write',
+  },
+  master: {
+    workflows: 'read',
+    jobs: 'read',
+    analytics: 'read',
+    clients: 'write',
+    preferences: 'write',
+  },
+  user: {
+    workflows: 'read',
+    jobs: 'read',
+    analytics: 'read',
+    preferences: 'write',
+  },
 }
 
-export function can(role: Role, capability: Capability): boolean {
-  return CAPABILITY_BY_ROLE[capability].has(role)
+export function accessFor(role: Role | null | undefined, brew: Brew): Access | null {
+  if (!role) return null
+  return ROLE_ACCESS[role][brew] ?? null
+}
+
+/** Can the role see this brew at all (read or write)? */
+export function canRead(role: Role | null | undefined, brew: Brew): boolean {
+  return accessFor(role, brew) != null
+}
+
+/** Can the role mutate anything inside this brew? */
+export function canWrite(role: Role | null | undefined, brew: Brew): boolean {
+  return accessFor(role, brew) === 'write'
 }

@@ -3,8 +3,7 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { eq } from 'drizzle-orm'
 import { db, trainingJobs, gtUsers } from '../db/index.js'
-import { requireAdmin } from '../middleware/auth.js'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import { notFound, httpErrorResponse } from '../lib/httpError.js'
 import { getTrainingLog, getTrainingProgress } from '../services/aiToolkit.js'
 import type { AppVariables } from '../types.js'
@@ -108,7 +107,7 @@ const ingestSchema = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
 })
 
-app.post('/', requireAdmin, zValidator('json', ingestSchema), async (c) => {
+app.post('/', requireAccess('jobs', 'write'), zValidator('json', ingestSchema), async (c) => {
   const body = c.req.valid('json')
 
   // Upsert the GT user record so we always have a row to FK against
@@ -183,7 +182,7 @@ const statusSchema = z.object({
   failedReason: z.string().optional(),
 })
 
-app.patch('/:id/status', requireAdmin, zValidator('json', statusSchema), async (c) => {
+app.patch('/:id/status', requireAccess('jobs', 'write'), zValidator('json', statusSchema), async (c) => {
   const id = c.req.param('id')
   const body = c.req.valid('json')
 

@@ -135,8 +135,10 @@ export function ServersPage({
 }) {
   const cfg = KIND_CONFIG[kindLabel]
   const KindIcon = cfg.icon
-  const { user } = useAuth()
-  const isAdmin = user?.isAdmin ?? false
+  const { canWrite } = useAuth()
+  // "isAdmin" downstream means "can edit this tool's records" — services are
+  // writable by admin + operator, hosts (Servers tool) by admin only.
+  const isAdmin = canWrite(kindLabel === 'service' ? 'services' : 'servers')
   const { servers, loading, error, reload } = useServers()
   const { workflows } = useWorkflows()
   const [tab, setTab] = useTabWithUrl('all', [
@@ -763,7 +765,8 @@ export function ServersPage({
                       )}
 
                       {/* Footer row — different per flavour:
-                          - services (workflow only): Workflows count + GPU
+                          - services (workflow only): Workflows count (GPU is a
+                            host-level concern, shown on the Servers tool)
                           - servers: Latency + GPU */}
                       {kindLabel === 'service' && s.type !== 'lora' && (
                         <div
@@ -816,31 +819,6 @@ export function ServersPage({
                                 </span>
                               )}
                             </div>
-                          </div>
-                          <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '60%' }}>
-                            <div className="stat-label" style={{ fontSize: 9 }}>
-                              GPU
-                            </div>
-                            {(() => {
-                              // GPU may live on the linked host record rather than
-                              // the service itself — falling back keeps the card
-                              // populated even before the service has been probed.
-                              const gpu = linkedGpu(s, servers)
-                              return (
-                                <div
-                                  className="mono"
-                                  style={{
-                                    fontSize: 12,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  title={gpu ?? undefined}
-                                >
-                                  {gpu ?? '—'}
-                                </div>
-                              )
-                            })()}
                           </div>
                         </div>
                       )}
@@ -1078,6 +1056,20 @@ export function ServersPage({
                   },
                 ]
               : []),
+            // Jump to the physical host this service runs on (hostname match).
+            ...(kindLabel === 'service' && navigate && findHostFor(s, servers)
+              ? [
+                  {
+                    icon: <Server size={14} />,
+                    label: 'Go to server',
+                    action: () => {
+                      setMenuOpen(null)
+                      navigate('servers', `/servers/${findHostFor(s, servers)!.id}`)
+                    },
+                    color: 'var(--info)',
+                  },
+                ]
+              : []),
             // Maintenance is a host-level state — only show the toggle on the
             // servers tool, never on services. Services inherit the maintenance
             // status from their host. PATCH /api/servers/:id is admin-only too,
@@ -1147,7 +1139,7 @@ export function ServersPage({
                 position: 'fixed',
                 top: menuOpen.top,
                 left: menuOpen.left,
-                zIndex: 1000,
+                zIndex: 'var(--z-pop)',
                 background: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 10,

@@ -179,7 +179,7 @@ export function GitChip({ onChanged }: { onChanged?: () => void }) {
             position: 'absolute',
             top: 'calc(100% + 6px)',
             right: 0,
-            zIndex: 60,
+            zIndex: 'var(--z-pop)',
             width: 280,
             gap: 12,
             padding: 14,

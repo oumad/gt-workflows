@@ -6,9 +6,11 @@ import { verify } from 'hono/jwt'
 import { config } from '../config/index.js'
 import { resolveBearerToken, touchLastUsed } from '../services/personalTokens.js'
 import {
-  type Capability,
+  type Access,
+  type Brew,
   type Role,
-  can,
+  canRead,
+  canWrite,
   derivePrimaryRole,
   deriveIsAdmin,
 } from '../lib/permissions.js'
@@ -22,10 +24,14 @@ const PAT_PREFIX = 'cm_pat_'
  *  c.var.user. Single helper so JWT / API-key / personal-token paths agree
  *  on field derivation. */
 function authUserFromRow(row: typeof users.$inferSelect): AuthUser {
+  // When a roles array exists it is authoritative — the legacy isAdmin flag
+  // only matters for pre-roles rows with an empty array. (Under the old
+  // model ops implied isAdmin; trusting the stale flag would keep granting
+  // admin to operators.)
   return {
     id: row.id,
     username: row.username,
-    isAdmin: deriveIsAdmin(row.roles) || row.isAdmin,
+    isAdmin: row.roles.length > 0 ? deriveIsAdmin(row.roles) : row.isAdmin,
     roles: row.roles,
     role: derivePrimaryRole(row.roles.length > 0 ? row.roles : row.isAdmin ? ['admin'] : []),
   }
@@ -45,7 +51,7 @@ export const requireAuth: MiddlewareHandler<{ Variables: AppVariables }> = async
       c.set('user', {
         id: devUser.id,
         username: devUser.username,
-        isAdmin: deriveIsAdmin(devUser.roles) || devUser.isAdmin,
+        isAdmin: devUser.roles.length > 0 ? deriveIsAdmin(devUser.roles) : devUser.isAdmin,
         roles: devUser.roles,
         role: derivePrimaryRole(
           devUser.roles.length > 0 ? devUser.roles : devUser.isAdmin ? ['admin'] : [],
@@ -100,14 +106,14 @@ export const requireAuth: MiddlewareHandler<{ Variables: AppVariables }> = async
         const authUser: AuthUser = {
           id: payload.sub,
           username: payload.username ?? '',
-          // Effective admin = JWT-stamped isAdmin OR derived from current roles.
-          // Both are kept in sync at login but tokens older than a role change
-          // would still authorise correctly if the roles array was migrated.
-          isAdmin: deriveIsAdmin(roles) || payload.isAdmin === true,
+          // The roles claim is authoritative when present; the stamped isAdmin
+          // boolean is only a fallback for pre-roles tokens. (Old ops tokens
+          // carry isAdmin:true — trusting it would keep granting admin.)
+          isAdmin: roles.length > 0 ? deriveIsAdmin(roles) : payload.isAdmin === true,
           roles,
-          role:
-            payload.role ??
-            derivePrimaryRole(roles.length > 0 ? roles : payload.isAdmin ? ['admin'] : []),
+          // Re-derive instead of trusting payload.role — old tokens carry
+          // legacy role strings (ops/designer/viewer).
+          role: derivePrimaryRole(roles.length > 0 ? roles : payload.isAdmin ? ['admin'] : []),
         }
         c.set('user', authUser)
 
@@ -138,7 +144,7 @@ export const requireAuth: MiddlewareHandler<{ Variables: AppVariables }> = async
  * cm_pat_...`; anything else is a 401.
  *
  * Sets `c.var.user` exactly like requireAuth does, so downstream
- * requireCapability checks work identically.
+ * requireAccess checks work identically.
  */
 export const personalTokenAuth: MiddlewareHandler<{ Variables: AppVariables }> = async (
   c,
@@ -193,12 +199,14 @@ export const requireAdmin: MiddlewareHandler<{ Variables: AppVariables }> = asyn
   return next()
 }
 
-/** Gate a route on a specific capability — the granular alternative to
- *  requireAdmin. Use this when a route should accept designer (e.g.
- *  edit-service) but not viewer, or vice-versa. Authenticates first if the
- *  request hasn't been through requireAuth yet — same pattern as requireAdmin. */
-export function requireCapability(
-  capability: Capability,
+/** Gate a route on brew-level access — the granular alternative to
+ *  requireAdmin. `requireAccess('workflows', 'write')` admits any role whose
+ *  access table grants write on the workflows brew. Authenticates first if
+ *  the request hasn't been through requireAuth yet — same pattern as
+ *  requireAdmin. */
+export function requireAccess(
+  brew: Brew,
+  level: Access,
 ): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (c, next) => {
     if (!c.var.user) {
@@ -210,8 +218,9 @@ export function requireCapability(
     }
     const user = c.var.user
     if (!user) return c.json({ error: 'Unauthorized' }, 401)
-    if (!can(user.role, capability)) {
-      return c.json({ error: 'Forbidden', code: 'missing_capability', capability }, 403)
+    const ok = level === 'write' ? canWrite(user.role, brew) : canRead(user.role, brew)
+    if (!ok) {
+      return c.json({ error: 'Forbidden', code: 'missing_access', brew, level }, 403)
     }
     return next()
   }

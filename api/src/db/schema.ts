@@ -52,7 +52,7 @@ export const users = pgTable(
 // Scopes are an open string array so we can add granular permissions later
 // without a schema change. V1 understands only:
 //   - 'full'   → inherits the owner's full role
-//   - 'read'   → read-only access (everywhere requireCapability(read-*) is satisfied)
+//   - 'read'   → read-only access (brew-level read via requireAccess)
 //   - 'mcp'    → reserved; today every token can hit /api/mcp
 // Empty array = same as 'full'.
 //

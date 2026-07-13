@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue'
 import { api } from '../../../lib/api'
 import { Pagination } from '../../../components/ui/Pagination'
 import { type SlowJob } from '../../analytics/analyticsHelpers'
@@ -67,11 +68,7 @@ export function DoctorSlowTab({
   // Client-side kind + query filter on the page's slice. Server doesn't yet
   // know about these, so a 20-row page may shrink after filtering. (The
   // pagination total still reflects the server's pre-filter count.)
-  const [qApplied, setQApplied] = useState(query)
-  useEffect(() => {
-    const t = setTimeout(() => setQApplied(query.trim()), 300)
-    return () => clearTimeout(t)
-  }, [query])
+  const qApplied = useDebouncedValue(query.trim())
 
   const rows = useMemo(() => {
     const now = Date.now()

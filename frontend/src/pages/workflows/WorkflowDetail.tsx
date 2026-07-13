@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTabWithUrl } from '../../hooks/useTabWithUrl'
 import { createPortal } from 'react-dom'
 import {
@@ -14,12 +14,9 @@ import {
   Workflow as WorkflowIcon,
   Clock,
   RefreshCw,
-  Save,
 } from 'lucide-react'
 import { PageHead } from '../../components/shell/PageHead'
 import { Tabs } from '../../components/shell/Tabs'
-import { WorkflowConfig } from './WorkflowConfig'
-import { NodeManager } from './node-manager/NodeManager'
 import { WorkflowFiles } from './WorkflowFiles'
 import { api } from '../../lib/api'
 import { loadSession } from '../../lib/storage'
@@ -106,30 +103,11 @@ function HistoryModal({
   }
 
   return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9998,
-        background: 'rgba(0,0,0,.45)',
-        backdropFilter: 'blur(3px)',
-        display: 'grid',
-        placeItems: 'center',
-      }}
-      onClick={onClose}
-    >
+    <div className="modal-stage" onClick={onClose}>
       <div
+        className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 14,
-          boxShadow: 'var(--shadow-lg)',
-          width: 560,
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
+        style={{ width: 'min(560px, 92vw)', maxHeight: '80vh' }}
       >
         <div
           className="row"
@@ -355,7 +333,7 @@ function ActionsMenu({
           boxShadow: 'var(--shadow-lg)',
           padding: 4,
           minWidth: 200,
-          zIndex: 9999,
+          zIndex: 'var(--z-pop)',
         }}
       >
         <DotItem
@@ -453,7 +431,7 @@ export function WorkflowDetail({
   onDelete,
   onSaved,
 }: Props) {
-  const [tab, setTab] = useTabWithUrl('overview', ['overview', 'config', 'nodes', 'files', 'runs'])
+  const [tab, setTab] = useTabWithUrl('overview', ['overview', 'files', 'runs'])
   const [jobs, setJobs] = useState<UnifiedJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(true)
   // Exact all-time run count from the API (uncapped) — drives the Runs pill
@@ -464,17 +442,6 @@ export function WorkflowDetail({
   const [historyOpen, setHistoryOpen] = useState(false)
   const [dupOpen, setDupOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [nodeDirty, setNodeDirty] = useState(false)
-  const [nodeResetKey, setNodeResetKey] = useState(0)
-  const nodeSaveRef = useRef<(() => Promise<void>) | null>(null)
-
-  const handleNodeSave = useCallback(async () => {
-    await nodeSaveRef.current?.()
-  }, [])
-  const handleNodeDiscard = useCallback(() => {
-    setNodeResetKey((k) => k + 1)
-    setNodeDirty(false)
-  }, [])
 
   async function handleDownload() {
     if (downloading) return
@@ -529,19 +496,15 @@ export function WorkflowDetail({
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'config', label: 'Config' },
-    ...(isComfyUI ? [{ id: 'nodes', label: 'Node Manager' }] : []),
-    // Generic folder browser + per-file editor (JSON gets syntax highlight +
-    // validation, plain text otherwise). Replaces the old "JSON files" tab,
-    // which was limited to params.json + workflow.json.
-    { id: 'files', label: 'Files' },
+    // Generic folder browser + per-file editor. Editing-adjacent, so it's
+    // hidden entirely for read-only roles — they only get Overview + Runs.
+    ...(isAdmin ? [{ id: 'files', label: 'Files' }] : []),
     // Pill hidden until the count is known — a wrong number is worse than none.
     { id: 'runs', label: 'Runs', pill: runsTotal ?? undefined },
   ]
 
-  // A deep-linked ?tab= may name a conditionally-hidden tab (e.g. 'nodes' on a
-  // non-ComfyUI workflow); fall back to the first rendered tab so the body is
-  // never blank. (useTabWithUrl can't know the conditional set at mount.)
+  // A deep-linked ?tab= may name a removed tab (e.g. an old 'config' link);
+  // fall back to the first rendered tab so the body is never blank.
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
 
   return (
@@ -584,15 +547,19 @@ export function WorkflowDetail({
         active={activeTab}
         onChange={setTab}
         trailing={
-          <ActionsMenu
-            isAdmin={isAdmin}
-            onDelete={onDelete}
-            onTest={() => setTestOpen(true)}
-            onAudit={() => setAuditOpen(true)}
-            onDownload={handleDownload}
-            onHistory={() => setHistoryOpen(true)}
-            onDuplicate={() => setDupOpen(true)}
-          />
+          // The whole actions menu (test/audit/duplicate/download/history/
+          // delete) is edit-tier — read-only roles get no actions at all.
+          isAdmin ? (
+            <ActionsMenu
+              isAdmin={isAdmin}
+              onDelete={onDelete}
+              onTest={() => setTestOpen(true)}
+              onAudit={() => setAuditOpen(true)}
+              onDownload={handleDownload}
+              onHistory={() => setHistoryOpen(true)}
+              onDuplicate={() => setDupOpen(true)}
+            />
+          ) : null
         }
       />
 
@@ -609,60 +576,10 @@ export function WorkflowDetail({
           />
         )}
 
-        {activeTab === 'config' && (
-          <WorkflowConfig wf={wf} servers={servers} isAdmin={isAdmin} onSaved={onSaved} />
-        )}
-
-        {isComfyUI && (
-          <NodeManager
-            key={nodeResetKey}
-            wf={wf}
-            isAdmin={isAdmin}
-            hidden={activeTab !== 'nodes'}
-            onDirtyChange={setNodeDirty}
-            saveRef={nodeSaveRef}
-          />
-        )}
-
         {activeTab === 'files' && <WorkflowFiles wfId={wf.id} isAdmin={isAdmin} />}
 
         {activeTab === 'runs' && <RunsTab wf={wf} />}
       </div>
-
-      {nodeDirty && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 900,
-            background: 'var(--surface)',
-            borderTop: '2px solid var(--accent)',
-            padding: '10px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            boxShadow: '0 -4px 20px rgba(0,0,0,.15)',
-          }}
-        >
-          <Save size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>
-            You have unsaved changes in the Node Manager.
-          </span>
-          <span className="spacer" />
-          <button className="btn btn-sm btn-ghost" onClick={handleNodeDiscard}>
-            Discard
-          </button>
-          <button
-            className="btn btn-sm"
-            style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}
-            onClick={handleNodeSave}
-          >
-            Save
-          </button>
-        </div>
-      )}
     </>
   )
 }

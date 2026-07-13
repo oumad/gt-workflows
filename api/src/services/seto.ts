@@ -5,6 +5,7 @@
  * avg-duration aggregate (used by the per-job ETA finding).
  */
 import { TtlCache } from '../lib/ttlCache.js'
+import { hostnameOf, portOf } from '../lib/serverUrl.js'
 import { db } from '../db/index.js'
 import * as repo from '../repositories/seto.js'
 import type { Cfg, Finding, JobLookup, CheckResponse, CheckKind } from '../models/seto.js'
@@ -49,15 +50,6 @@ export async function patchConfig(input: PatchConfigInput): Promise<Cfg> {
 
 /* ─── Helpers ───────────────────────────────────────────────── */
 
-function hostnameOf(url: string | null | undefined): string | null {
-  if (!url) return null
-  try {
-    return new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).hostname
-  } catch {
-    return null
-  }
-}
-
 function fmtDuration(sec: number | null): string {
   if (sec == null || sec < 0) return '—'
   if (sec >= 3600) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`
@@ -86,24 +78,6 @@ function classifyReason(reason: string | null | undefined): string | null {
 
 function isServiceDown(svc: { lastPingAt: Date | null; lastPingOk: boolean | null }): boolean {
   return !svc.lastPingAt || !svc.lastPingOk
-}
-
-/** Hostname of a server/service URL (scheme optional), or null if unparseable. */
-function recordHostname(url: string): string | null {
-  try {
-    return new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).hostname || null
-  } catch {
-    return null
-  }
-}
-
-/** True when the URL carries a port → it's a service; port-less → a host. */
-function recordHasPort(url: string): boolean {
-  try {
-    return !!new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).port
-  } catch {
-    return false
-  }
 }
 
 async function lookupJob(id: string): Promise<JobLookup | null> {
@@ -514,11 +488,11 @@ async function checkService(serverId: string, cfg: Cfg): Promise<Finding[]> {
   // the user tell "the service process crashed" (host pings, service down) from
   // "the whole box is down" (host not pinging). Only shown when there's
   // something to report: the service is down, or the host itself isn't pinging.
-  const svcHostname = recordHostname(svc.url)
+  const svcHostname = hostnameOf(svc.url)
   if (svcHostname) {
     const allServers = await repo.findAllServers()
     const host = allServers.find(
-      (s) => s.id !== svc.id && !recordHasPort(s.url) && recordHostname(s.url) === svcHostname,
+      (s) => s.id !== svc.id && portOf(s.url) == null && hostnameOf(s.url) === svcHostname,
     )
     if (host) {
       const hostDown = !host.lastPingAt || !host.lastPingOk

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
 import { desc, eq, sql } from 'drizzle-orm'
 import { db, workflowJobs, trainingJobs, servers } from '../db/index.js'
-import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import type { AppVariables } from '../types.js'
 
 // ─────────────────────────────────────────────
@@ -15,7 +15,7 @@ const app = new Hono<{ Variables: AppVariables }>()
 // ── GET /clients/stats ────────────────────────
 // "Active" and "last seen" are derived from actual job activity — not from
 // gt_users.last_seen_at (which the sync touches even when no new jobs run).
-app.get('/stats', requireAuth, requireAdmin, async (c) => {
+app.get('/stats', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const [[userRow], [activeRow], [jobRow]] = await Promise.all([
     db.execute(sql`SELECT count(*)::int AS total FROM gt_users`),
     db.execute(sql`
@@ -59,7 +59,7 @@ const listQuery = z.object({
   offset: z.coerce.number().min(0).optional(),
 })
 
-app.get('/', requireAuth, requireAdmin, zValidator('query', listQuery), async (c) => {
+app.get('/', requireAuth, requireAccess('clients', 'read'), zValidator('query', listQuery), async (c) => {
   const q = c.req.valid('query')
   const limit = q.limit ?? 200
   const offset = q.offset ?? 0
@@ -137,7 +137,7 @@ app.get('/', requireAuth, requireAdmin, zValidator('query', listQuery), async (c
 })
 
 // ── GET /clients/:id ──────────────────────────
-app.get('/:id', requireAuth, requireAdmin, async (c) => {
+app.get('/:id', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
   const row = await db.query.gtUsers.findFirst({ where: (u, { eq }) => eq(u.id, id) })
   if (!row) return c.json({ error: 'Not found' }, 404)
@@ -145,7 +145,7 @@ app.get('/:id', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/jobs ─────────────────────
-app.get('/:id/jobs', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/jobs', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
   const limit = Math.min(Number(c.req.query('limit') ?? 50), 200)
   const rows = await db
@@ -169,7 +169,7 @@ app.get('/:id/jobs', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/training ─────────────────
-app.get('/:id/training', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/training', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
   const limit = Math.min(Number(c.req.query('limit') ?? 50), 200)
   const rows = await db
@@ -192,7 +192,7 @@ app.get('/:id/training', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/stats ────────────────────
-app.get('/:id/stats', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/stats', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
 
   const [userRow, wfRow, loraRow, rankRow] = await Promise.all([
@@ -257,7 +257,7 @@ app.get('/:id/stats', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/activity?period=week|month|year|all ─────────
-app.get('/:id/activity', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/activity', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
   const period = c.req.query('period') ?? 'month'
 
@@ -297,7 +297,7 @@ app.get('/:id/activity', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/workflows ────────────────
-app.get('/:id/workflows', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/workflows', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
 
   const rows = await db.execute(sql`
@@ -338,7 +338,7 @@ app.get('/:id/workflows', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/loras ────────────────────
-app.get('/:id/loras', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/loras', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
 
   const rows = await db.execute(sql`
@@ -378,7 +378,7 @@ app.get('/:id/loras', requireAuth, requireAdmin, async (c) => {
 })
 
 // ── GET /clients/:id/servers ──────────────────
-app.get('/:id/servers', requireAuth, requireAdmin, async (c) => {
+app.get('/:id/servers', requireAuth, requireAccess('clients', 'read'), async (c) => {
   const id = c.req.param('id')
 
   const rows = await db.execute(sql`

@@ -24,7 +24,7 @@
 .brand-mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--ink);
   color: var(--bg);
   display: grid;
@@ -85,7 +85,7 @@
   background: transparent;
   color: var(--ink-2);
   font: 500 13px/1 var(--font-ui);
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: default;
   text-align: left;
   transition:

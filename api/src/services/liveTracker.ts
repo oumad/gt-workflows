@@ -50,7 +50,3 @@ export function consumeComfyStartedAt(id: string): number | null {
   return null
 }
 
-/** Remove a tracking entry without returning it (cleanup on job eviction). */
-export function clearComfyStartedAt(id: string): void {
-  comfyStartMap.delete(id)
-}

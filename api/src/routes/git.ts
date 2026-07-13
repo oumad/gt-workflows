@@ -5,7 +5,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { requireAuth, requireAccess } from '../middleware/auth.js'
 import { httpErrorResponse } from '../lib/httpError.js'
 import * as git from '../services/git.js'
 import type { AppVariables } from '../types.js'
@@ -24,7 +24,7 @@ app.get('/status', requireAuth, async (c) => {
 // ── POST /api/git/switch — change branch (allowed set only; refused when dirty) ──
 app.post(
   '/switch',
-  requireAdmin,
+  requireAccess('workflows', 'write'),
   zValidator('json', z.object({ branch: z.string().min(1) })),
   async (c) => {
     try {
@@ -36,7 +36,7 @@ app.post(
 )
 
 // ── POST /api/git/update — conflict-free update (snapshot + reset + take-theirs) ──
-app.post('/update', requireAdmin, async (c) => {
+app.post('/update', requireAccess('workflows', 'write'), async (c) => {
   try {
     return c.json(await git.update())
   } catch (err) {
@@ -45,7 +45,7 @@ app.post('/update', requireAdmin, async (c) => {
 })
 
 // ── POST /api/git/publish — validate + squash + ff-only push ──
-app.post('/publish', requireAdmin, async (c) => {
+app.post('/publish', requireAccess('workflows', 'write'), async (c) => {
   try {
     return c.json(await git.publish())
   } catch (err) {
@@ -54,7 +54,7 @@ app.post('/publish', requireAdmin, async (c) => {
 })
 
 // ── POST /api/git/discard — drop all local changes (snapshotted to History) ──
-app.post('/discard', requireAdmin, async (c) => {
+app.post('/discard', requireAccess('workflows', 'write'), async (c) => {
   try {
     return c.json(await git.discard())
   } catch (err) {

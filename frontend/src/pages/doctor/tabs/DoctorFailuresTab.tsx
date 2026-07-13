@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue'
 import { api } from '../../../lib/api'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ERROR_CODE_COLOR, ERROR_CODE_LABEL } from '../../analytics/analyticsHelpers'
@@ -38,11 +39,7 @@ export function DoctorFailuresTab({
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   // Debounce the search so we don't fire a fetch on every keystroke.
-  const [qApplied, setQApplied] = useState(query)
-  useEffect(() => {
-    const t = setTimeout(() => setQApplied(query.trim()), 300)
-    return () => clearTimeout(t)
-  }, [query])
+  const qApplied = useDebouncedValue(query.trim())
 
   // Whenever any of the filters change, jump back to page 1 — leaving the
   // user on page 5 of a filter that now has only 2 pages would just dump

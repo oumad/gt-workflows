@@ -7,7 +7,7 @@ import { config } from '../config/index.js'
 import { db, users } from '../db/index.js'
 import { verifyPassword } from '../lib/password.js'
 import { rateLimit } from '../middleware/rateLimit.js'
-import { derivePrimaryRole, deriveIsAdmin } from '../lib/permissions.js'
+import { derivePrimaryRole, deriveIsAdmin, normalizeRoles } from '../lib/permissions.js'
 
 const app = new Hono()
 
@@ -51,13 +51,12 @@ app.post('/login', loginLimiter, zValidator('json', loginSchema), async (c) => {
       /* non-critical */
     })
 
-  // Derive role + admin flag from the user's role array. Legacy isAdmin=true
-  // users without an explicit role land on 'admin' (preserves backward compat
-  // for accounts created before the roles system). Empty roles + isAdmin=false
-  // defaults to 'designer' so existing daily-driver users don't suddenly read
-  // 'viewer' (which would lock them out of nearly everything).
-  const effectiveRoles =
-    user.roles.length > 0 ? user.roles : user.isAdmin ? ['admin'] : ['designer']
+  // Derive role + admin flag from the user's role array. Legacy role strings
+  // (ops/designer/viewer) are normalised to the current set. isAdmin=true
+  // users without an explicit role land on 'admin'; empty roles + isAdmin=false
+  // defaults to 'operator' so existing daily-driver accounts keep working.
+  const normalized = normalizeRoles(user.roles)
+  const effectiveRoles = normalized.length > 0 ? normalized : user.isAdmin ? ['admin'] : ['operator']
   const role = derivePrimaryRole(effectiveRoles)
   const isAdmin = deriveIsAdmin(effectiveRoles)
 
